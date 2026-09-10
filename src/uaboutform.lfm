@@ -1,0 +1,56 @@
+object FrmAbout: TFrmAbout
+  Left = 400
+  Height = 420
+  Top = 240
+  Width = 560
+  BorderStyle = bsDialog
+  Caption = 'About PhosphorIDE'
+  ClientHeight = 420
+  ClientWidth = 560
+  OnCreate = FormCreate
+  Position = poMainFormCenter
+  LCLVersion = '4.8.0.0'
+  object LblTitle: TLabel
+    Left = 16
+    Height = 26
+    Top = 14
+    Width = 200
+    Caption = 'PhosphorIDE'
+    Font.Height = -21
+    Font.Style = [fsBold]
+    ParentFont = False
+  end
+  object LblSubtitle: TLabel
+    Left = 16
+    Height = 15
+    Top = 46
+    Width = 400
+    Caption = 'Edit, compile and run Phosphor BASIC.'
+  end
+  object MemoDetails: TMemo
+    Left = 16
+    Height = 300
+    Top = 72
+    Width = 528
+    Anchors = [akTop, akLeft, akRight, akBottom]
+    Font.Name = 'Courier New'
+    ParentFont = False
+    ReadOnly = True
+    ScrollBars = ssAutoBoth
+    TabOrder = 0
+    WordWrap = False
+  end
+  object BtnClose: TButton
+    Left = 456
+    Height = 28
+    Top = 382
+    Width = 88
+    Anchors = [akRight, akBottom]
+    Cancel = True
+    Caption = 'Close'
+    Default = True
+    ModalResult = 1
+    OnClick = BtnCloseClick
+    TabOrder = 1
+  end
+end

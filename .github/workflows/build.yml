@@ -1,0 +1,99 @@
+name: build
+
+# Both platforms, every push. This project is two-platform by intent and the
+# sibling Phosphor repository has the scars to prove why: Windows-green has
+# shipped Linux-broken defects more than once. A build that only ever runs on the
+# machine it was written on is not known to build.
+#
+# What each job proves, and what it does not:
+#
+#   * lazbuild with ZERO errors, warnings and notes. The build scripts read the
+#     compiler's text as well as its exit code, because lazbuild has answered 0
+#     over a compiler that did not.
+#   * bin/phosphoridetest -- the diagnostic parser, the generated word tables, the
+#     highlighter's scanner and the protocol codec. 125 checks. None of these has
+#     a visible failure mode, which is exactly why they are tested here.
+#   * phosphoride --selftest -- every form is CONSTRUCTED from its .lfm. This is
+#     the check that catches a hand-written .lfm naming a property its .pas does
+#     not publish, which does not fail at build time and does not fail at run time
+#     either: LCL shows a modal dialog and waits. Under xvfb on Linux, directly on
+#     Windows, and under a timeout on both, because a dialog is not an exit code.
+#   * tools/gen-keywords.py --check -- that the generated language tables still
+#     match the Phosphor sources they were extracted from. It needs a Phosphor
+#     checkout, so it runs only in the job that makes one.
+#
+# NOT proved here: that the editor is usable. Nothing in CI opens a window and
+# types in it. A layout that looks right on win32 can still collapse on gtk2.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      # Both platforms always report. A Windows failure must not hide whatever
+      # Linux was about to say.
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-latest
+            name: linux
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out PhosphorIDE
+        uses: actions/checkout@v4
+        with:
+          path: PhosphorIDE
+
+      # A sibling checkout, in the layout the host search already looks for:
+      # ../Phosphor next to this one. It gives the generated-tables check
+      # something to check against, and it is what a contributor's machine looks
+      # like anyway.
+      - name: Check out Phosphor
+        uses: actions/checkout@v4
+        with:
+          repository: AndreMurtaX/Phosphor
+          path: Phosphor
+
+      - name: Install Lazarus
+        uses: gcarreno/setup-lazarus@v3.3.1
+        with:
+          lazarus-version: stable
+
+      # The selftest constructs LCL forms, and under gtk2 that needs a display.
+      # Without this the build script announces the skip rather than failing --
+      # but a skipped check reads as a pass, and this is the one check that
+      # catches a form that will not build.
+      - name: Install xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Build and check (Windows)
+        if: runner.os == 'Windows'
+        working-directory: PhosphorIDE
+        shell: pwsh
+        run: powershell -NoProfile -File scripts\build.ps1 -PhosphorRepo ..\Phosphor
+
+      - name: Build and check (Linux)
+        if: runner.os == 'Linux'
+        working-directory: PhosphorIDE
+        run: xvfb-run -a bash scripts/build.sh --phosphor ../Phosphor
+
+      - name: Keep the binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosphoride-${{ matrix.name }}
+          path: |
+            PhosphorIDE/bin/phosphoride*
+          if-no-files-found: warn
+          retention-days: 7

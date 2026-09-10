@@ -1,0 +1,522 @@
+program phosphoridetest;
+
+{ The parts of PhosphorIDE that can be wrong without anyone noticing.
+
+  A console program, on purpose: it links the SynEdit and LCL units it needs but
+  never `Interfaces`, so no widgetset is created and it runs identically on a
+  desktop, over a pipe, and on a headless CI machine. That distinction -- linking
+  the LCL is not what connects to a display -- is the same one the Phosphor host
+  rests on, and it is what lets the highlighter be tested without a window.
+
+  WHAT IS TESTED HERE is the logic that has no visible failure mode: a diagnostic
+  parser that silently stops matching, a highlighter that quietly paints a bad
+  escape as ordinary text, a protocol encoder that emits a frame the other end
+  will not accept. A form that fails to build is caught by `phosphoride
+  --selftest`; a colour that is slightly wrong is caught by looking. These are
+  neither.
+
+  Exit code 0 means every check passed. Anything else means the count of failures,
+  and every failure has already been printed with what it expected and what it
+  got. }
+
+{$mode objfpc}{$H+}
+
+uses
+  {$IFDEF UNIX}cthreads,{$ENDIF}
+  { LINKING THE LCL IS NOT WHAT CONNECTS TO A DISPLAY. `Interfaces` is: its
+    initialization section calls CreateWidgetset, and on gtk2 that opens the X
+    display before main, which kills a process that merely LISTED the unit on a
+    machine with no session. Naming the widgetset unit directly links the same
+    code -- which is what satisfies the WSRegister* symbols the LCL's registration
+    tables reference -- while leaving the call unmade.
+
+    The technique is Phosphor's, and the reason it is used here is the same: this
+    program must run identically on a desktop and on a headless CI machine. It
+    creates no window and touches no canvas; it only needs Graphics to compile,
+    because a highlighter's colours are TColor. }
+  InterfaceBase,
+  {$IFDEF WINDOWS}Win32Int,{$ELSE}Gtk2Int,{$ENDIF}
+  SysUtils, Classes,
+  uphosphorlang, uphosphormsg, usynphosphor, udebugproto, ubreakpoints;
+
+var
+  Checks: Integer = 0;
+  Failures: Integer = 0;
+  Section: String = '';
+
+procedure Group(const AName: String);
+begin
+  Section := AName;
+  WriteLn;
+  WriteLn('-- ', AName);
+end;
+
+procedure Check(const AWhat: String; ACondition: Boolean);
+begin
+  Inc(Checks);
+  if ACondition then
+    Exit;
+  Inc(Failures);
+  WriteLn('FAIL  [', Section, '] ', AWhat);
+end;
+
+procedure CheckEq(const AWhat, AExpected, AGot: String);
+begin
+  Inc(Checks);
+  if AExpected = AGot then
+    Exit;
+  Inc(Failures);
+  WriteLn('FAIL  [', Section, '] ', AWhat);
+  WriteLn('        expected: ', AExpected);
+  WriteLn('        got:      ', AGot);
+end;
+
+procedure CheckEqInt(const AWhat: String; AExpected, AGot: Integer);
+begin
+  CheckEq(AWhat, IntToStr(AExpected), IntToStr(AGot));
+end;
+
+{ ------------------------------------------------------- diagnostic parsing - }
+
+procedure TestMessages;
+var
+  M: TPhosphorMessage;
+begin
+  Group('uphosphormsg: the shapes the host actually emits');
+
+  { Every string below was captured from bin/phosphor.exe, not invented. }
+
+  Check('a compile error is a source location',
+    ParsePhosphorMessage('phosphor: bad.bas:2: unexpected token in expression', M));
+  Check('  kind', M.Kind = pmkSourceError);
+  CheckEqInt('  line', 2, M.Line);
+  CheckEq('  path', 'bad.bas', M.Path);
+  CheckEq('  message', 'unexpected token in expression', M.Text);
+
+  ParsePhosphorMessage('phosphor: C:\Dev\x\dz.bas:4: division by zero', M);
+  Check('a Windows drive letter is not the line separator', M.Kind = pmkSourceError);
+  CheckEqInt('  line past the drive colon', 4, M.Line);
+  CheckEq('  path keeps its backslashes', 'C:\Dev\x\dz.bas', M.Path);
+
+  ParsePhosphorMessage('phosphor: ./bad.bas:2: unexpected token in expression', M);
+  CheckEq('a relative path is echoed verbatim', './bad.bas', M.Path);
+
+  { The message itself contains a colon, which is what breaks a parser that
+    splits on the last one. }
+  ParsePhosphorMessage('phosphor: badfn.bas:2: no function nosuchfunc$:%', M);
+  Check('a message may contain colons', M.Kind = pmkSourceError);
+  CheckEqInt('  line', 2, M.Line);
+  CheckEq('  whole message survives', 'no function nosuchfunc$:%', M.Text);
+
+  ParsePhosphorMessage(
+    'phosphor: openerr.bas:1: cannot open "cafe.txt" for input: no such file', M);
+  CheckEq('  message with a quoted path and a colon',
+    'cannot open "cafe.txt" for input: no such file', M.Text);
+
+  { A packed executable has no path to print. }
+  ParsePhosphorMessage('phosphor: 4: division by zero', M);
+  Check('a packed executable reports line only', M.Kind = pmkPackedError);
+  CheckEqInt('  line', 4, M.Line);
+  CheckEq('  path is empty', '', M.Path);
+  Check('  and it is still somewhere to jump to', HasSourceLocation(M));
+
+  { The REPL uses another shape entirely. }
+  ParsePhosphorMessage('error: unexpected token in expression', M);
+  Check('the REPL shape is recognised', M.Kind = pmkReplError);
+  CheckEqInt('  and carries no line', 0, M.Line);
+  Check('  so it is not a jump target', not HasSourceLocation(M));
+
+  { A refusal is NOT a source location -- this is the case that turns into a
+    jump to line 0 of a file called "file not". }
+  ParsePhosphorMessage('phosphor: file not found: nope.bas', M);
+  Check('a host refusal is not a source error', M.Kind = pmkHostError);
+  Check('  and is not a jump target', not HasSourceLocation(M));
+  CheckEq('  message', 'file not found: nope.bas', M.Text);
+
+  ParsePhosphorMessage('phosphor: --out needs a path', M);
+  Check('a usage refusal is a host error', M.Kind = pmkHostError);
+
+  ParsePhosphorMessage(
+    'phosphor: warning: 1 function name(s) this host does not provide:', M);
+  Check('a --check warning is a warning', M.Kind = pmkWarning);
+  Check('  and is not a jump target', not HasSourceLocation(M));
+
+  { Ordinary program output must survive untouched. }
+  Check('program output is not a diagnostic',
+    not ParsePhosphorMessage('hello, world', M));
+  Check('  kind', M.Kind = pmkPlain);
+  CheckEq('  text is passed through', 'hello, world', M.Text);
+
+  { A program is free to print something that looks like one. It is still only
+    stderr that is parsed, but the parser must not corrupt it. }
+  ParsePhosphorMessage('phosphor: 0: not really a line number', M);
+  Check('line 0 is not a location', not HasSourceLocation(M));
+
+  Group('uphosphormsg: exit codes');
+  CheckEq('0', 'finished', PhosphorExitCodeText(0));
+  CheckEq('1 is the program''s fault', 'the program failed', PhosphorExitCodeText(1));
+  CheckEq('2 means nothing ran', 'the host refused to run it', PhosphorExitCodeText(2));
+  CheckEq('3 is the interpreter itself', 'the interpreter itself faulted',
+    PhosphorExitCodeText(3));
+  Check('anything else is named as foreign',
+    Pos('exit code', PhosphorExitCodeText(137)) > 0);
+end;
+
+{ ------------------------------------------------------------ the word lists - }
+
+procedure TestLanguage;
+var
+  Tier: TPhosphorTier;
+begin
+  Group('uphosphorlang: generated word lists');
+
+  CheckEqInt('keyword count matches the constant',
+    PhosphorKeywordCount, Length(PhosphorKeywords));
+  CheckEqInt('core count matches the constant',
+    PhosphorBuiltinCoreCount, Length(PhosphorBuiltins(ptCore)));
+  CheckEqInt('package count matches the constant',
+    PhosphorBuiltinPackageCount, Length(PhosphorBuiltins(ptPackage)));
+  CheckEqInt('gui count matches the constant',
+    PhosphorBuiltinGuiCount, Length(PhosphorBuiltins(ptGui)));
+
+  Check('println is a keyword', IsPhosphorKeyword('println'));
+  Check('endfunction is a keyword', IsPhosphorKeyword('endfunction'));
+  Check('lookup is case-insensitive', IsPhosphorKeyword('PrintLn'));
+  Check('and so is a mixed-case terminator', IsPhosphorKeyword('EndIf'));
+  Check('mod is a word operator', IsPhosphorOperatorWord('mod'));
+  Check('true is a literal', IsPhosphorLiteralWord('true'));
+  Check('null is a literal (JSON only, but still a word)',
+    IsPhosphorLiteralWord('null'));
+
+  Check('a suffix is part of the name: left$ is a built-in',
+    IsPhosphorBuiltin('left$'));
+  Check('  and left alone is not', not IsPhosphorBuiltin('left'));
+  Check('dim@ is a built-in, not the dim statement', IsPhosphorBuiltin('dim@'));
+  Check('dim is a keyword even though it is unimplemented',
+    IsPhosphorKeyword('dim'));
+
+  Check('eof is a built-in (a compiler special form, in no registry)',
+    IsPhosphorBuiltin('eof'));
+  Check('input$ likewise', IsPhosphorBuiltin('input$'));
+
+  Check('ucase$ is core', PhosphorBuiltinTier('ucase$', Tier) and (Tier = ptCore));
+  Check('zip_open@ is a package name',
+    PhosphorBuiltinTier('zip_open@', Tier) and (Tier = ptPackage));
+  Check('form@ is a GUI name', PhosphorBuiltinTier('form@', Tier) and (Tier = ptGui));
+
+  Check('an invented name is nothing', not IsPhosphorBuiltin('nosuchfunc$'));
+  Check('and neither is the empty string', not IsPhosphorBuiltin(''));
+end;
+
+{ ---------------------------------------------------------------- the colours - }
+
+type
+  TKindArray = array of TPhosphorTokenKind;
+
+function Tokenize(AHl: TSynPhosphorSyn; const ALine: String;
+  out ATexts: TStringList): TKindArray;
+begin
+  Result := nil;
+  ATexts := TStringList.Create;
+  AHl.SetLine(ALine, 0);
+  while not AHl.GetEol do
+  begin
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)] := TPhosphorTokenKind(AHl.GetTokenKind);
+    ATexts.Add(AHl.GetToken);
+    AHl.Next;
+  end;
+end;
+
+procedure TestHighlighter;
+var
+  Hl: TSynPhosphorSyn;
+  Kinds: TKindArray;
+  Texts: TStringList;
+
+  procedure Scan(const ALine: String);
+  begin
+    FreeAndNil(Texts);
+    Kinds := Tokenize(Hl, ALine, Texts);
+  end;
+
+begin
+  Group('usynphosphor: what the scanner emits');
+  Hl := TSynPhosphorSyn.Create(nil);
+  Texts := nil;
+  try
+    CheckEq('the language names itself', 'Phosphor BASIC',
+      TSynPhosphorSyn.GetLanguageName);
+
+    Scan('println "hi"');
+    CheckEqInt('println "hi" is three tokens', 3, Length(Kinds));
+    Check('  println is a keyword', Kinds[0] = ptkKeyword);
+    Check('  the gap is space', Kinds[1] = ptkSpace);
+    Check('  the literal is a string', Kinds[2] = ptkString);
+    CheckEq('  and the string keeps its quotes', '"hi"', Texts[2]);
+
+    Scan('name$ = ucase$(x%)');
+    Check('name$ is one identifier, suffix included', Kinds[0] = ptkIdentifier);
+    CheckEq('  including the $', 'name$', Texts[0]);
+    Check('ucase$ is a core built-in', Kinds[4] = ptkBuiltinCore);
+    CheckEq('  including the $', 'ucase$', Texts[4]);
+
+    { The trap the highlighter exists to make visible. }
+    Scan('println "C:\temp"');
+    Check('a known escape stays part of the string',
+      (Length(Kinds) = 3) and (Kinds[2] = ptkString));
+
+    Scan('println "C:\qemu"');
+    Check('an UNKNOWN escape is split out as an error',
+      Length(Kinds) >= 4);
+    Check('  the text before it is still a string', Kinds[2] = ptkString);
+    Check('  the two offending characters are an error', Kinds[3] = ptkError);
+    CheckEq('  and they are exactly the escape', '\q', Texts[3]);
+
+    Scan('s$ = "never closed');
+    Check('an unterminated string is an error, not a continuation',
+      Kinds[High(Kinds)] = ptkError);
+
+    Scan('s$ = "a doubled "" quote"');
+    Check('a doubled quote does not close the literal',
+      (Kinds[High(Kinds)] = ptkString));
+    CheckEq('  the whole literal is one token', '"a doubled "" quote"',
+      Texts[High(Kinds)]);
+
+    Scan('rem this is a comment');
+    CheckEqInt('rem swallows the line', 1, Length(Kinds));
+    Check('  as a comment', Kinds[0] = ptkComment);
+
+    Scan('remark = 5');
+    Check('but remark is an ordinary identifier', Kinds[0] = ptkIdentifier);
+
+    Scan('x = 5 '' trailing comment');
+    Check('an apostrophe comment can follow code',
+      Kinds[High(Kinds)] = ptkComment);
+
+    Scan('n = 1.5e-3');
+    Check('a full number is one token', Kinds[4] = ptkNumber);
+    CheckEq('  including the exponent', '1.5e-3', Texts[4]);
+
+    Scan('n = 1.');
+    Check('a trailing dot is NOT part of the number', Kinds[4] = ptkNumber);
+    CheckEq('  the number stops at the digits', '1', Texts[4]);
+
+    Scan('retry:');
+    Check('a name followed by a colon at line start is a label',
+      Kinds[0] = ptkLabelName);
+
+    Scan('  x = retry:');
+    Check('but not in the middle of a line',
+      Kinds[Length(Kinds) - 2] = ptkIdentifier);
+
+    Scan('a += 1');
+    Check('a compound assignment is one symbol', Kinds[2] = ptkSymbol);
+    CheckEq('  both characters', '+=', Texts[2]);
+
+    Scan('if a <> b then');
+    Check('<> is one symbol', Kinds[4] = ptkSymbol);
+    CheckEq('  both characters', '<>', Texts[4]);
+
+    { x, space, =, space, a, space, \, space, b -- the operator is token 6. }
+    Scan('x = a \ b');
+    CheckEq('a backslash outside a string is integer division', '\', Texts[6]);
+    Check('  and it is a symbol', Kinds[6] = ptkSymbol);
+
+    Scan('');
+    CheckEqInt('an empty line has no tokens', 0, Length(Kinds));
+  finally
+    Texts.Free;
+    Hl.Free;
+  end;
+end;
+
+{ ------------------------------------------------------------ breakpoints --- }
+
+procedure TestBreakpoints;
+var
+  B: TBreakpointSet;
+
+  function Dump: String;
+  var
+    I: Integer;
+  begin
+    Result := '';
+    for I := 0 to B.Count - 1 do
+    begin
+      if I > 0 then
+        Result := Result + ',';
+      Result := Result + IntToStr(B[I]);
+    end;
+  end;
+
+begin
+  Group('ubreakpoints: marks that follow their statement');
+  B := TBreakpointSet.Create;
+  try
+    Check('toggling on answers True', B.Toggle(5));
+    Check('  and it is there', B.Has(5));
+    Check('toggling off answers False', not B.Toggle(5));
+    Check('  and it is gone', not B.Has(5));
+
+    B.Toggle(9); B.Toggle(3); B.Toggle(6);
+    CheckEq('the set stays sorted whatever order they arrive in', '3,6,9', Dump);
+    CheckEqInt('  and counted', 3, B.Count);
+
+    B.Toggle(6);
+    CheckEq('removing from the middle keeps the rest in order', '3,9', Dump);
+
+    Check('line 0 is refused', not B.Toggle(0));
+    Check('and so is a negative line', not B.Toggle(-1));
+    CheckEq('  neither reached the set', '3,9', Dump);
+
+    { The arithmetic. AFirstLine is the 1-based line the edit happened AT. }
+    B.Clear;
+    B.Toggle(5); B.Toggle(10);
+
+    B.TrackEdit(11, 1);
+    CheckEq('an insert BELOW every mark moves nothing', '5,10', Dump);
+
+    B.TrackEdit(1, 2);
+    CheckEq('two lines inserted at the top move both down', '7,12', Dump);
+
+    B.TrackEdit(7, 1);
+    CheckEq('an insert AT a mark''s own line moves it', '8,13', Dump);
+
+    B.TrackEdit(8, -1);
+    CheckEq('deleting a mark''s own line drops it, and shifts the rest', '12', Dump);
+
+    B.Clear;
+    B.Toggle(3); B.Toggle(4); B.Toggle(5); B.Toggle(20);
+    B.TrackEdit(3, -3);
+    CheckEq('deleting a range drops every mark inside it', '17', Dump);
+
+    B.Clear;
+    B.Toggle(5);
+    B.TrackEdit(6, -1);
+    CheckEq('deleting the line BELOW a mark leaves it alone', '5', Dump);
+
+    B.TrackEdit(5, 0);
+    CheckEq('a zero delta is a no-op', '5', Dump);
+
+    B.Clear;
+    B.Toggle(2);
+    B.TrackEdit(1, -1);
+    CheckEq('deleting line 1 with a mark on line 2 moves it to 1', '1', Dump);
+
+    B.Clear;
+    B.Toggle(1);
+    B.TrackEdit(1, -1);
+    CheckEq('deleting the only marked line empties the set', '', Dump);
+    CheckEqInt('  and the count agrees', 0, B.Count);
+
+    B.Clear;
+    B.Toggle(4);
+    CheckEqInt('ToArray copies the set', 1, Length(B.ToArray));
+    CheckEqInt('  with the right line', 4, B.ToArray[0]);
+  finally
+    B.Free;
+  end;
+end;
+
+{ ------------------------------------------------------------ the protocol --- }
+
+procedure TestProtocol;
+var
+  Frame: String;
+  M: TPdbpMessage;
+begin
+  Group('udebugproto: frames both ends must agree on');
+
+  Frame := EncodeInitialize(1, 'PhosphorIDE test');
+  Check('a frame is a single line', Pos(#10, Frame) = 0);
+  Check('  it names the command', Pos('"cmd" : "initialize"', Frame) > 0);
+  Check('  and the protocol version', Pos('"protocol" : 1', Frame) > 0);
+
+  Frame := EncodeSetBreakpoints(7, 'x.bas', [3, 11]);
+  Check('breakpoints carry the whole set', Pos('[3, 11]', Frame) > 0);
+
+  Frame := EncodeSetBreakpoints(8, 'x.bas', []);
+  Check('an empty set is legal -- it is how the last one is cleared',
+    Pos('"lines" : []', Frame) > 0);
+
+  Frame := EncodeSimple(9, pcStepOver);
+  Check('a bare command needs nothing else', Pos('"cmd" : "stepOver"', Frame) > 0);
+
+  CheckEq('command names match their DAP equivalents', 'stackTrace',
+    PdbpCommandName(pcStackTrace));
+
+  M := DecodePdbp('{"event":"stopped","reason":"breakpoint","path":"x.bas","line":11}');
+  Check('a stopped event decodes', M.Valid and M.IsEvent);
+  Check('  as the right event', M.Event = peStopped);
+  Check('  with its reason', M.StopReason = psrBreakpoint);
+  CheckEqInt('  and its line', 11, M.Line);
+  CheckEq('  and its file', 'x.bas', M.Path);
+
+  M := DecodePdbp('{"event":"exited","exitCode":2}');
+  Check('an exit decodes', M.Valid and (M.Event = peExited));
+  CheckEqInt('  with the code', 2, M.ExitCode);
+
+  M := DecodePdbp('{"seq":1,"ok":true,"protocol":1,"capabilities":{"stepOut":true}}');
+  Check('a response decodes', M.Valid and M.IsResponse);
+  Check('  ok', M.Ok);
+  CheckEqInt('  seq', 1, M.Seq);
+  Check('  a declared capability is on', M.Capabilities.StepOut);
+  Check('  an undeclared one defaults OFF, never assumed',
+    not M.Capabilities.Evaluate);
+
+  M := DecodePdbp('{"seq":2,"ok":false,"error":"no such frame"}');
+  Check('a refusal decodes', M.Valid and not M.Ok);
+  CheckEq('  with its reason', 'no such frame', M.ErrorText);
+
+  M := DecodePdbp('{"seq":3,"ok":true,"frames":[' +
+    '{"index":0,"name":"greet","path":"x.bas","line":4},' +
+    '{"index":1,"name":"(main)","path":"x.bas","line":12}]}');
+  CheckEqInt('a stack decodes', 2, Length(M.Frames));
+  CheckEq('  innermost frame first', 'greet', M.Frames[0].Name);
+  CheckEqInt('  with its line', 12, M.Frames[1].Line);
+
+  M := DecodePdbp('{"seq":4,"ok":true,"variables":[' +
+    '{"name":"count%","value":"3","kind":"int","scope":"local"}]}');
+  CheckEqInt('variables decode', 1, Length(M.Variables));
+  CheckEq('  the name keeps its suffix', 'count%', M.Variables[0].Name);
+  CheckEq('  the host renders the value', '3', M.Variables[0].Value);
+
+  { Desync must be a report, never a crash -- the other end is a separate
+    program and may be any version, or not a PDBP speaker at all. }
+  M := DecodePdbp('this is not json');
+  Check('garbage is invalid, not fatal', not M.Valid);
+  Check('  and says why', M.ParseError <> '');
+
+  M := DecodePdbp('[1,2,3]');
+  Check('a JSON array is not a frame', not M.Valid);
+
+  M := DecodePdbp('{"event":"teleported"}');
+  Check('an unknown event is refused rather than guessed at', not M.Valid);
+
+  M := DecodePdbp('{"nothing":"useful"}');
+  Check('an object that is neither event nor response is refused', not M.Valid);
+
+  M := DecodePdbp('');
+  Check('an empty line is refused', not M.Valid);
+end;
+
+begin
+  WriteLn('PhosphorIDE unit checks');
+
+  TestMessages;
+  TestLanguage;
+  TestHighlighter;
+  TestBreakpoints;
+  TestProtocol;
+
+  WriteLn;
+  if Failures = 0 then
+  begin
+    WriteLn(Format('%d checks, all green.', [Checks]));
+    Halt(0);
+  end;
+
+  WriteLn(Format('%d checks, %d FAILED.', [Checks, Failures]));
+  Halt(Failures);
+end.

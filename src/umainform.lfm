@@ -1,0 +1,546 @@
+object FrmMain: TFrmMain
+  Left = 240
+  Height = 700
+  Top = 130
+  Width = 1000
+  Caption = 'PhosphorIDE'
+  Menu = MainMenu1
+  OnCloseQuery = FormCloseQuery
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnShow = FormShow
+  ShowHint = True
+  LCLVersion = '4.8.0.0'
+  object ToolBar1: TToolBar
+    Left = 0
+    Height = 26
+    Top = 0
+    Width = 1000
+    Caption = 'ToolBar1'
+    ShowCaptions = True
+    TabOrder = 0
+    object TbNew: TToolButton
+      Left = 1
+      Top = 2
+      Action = ActNew
+    end
+    object TbOpen: TToolButton
+      Left = 45
+      Top = 2
+      Action = ActOpen
+    end
+    object TbSave: TToolButton
+      Left = 96
+      Top = 2
+      Action = ActSave
+    end
+    object TbSep1: TToolButton
+      Left = 141
+      Height = 22
+      Top = 2
+      Caption = 'TbSep1'
+      Style = tbsDivider
+    end
+    object TbRun: TToolButton
+      Left = 146
+      Top = 2
+      Action = ActRun
+    end
+    object TbStop: TToolButton
+      Left = 187
+      Top = 2
+      Action = ActStop
+    end
+    object TbSep2: TToolButton
+      Left = 233
+      Height = 22
+      Top = 2
+      Caption = 'TbSep2'
+      Style = tbsDivider
+    end
+    object TbCheck: TToolButton
+      Left = 238
+      Top = 2
+      Action = ActCheck
+    end
+    object TbSep3: TToolButton
+      Left = 300
+      Height = 22
+      Top = 2
+      Caption = 'TbSep3'
+      Style = tbsDivider
+    end
+    object TbToggleBreakpoint: TToolButton
+      Left = 305
+      Top = 2
+      Action = ActToggleBreakpoint
+    end
+    object TbStepOver: TToolButton
+      Left = 407
+      Top = 2
+      Action = ActStepOver
+    end
+    object TbStepInto: TToolButton
+      Left = 478
+      Top = 2
+      Action = ActStepInto
+    end
+  end
+  object StatusBar1: TStatusBar
+    Left = 0
+    Height = 23
+    Top = 677
+    Width = 1000
+    Panels = <
+      item
+        Text = '1: 1'
+        Width = 90
+      end
+      item
+        Width = 90
+      end
+      item
+        Width = 260
+      end
+      item
+        Width = 400
+      end>
+  end
+  object PagesOutput: TPageControl
+    Left = 0
+    Height = 180
+    Top = 497
+    Width = 1000
+    ActivePage = TabOutput
+    Align = alBottom
+    TabIndex = 0
+    TabOrder = 2
+    object TabOutput: TTabSheet
+      Caption = 'Output'
+      ClientHeight = 152
+      ClientWidth = 992
+      object PanelInput: TPanel
+        Left = 0
+        Height = 30
+        Top = 122
+        Width = 992
+        Align = alBottom
+        BevelOuter = bvNone
+        ClientHeight = 30
+        ClientWidth = 992
+        TabOrder = 0
+        object BtnSendInput: TButton
+          Left = 902
+          Height = 30
+          Top = 0
+          Width = 90
+          Align = alRight
+          Caption = 'Send'
+          Hint = 'Send this line to the running program''s standard input'
+          OnClick = BtnSendInputClick
+          TabOrder = 0
+        end
+        object EditInput: TEdit
+          Left = 0
+          Height = 30
+          Top = 0
+          Width = 902
+          Align = alClient
+          Hint = 'What a running program reads with INPUT or LINE INPUT'
+          OnKeyDown = EditInputKeyDown
+          TabOrder = 1
+        end
+      end
+      object MemoOutput: TMemo
+        Left = 0
+        Height = 122
+        Top = 0
+        Width = 992
+        Align = alClient
+        ReadOnly = True
+        ScrollBars = ssAutoBoth
+        TabOrder = 1
+        WordWrap = False
+      end
+    end
+    object TabProblems: TTabSheet
+      Caption = 'Problems'
+      ClientHeight = 152
+      ClientWidth = 992
+      object ListProblems: TListBox
+        Left = 0
+        Height = 152
+        Top = 0
+        Width = 992
+        Align = alClient
+        ItemHeight = 0
+        OnDblClick = ListProblemsDblClick
+        ScrollWidth = 990
+        TabOrder = 0
+      end
+    end
+  end
+  object SplitterOutput: TSplitter
+    Cursor = crVSplit
+    Left = 0
+    Height = 5
+    Top = 492
+    Width = 1000
+    Align = alBottom
+    ResizeAnchor = akBottom
+  end
+  object PagesEditors: TPageControl
+    Left = 0
+    Height = 466
+    Top = 26
+    Width = 1000
+    Align = alClient
+    TabOrder = 1
+    OnChange = PagesEditorsChange
+  end
+  object MainMenu1: TMainMenu
+    Left = 48
+    Top = 64
+    object MnuFile: TMenuItem
+      Caption = '&File'
+      object MnuNew: TMenuItem
+        Action = ActNew
+      end
+      object MnuOpen: TMenuItem
+        Action = ActOpen
+      end
+      object MnuRecent: TMenuItem
+        Caption = 'Open &Recent'
+      end
+      object SepF1: TMenuItem
+        Caption = '-'
+      end
+      object MnuSave: TMenuItem
+        Action = ActSave
+      end
+      object MnuSaveAs: TMenuItem
+        Action = ActSaveAs
+      end
+      object SepF2: TMenuItem
+        Caption = '-'
+      end
+      object MnuCloseTab: TMenuItem
+        Action = ActCloseTab
+      end
+      object SepF3: TMenuItem
+        Caption = '-'
+      end
+      object MnuExit: TMenuItem
+        Action = ActExit
+      end
+    end
+    object MnuEdit: TMenuItem
+      Caption = '&Edit'
+      object MnuUndo: TMenuItem
+        Action = ActUndo
+      end
+      object MnuRedo: TMenuItem
+        Action = ActRedo
+      end
+      object SepE1: TMenuItem
+        Caption = '-'
+      end
+      object MnuCut: TMenuItem
+        Action = ActCut
+      end
+      object MnuCopy: TMenuItem
+        Action = ActCopy
+      end
+      object MnuPaste: TMenuItem
+        Action = ActPaste
+      end
+      object SepE2: TMenuItem
+        Caption = '-'
+      end
+      object MnuFind: TMenuItem
+        Action = ActFind
+      end
+      object MnuFindNext: TMenuItem
+        Action = ActFindNext
+      end
+      object MnuReplace: TMenuItem
+        Action = ActReplace
+      end
+      object SepE3: TMenuItem
+        Caption = '-'
+      end
+      object MnuGotoLine: TMenuItem
+        Action = ActGotoLine
+      end
+    end
+    object MnuRunMenu: TMenuItem
+      Caption = '&Run'
+      object MnuRun: TMenuItem
+        Action = ActRun
+      end
+      object MnuCheck: TMenuItem
+        Action = ActCheck
+      end
+      object SepR1: TMenuItem
+        Caption = '-'
+      end
+      object MnuCompile: TMenuItem
+        Action = ActCompile
+      end
+      object MnuPack: TMenuItem
+        Action = ActPack
+      end
+      object MnuStop: TMenuItem
+        Action = ActStop
+      end
+    end
+    object MnuDebug: TMenuItem
+      Caption = '&Debug'
+      object MnuToggleBreakpoint: TMenuItem
+        Action = ActToggleBreakpoint
+      end
+      object MnuClearBreakpoints: TMenuItem
+        Action = ActClearBreakpoints
+      end
+      object SepD1: TMenuItem
+        Caption = '-'
+      end
+      object MnuDebugStart: TMenuItem
+        Action = ActDebugStart
+      end
+      object MnuStepOver: TMenuItem
+        Action = ActStepOver
+      end
+      object MnuStepInto: TMenuItem
+        Action = ActStepInto
+      end
+      object MnuStepOut: TMenuItem
+        Action = ActStepOut
+      end
+      object MnuContinue: TMenuItem
+        Action = ActContinue
+      end
+      object MnuDebugStop: TMenuItem
+        Action = ActDebugStop
+      end
+      object SepD2: TMenuItem
+        Caption = '-'
+      end
+      object MnuDebugWhy: TMenuItem
+        Action = ActDebugWhy
+      end
+    end
+    object MnuTools: TMenuItem
+      Caption = '&Tools'
+      object MnuPreferences: TMenuItem
+        Action = ActPreferences
+      end
+    end
+    object MnuHelp: TMenuItem
+      Caption = '&Help'
+      object MnuLangRef: TMenuItem
+        Action = ActLangRef
+      end
+      object MnuFuncRef: TMenuItem
+        Action = ActFuncRef
+      end
+      object SepH1: TMenuItem
+        Caption = '-'
+      end
+      object MnuAbout: TMenuItem
+        Action = ActAbout
+      end
+    end
+  end
+  object ActionList1: TActionList
+    OnUpdate = ActionList1Update
+    Left = 152
+    Top = 64
+    object ActNew: TAction
+      Caption = '&New'
+      Hint = 'A new, empty program'
+      OnExecute = ActNewExecute
+      ShortCut = 16462
+    end
+    object ActOpen: TAction
+      Caption = '&Open...'
+      Hint = 'Open a .bas file'
+      OnExecute = ActOpenExecute
+      ShortCut = 16463
+    end
+    object ActSave: TAction
+      Caption = '&Save'
+      Hint = 'Save this file as UTF-8 with no byte-order mark'
+      OnExecute = ActSaveExecute
+      ShortCut = 16467
+    end
+    object ActSaveAs: TAction
+      Caption = 'Save &As...'
+      OnExecute = ActSaveAsExecute
+      ShortCut = 24659
+    end
+    object ActCloseTab: TAction
+      Caption = '&Close Tab'
+      OnExecute = ActCloseTabExecute
+      ShortCut = 16471
+    end
+    object ActExit: TAction
+      Caption = 'E&xit'
+      OnExecute = ActExitExecute
+      ShortCut = 16465
+    end
+    object ActUndo: TAction
+      Caption = '&Undo'
+      OnExecute = ActUndoExecute
+      ShortCut = 16474
+    end
+    object ActRedo: TAction
+      Caption = '&Redo'
+      OnExecute = ActRedoExecute
+      ShortCut = 16473
+    end
+    object ActCut: TAction
+      Caption = 'Cu&t'
+      OnExecute = ActCutExecute
+      ShortCut = 16472
+    end
+    object ActCopy: TAction
+      Caption = '&Copy'
+      OnExecute = ActCopyExecute
+      ShortCut = 16451
+    end
+    object ActPaste: TAction
+      Caption = '&Paste'
+      OnExecute = ActPasteExecute
+      ShortCut = 16470
+    end
+    object ActFind: TAction
+      Caption = '&Find...'
+      OnExecute = ActFindExecute
+      ShortCut = 16454
+    end
+    object ActFindNext: TAction
+      Caption = 'Find &Next'
+      OnExecute = ActFindNextExecute
+      ShortCut = 114
+    end
+    object ActReplace: TAction
+      Caption = '&Replace...'
+      OnExecute = ActReplaceExecute
+      ShortCut = 16466
+    end
+    object ActGotoLine: TAction
+      Caption = '&Go to Line...'
+      OnExecute = ActGotoLineExecute
+      ShortCut = 16455
+    end
+    object ActRun: TAction
+      Caption = '&Run'
+      Hint = 'Hand this file to the phosphor host and stream its output here'
+      OnExecute = ActRunExecute
+      ShortCut = 120
+    end
+    object ActCheck: TAction
+      Caption = '&Check Syntax'
+      Hint = 'compile --check: the whole file is compiled, and unknown function names are warned about'
+      OnExecute = ActCheckExecute
+      ShortCut = 16504
+    end
+    object ActCompile: TAction
+      Caption = 'Compile to &Bytecode...'
+      Hint = 'Write a portable .pbc'
+      OnExecute = ActCompileExecute
+    end
+    object ActPack: TAction
+      Caption = 'Pack &Executable...'
+      Hint = 'Compile, then pack the bytecode into a standalone executable'
+      OnExecute = ActPackExecute
+    end
+    object ActStop: TAction
+      Caption = 'S&top'
+      Hint = 'Kill the running program'
+      OnExecute = ActStopExecute
+      ShortCut = 16497
+    end
+    object ActToggleBreakpoint: TAction
+      Caption = 'Toggle &Breakpoint'
+      Hint = 'Mark this line. Nothing stops at it yet -- see Debug > Why is stepping unavailable?'
+      OnExecute = ActToggleBreakpointExecute
+      ShortCut = 116
+    end
+    object ActClearBreakpoints: TAction
+      Caption = 'Clear All Break&points'
+      OnExecute = ActClearBreakpointsExecute
+    end
+    object ActDebugStart: TAction
+      Caption = 'Start &Debugging'
+      Enabled = False
+      ShortCut = 8312
+    end
+    object ActStepOver: TAction
+      Caption = 'Step &Over'
+      Enabled = False
+      ShortCut = 119
+    end
+    object ActStepInto: TAction
+      Caption = 'Step &Into'
+      Enabled = False
+      ShortCut = 118
+    end
+    object ActStepOut: TAction
+      Caption = 'Step O&ut'
+      Enabled = False
+      ShortCut = 8311
+    end
+    object ActContinue: TAction
+      Caption = 'C&ontinue'
+      Enabled = False
+    end
+    object ActDebugStop: TAction
+      Caption = 'Stop Debu&gging'
+      Enabled = False
+    end
+    object ActDebugWhy: TAction
+      Caption = '&Why is stepping unavailable?'
+      OnExecute = ActDebugWhyExecute
+    end
+    object ActPreferences: TAction
+      Caption = '&Preferences...'
+      OnExecute = ActPreferencesExecute
+    end
+    object ActLangRef: TAction
+      Caption = '&Language Reference'
+      OnExecute = ActLangRefExecute
+    end
+    object ActFuncRef: TAction
+      Caption = '&Function Reference'
+      OnExecute = ActFuncRefExecute
+    end
+    object ActAbout: TAction
+      Caption = '&About PhosphorIDE'
+      OnExecute = ActAboutExecute
+    end
+  end
+  object OpenDialog1: TOpenDialog
+    Options = [ofFileMustExist, ofEnableSizing, ofViewDetail]
+    Left = 256
+    Top = 64
+  end
+  object SaveDialog1: TSaveDialog
+    Options = [ofOverwritePrompt, ofPathMustExist, ofEnableSizing, ofViewDetail]
+    Left = 352
+    Top = 64
+  end
+  object FindDialog1: TFindDialog
+    OnFind = FindDialog1Find
+    Options = [frDown, frHideWholeWord]
+    Left = 448
+    Top = 64
+  end
+  object ReplaceDialog1: TReplaceDialog
+    OnReplace = ReplaceDialog1Replace
+    Options = [frDown, frHideWholeWord]
+    Left = 544
+    Top = 64
+  end
+end

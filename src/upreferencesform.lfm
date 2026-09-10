@@ -1,0 +1,236 @@
+object FrmPreferences: TFrmPreferences
+  Left = 420
+  Height = 440
+  Top = 220
+  Width = 620
+  BorderStyle = bsDialog
+  Caption = 'Preferences'
+  ClientHeight = 440
+  ClientWidth = 620
+  Position = poMainFormCenter
+  LCLVersion = '4.8.0.0'
+  object PageControl1: TPageControl
+    Left = 12
+    Height = 372
+    Top = 12
+    Width = 596
+    ActivePage = TabHost
+    TabIndex = 0
+    TabOrder = 0
+    object TabHost: TTabSheet
+      Caption = 'Host and running'
+      ClientHeight = 344
+      ClientWidth = 588
+      object LblHost: TLabel
+        Left = 16
+        Height = 15
+        Top = 16
+        Width = 400
+        Caption = 'phosphor binary (leave empty to search for one on every start):'
+      end
+      object EditHostPath: TEdit
+        Left = 16
+        Height = 25
+        Top = 38
+        Width = 452
+        OnChange = EditHostPathChange
+        TabOrder = 0
+      end
+      object BtnBrowseHost: TButton
+        Left = 478
+        Height = 25
+        Top = 38
+        Width = 94
+        Caption = 'Browse...'
+        OnClick = BtnBrowseHostClick
+        TabOrder = 1
+      end
+      object LblHostResolved: TLabel
+        Left = 16
+        Height = 30
+        Top = 70
+        Width = 556
+        Caption = 'Will use:'
+        WordWrap = True
+      end
+      object ChkSaveBeforeRun: TCheckBox
+        Left = 16
+        Height = 19
+        Top = 118
+        Width = 400
+        Caption = 'Save the file before running it'
+        TabOrder = 2
+      end
+      object ChkClearOutput: TCheckBox
+        Left = 16
+        Height = 19
+        Top = 144
+        Width = 400
+        Caption = 'Clear the output pane at the start of each run'
+        TabOrder = 3
+      end
+      object ChkSandbox: TCheckBox
+        Left = 16
+        Height = 19
+        Top = 182
+        Width = 460
+        Caption = 'Confine every path a script names (--sandbox). Fails closed.'
+        OnChange = ChkSandboxChange
+        TabOrder = 4
+      end
+      object LblSandbox: TLabel
+        Left = 36
+        Height = 15
+        Top = 208
+        Width = 460
+        Caption = 'Root directory (empty means the directory the script itself is in):'
+      end
+      object EditSandboxRoot: TEdit
+        Left = 36
+        Height = 25
+        Top = 228
+        Width = 432
+        TabOrder = 5
+      end
+      object BtnBrowseSandbox: TButton
+        Left = 478
+        Height = 25
+        Top = 228
+        Width = 94
+        Caption = 'Browse...'
+        OnClick = BtnBrowseSandboxClick
+        TabOrder = 6
+      end
+    end
+    object TabEditor: TTabSheet
+      Caption = 'Editor'
+      ClientHeight = 344
+      ClientWidth = 588
+      object LblFont: TLabel
+        Left = 16
+        Height = 15
+        Top = 20
+        Width = 80
+        Caption = 'Font:'
+      end
+      object EditFontName: TEdit
+        Left = 130
+        Height = 25
+        Top = 16
+        Width = 250
+        TabOrder = 0
+      end
+      object LblSize: TLabel
+        Left = 396
+        Height = 15
+        Top = 20
+        Width = 30
+        Caption = 'Size:'
+      end
+      object SpinFontSize: TSpinEdit
+        Left = 440
+        Height = 25
+        Top = 16
+        Width = 70
+        MaxValue = 48
+        MinValue = 6
+        TabOrder = 1
+        Value = 10
+      end
+      object LblTabWidth: TLabel
+        Left = 16
+        Height = 15
+        Top = 60
+        Width = 100
+        Caption = 'Tab width:'
+      end
+      object SpinTabWidth: TSpinEdit
+        Left = 130
+        Height = 25
+        Top = 56
+        Width = 70
+        MaxValue = 16
+        MinValue = 1
+        TabOrder = 2
+        Value = 4
+      end
+      object ChkUseSpaces: TCheckBox
+        Left = 220
+        Height = 19
+        Top = 58
+        Width = 300
+        Caption = 'Insert spaces instead of tab characters'
+        TabOrder = 3
+      end
+      object LblRightMargin: TLabel
+        Left = 16
+        Height = 15
+        Top = 100
+        Width = 110
+        Caption = 'Right margin (0 = off):'
+      end
+      object SpinRightMargin: TSpinEdit
+        Left = 130
+        Height = 25
+        Top = 96
+        Width = 70
+        MaxValue = 300
+        MinValue = 0
+        TabOrder = 4
+      end
+      object ChkLineNumbers: TCheckBox
+        Left = 16
+        Height = 19
+        Top = 140
+        Width = 300
+        Caption = 'Show line numbers'
+        TabOrder = 5
+      end
+      object ChkCurrentLine: TCheckBox
+        Left = 16
+        Height = 19
+        Top = 166
+        Width = 300
+        Caption = 'Highlight the line the caret is on'
+        TabOrder = 6
+      end
+      object ChkDark: TCheckBox
+        Left = 16
+        Height = 19
+        Top = 192
+        Width = 300
+        Caption = 'Dark colours'
+        TabOrder = 7
+      end
+    end
+  end
+  object BtnOK: TButton
+    Left = 414
+    Height = 30
+    Top = 398
+    Width = 94
+    Caption = 'OK'
+    Default = True
+    ModalResult = 1
+    TabOrder = 1
+  end
+  object BtnCancel: TButton
+    Left = 516
+    Height = 30
+    Top = 398
+    Width = 94
+    Cancel = True
+    Caption = 'Cancel'
+    ModalResult = 2
+    TabOrder = 2
+  end
+  object OpenDialogHost: TOpenDialog
+    Options = [ofFileMustExist, ofEnableSizing]
+    Left = 40
+    Top = 396
+  end
+  object SelectDirectoryDialog1: TSelectDirectoryDialog
+    Left = 120
+    Top = 396
+  end
+end

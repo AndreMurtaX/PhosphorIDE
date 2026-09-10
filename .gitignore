@@ -1,0 +1,38 @@
+# Build output
+/bin/
+
+# FPC / Lazarus compiled artifacts
+*.ppu
+*.o
+*.a
+*.or
+*.res
+*.compiled
+lib/
+backup/
+
+# Lazarus IDE session state (per-user, holds absolute paths and cursor positions,
+# not part of the project)
+*.lps
+*.lpo
+
+# lazbuild writes its own package-link registry into whatever directory it was run
+# from. Per-machine state (absolute paths to this checkout), not part of the project.
+/packagefiles.xml
+
+# Claude Code local tooling (dev-process, not part of the product)
+.claude/
+
+# Editor / OS noise
+*.bak
+*.~*
+*.orig
+Thumbs.db
+.DS_Store
+
+# crash dumps from tools run in the working tree
+*.stackdump
+
+# Python bytecode from the gate scripts
+__pycache__/
+*.pyc

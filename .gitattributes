@@ -1,0 +1,8 @@
+# One line ending in the working copy on every platform. The .lfm and .lpi files
+# are read by Lazarus on both Windows and Linux and diffed constantly; a CRLF/LF
+# flip in one of them turns a one-property change into a whole-file diff.
+* text=auto eol=lf
+
+# Fixtures the tests compare byte-for-byte: never let git touch their bytes.
+tests/fixtures/*.bas       -text
+tests/fixtures/*.expected  -text
