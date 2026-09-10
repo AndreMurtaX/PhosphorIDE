@@ -209,6 +209,14 @@ begin
   Full := ExpandFileNameUTF8(APath);
   if not FileExistsUTF8(Full) then
     Exit;
+  { EXISTING IS NOT THE SAME AS RUNNABLE. On Unix the execute bit is the whole
+    question, and a file called `phosphor` that lacks it -- unzipped without
+    permissions, copied off a FAT stick, downloaded -- would be offered as the
+    host and then fail at every Run with a message about the child not starting,
+    rather than at the one moment where the editor could say what is wrong.
+    FileIsExecutable answers per platform: on Windows it checks the extension. }
+  if not FileIsExecutable(Full) then
+    Exit;
   { CompareFilenames already knows that Windows is case-insensitive and Linux is
     not, which is one fewer platform rule spelled out by hand here. }
   for I := 0 to High(ACands) do

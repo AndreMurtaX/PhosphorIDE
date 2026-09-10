@@ -172,24 +172,55 @@ begin
   finally
     Raw.Free;
   end;
-  FFileName := APath;
+  { The path is expanded ONCE, here, and everything downstream compares and
+    reports the expanded form. A relative path works until the editor's working
+    directory is not what the user assumed -- and then the same file is open in
+    two tabs under two names, each unaware of the other's edits. }
+  FFileName := ExpandFileNameUTF8(APath);
   FEdit.Modified := False;
 end;
 
 procedure TEditorDoc.SaveToFile(const APath: String);
 var
   Stream: TFileStream;
-  Text: String;
+  Text, Temp: String;
 begin
   Text := FEdit.Lines.Text;
-  Stream := TFileStream.Create(APath, fmCreate);
+
+  { WRITE BESIDE THE FILE, THEN REPLACE IT. fmCreate truncates the target the
+    instant it is opened, so a disk that fills, a network share that drops or a
+    process killed mid-write leaves a file that is empty or half a program --
+    and the version that was there is gone. The user's only copy was the one just
+    destroyed by the act of trying to save it.
+
+    The temporary lives in the SAME directory, because a rename across a
+    filesystem is a copy and stops being atomic. }
+  Temp := APath + '.tmp-phosphoride';
+  Stream := TFileStream.Create(Temp, fmCreate);
   try
-    if Length(Text) > 0 then
-      Stream.WriteBuffer(Text[1], Length(Text));
-  finally
-    Stream.Free;
+    try
+      if Length(Text) > 0 then
+        Stream.WriteBuffer(Text[1], Length(Text));
+    finally
+      Stream.Free;
+    end;
+
+    { RenameFileUTF8 does not overwrite on Windows, so the target goes first --
+      and only once the new bytes are known to be safely written. }
+    if FileExistsUTF8(APath) and not DeleteFileUTF8(APath) then
+      raise EWriteError.CreateFmt('cannot replace %s', [APath]);
+    if not RenameFileUTF8(Temp, APath) then
+      raise EWriteError.CreateFmt('wrote %s but could not rename it to %s',
+        [Temp, APath]);
+  except
+    { The half-written temporary is this unit's mess to clear up; leaving one
+      beside every failed save is its own small defect. }
+    if FileExistsUTF8(Temp) then
+      DeleteFileUTF8(Temp);
+    raise;
   end;
-  FFileName := APath;
+
+  FFileName := ExpandFileNameUTF8(APath);
   FEdit.Modified := False;
 end;
 

@@ -144,6 +144,11 @@ type
 
 implementation
 
+{$IFDEF UNIX}
+uses
+  BaseUnix;
+{$ENDIF}
+
 const
   { How often the main thread turns collected bytes into lines. Small enough that
     output feels live, large enough that a program printing in a tight loop does
@@ -200,6 +205,22 @@ end;
 constructor TPhosphorRunner.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+
+  {$IFDEF UNIX}
+  { WRITING TO A PIPE WHOSE READER IS GONE RAISES SIGPIPE, AND THE DEFAULT
+    DISPOSITION OF SIGPIPE IS TO TERMINATE THE PROCESS.
+
+    Which process? THIS one -- the editor. The window, the tabs and every unsaved
+    buffer, killed by a signal, because the user pressed Send a moment after the
+    program they were answering happened to finish. There is no exception to catch
+    and nothing in the except block below would ever run.
+
+    Ignored here rather than in the .lpr, because this is the unit that owns the
+    only pipe the editor writes to. SIG_IGN turns the signal into an ordinary
+    EPIPE error return, which the write below already handles by doing nothing. }
+  FpSignal(SIGPIPE, SignalHandler(SIG_IGN));
+  {$ENDIF}
+
   FLock := TCriticalSection.Create;
   FTimer := TTimer.Create(Self);
   FTimer.Enabled := False;

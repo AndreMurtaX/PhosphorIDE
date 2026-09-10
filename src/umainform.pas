@@ -22,7 +22,7 @@ unit umainform;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Menus, ComCtrls,
+  Classes, SysUtils, Math, Forms, Controls, Graphics, Dialogs, Menus, ComCtrls,
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
@@ -217,6 +217,7 @@ type
     procedure FocusEditor(ADoc: TEditorDoc);
     function NewDoc(const APath: String): TEditorDoc;
     function ConfirmSaved(ADoc: TEditorDoc): Boolean;
+    procedure SaveDoc(ADoc: TEditorDoc);
     function EnsureSavedForRun(out APath: String): Boolean;
     procedure CloseDocAt(AIndex: Integer);
 
@@ -232,7 +233,7 @@ type
 
     procedure ResolveHost;
     function RequireHost: Boolean;
-    procedure StartHost(const AArgs: array of String; const AWhat: String);
+    function StartHost(const AArgs: array of String; const AWhat: String): Boolean;
 
     procedure AddOutput(const AText: String);
     procedure AppendOutput(AKind: TRunStream; const AText: String;
@@ -309,16 +310,27 @@ begin
   OpenDialog1.Filter := PhosphorFilter;
   SaveDialog1.Filter := PhosphorFilter;
 
+  { GEOMETRY FROM A PREVIOUS RUN IS A CLAIM ABOUT A SCREEN THAT MAY BE GONE. The
+    second monitor is unplugged, the laptop is docked somewhere else, the
+    resolution changed -- and the window is restored onto coordinates with no
+    pixels behind them, which is a program that started and cannot be found.
+    Clamped into the current workspace, never refused outright. }
   if FSettings.WindowWidth > 0 then
   begin
-    Left := FSettings.WindowLeft;
-    Top := FSettings.WindowTop;
-    Width := FSettings.WindowWidth;
-    Height := FSettings.WindowHeight;
+    Width := Min(FSettings.WindowWidth, Screen.WorkAreaWidth);
+    Height := Min(FSettings.WindowHeight, Screen.WorkAreaHeight);
+    Left := Max(Screen.WorkAreaLeft,
+                Min(FSettings.WindowLeft, Screen.WorkAreaLeft + Screen.WorkAreaWidth - Width));
+    Top := Max(Screen.WorkAreaTop,
+               Min(FSettings.WindowTop, Screen.WorkAreaTop + Screen.WorkAreaHeight - Height));
   end;
   if FSettings.WindowMaximised then
     WindowState := wsMaximized;
-  PagesOutput.Height := FSettings.OutputPaneHeight;
+
+  { And a stored pane height taller than the window leaves the editor with no
+    height at all -- and the splitter with nothing to drag, so there is no way
+    back from it inside the program. }
+  PagesOutput.Height := Max(60, Min(FSettings.OutputPaneHeight, ClientHeight - 150));
 
   ResolveHost;
   RefreshRecentMenu;
@@ -375,8 +387,19 @@ var
 begin
   CanClose := True;
 
-  { A running child is not a reason to refuse to close, but it is a reason to ask:
-    closing the editor kills it, and the user may be watching it work. }
+  { UNSAVED WORK IS ASKED ABOUT FIRST, and the child is killed LAST.
+
+    The other order looks equivalent and is not: killing first and then finding
+    that the user cancels at a save prompt leaves the window open with its program
+    already dead -- a run destroyed by a close that did not happen. Nothing is
+    ended until everything has agreed to end. }
+  for I := 0 to FDocs.Count - 1 do
+    if not ConfirmSaved(TEditorDoc(FDocs[I])) then
+    begin
+      CanClose := False;
+      Exit;
+    end;
+
   if FRunner.Running then
   begin
     if MessageDlg('PhosphorIDE',
@@ -388,13 +411,6 @@ begin
     end;
     FRunner.Kill;
   end;
-
-  for I := 0 to FDocs.Count - 1 do
-    if not ConfirmSaved(TEditorDoc(FDocs[I])) then
-    begin
-      CanClose := False;
-      Exit;
-    end;
 end;
 
 { ---------------------------------------------------------------- documents -- }
@@ -428,13 +444,25 @@ begin
   Result := TEditorDoc.Create(Page);
   FDocs.Add(Result);
 
-  if APath = '' then
-  begin
-    Inc(FUntitledCounter);
-    Result.UntitledIndex := FUntitledCounter;
-  end
-  else
-    Result.LoadFromFile(APath);
+  { A file that will not read raises out of here, and the caller reports it. What
+    must NOT survive is the tab: a page and a document that were added before the
+    read failed leave an untitled, unhighlighted editor with no event handlers and
+    no caption, which the user then has to close by hand and which the run actions
+    will happily hand to the host. }
+  try
+    if APath = '' then
+    begin
+      Inc(FUntitledCounter);
+      Result.UntitledIndex := FUntitledCounter;
+    end
+    else
+      Result.LoadFromFile(APath);
+  except
+    FDocs.Remove(Result);
+    Result.Free;
+    Page.Free;
+    raise;
+  end;
 
   Result.Edit.Highlighter := FHighlighter;
   Result.Edit.OnChange := @EditorChange;
@@ -494,7 +522,11 @@ begin
   case Answer of
     mrYes:
       begin
-        ActSaveExecute(nil);
+        { SaveDoc, not ActSaveExecute. The prompt above named a document; saving
+          "the active one" instead is a bet that nothing changed the active tab
+          between the question and the answer -- and things do, because a
+          diagnostic draining in from a still-running child switches tabs. }
+        SaveDoc(ADoc);
         Result := not ADoc.Modified;
       end;
     mrNo: Result := True;
@@ -505,35 +537,55 @@ end;
 
 procedure TFrmMain.OpenPath(const APath: String);
 var
-  I: Integer;
-  Doc: TEditorDoc;
+  I, Idx: Integer;
+  Doc, Pristine: TEditorDoc;
+  Full: String;
 begin
+  { Every comparison downstream is against an expanded path, so the incoming one
+    is expanded here. A relative path opened twice under two spellings is two tabs
+    owning one file, each unaware of the other's edits. }
+  Full := ExpandFileNameUTF8(APath);
   { Already open? Show that tab rather than opening the file twice, which is how
     two views of one file quietly diverge. }
   for I := 0 to FDocs.Count - 1 do
   begin
     Doc := TEditorDoc(FDocs[I]);
-    if (not Doc.IsUntitled) and (CompareFilenames(Doc.FileName, APath) = 0) then
+    if (not Doc.IsUntitled) and (CompareFilenames(Doc.FileName, Full) = 0) then
     begin
       PagesEditors.ActivePageIndex := I;
       Exit;
     end;
   end;
 
-  { An untouched, unnamed, empty first tab is replaced rather than added to. }
-  Doc := ActiveDoc;
-  if (FDocs.Count = 1) and (Doc <> nil) and Doc.IsUntitled and
-     (not Doc.Modified) and (Doc.Edit.Lines.Count <= 1) and (Doc.Edit.Lines.Text = '') then
-    CloseDocAt(FDocs.IndexOf(Doc));
+  { Open FIRST, discard the pristine tab afterwards. The other order looks tidier
+    and leaves two tabs behind: CloseDocAt re-creates an untitled document when it
+    empties the list, so closing the only tab before opening produces the empty
+    tab it was supposed to remove, plus the new one. }
+  Pristine := ActiveDoc;
+  if not ((FDocs.Count = 1) and (Pristine <> nil) and Pristine.IsUntitled and
+          (not Pristine.Modified) and (Pristine.Edit.Lines.Count <= 1) and
+          (Pristine.Edit.Lines.Text = '')) then
+    Pristine := nil;
 
   try
-    Doc := NewDoc(APath);
+    Doc := NewDoc(Full);
   except
     on E: Exception do
     begin
       MessageDlg('PhosphorIDE', Format('Could not open %s:'#10'%s', [APath, E.Message]),
         mtError, [mbOK], 0);
       Exit;
+    end;
+  end;
+
+  if Pristine <> nil then
+  begin
+    Idx := FDocs.IndexOf(Pristine);
+    if Idx >= 0 then
+    begin
+      FDocs.Delete(Idx);
+      Pristine.Free;
+      PagesEditors.Pages[Idx].Free;
     end;
   end;
 
@@ -557,35 +609,40 @@ begin
     OpenPath(OpenDialog1.FileName);
 end;
 
-procedure TFrmMain.ActSaveExecute(Sender: TObject);
-var
-  Doc: TEditorDoc;
+procedure TFrmMain.SaveDoc(ADoc: TEditorDoc);
 begin
-  Doc := ActiveDoc;
-  if Doc = nil then
+  if ADoc = nil then
     Exit;
-  if Doc.IsUntitled then
+  if ADoc.IsUntitled then
   begin
-    ActSaveAsExecute(Sender);
+    PagesEditors.ActivePageIndex := FDocs.IndexOf(ADoc);
+    ActSaveAsExecute(nil);
     Exit;
   end;
   try
-    Doc.SaveToFile(Doc.FileName);
+    ADoc.SaveToFile(ADoc.FileName);
   except
     on E: Exception do
     begin
       MessageDlg('PhosphorIDE', Format('Could not save %s:'#10'%s',
-        [Doc.FileName, E.Message]), mtError, [mbOK], 0);
+        [ADoc.FileName, E.Message]), mtError, [mbOK], 0);
       Exit;
     end;
   end;
-  RefreshTabCaption(Doc);
+  RefreshTabCaption(ADoc);
   RefreshStatus;
+end;
+
+procedure TFrmMain.ActSaveExecute(Sender: TObject);
+begin
+  SaveDoc(ActiveDoc);
 end;
 
 procedure TFrmMain.ActSaveAsExecute(Sender: TObject);
 var
-  Doc: TEditorDoc;
+  Doc, Other: TEditorDoc;
+  I: Integer;
+  Target: String;
 begin
   Doc := ActiveDoc;
   if Doc = nil then
@@ -596,13 +653,33 @@ begin
     SaveDialog1.FileName := 'untitled.bas';
   if not SaveDialog1.Execute then
     Exit;
+
+  { TWO TABS MUST NEVER OWN ONE FILE. Each would keep its own text, its own
+    modified flag and its own breakpoints, and the last one saved would silently
+    win -- so the first user's work disappears into a file they still have open
+    and still believe they are editing. }
+  Target := ExpandFileNameUTF8(SaveDialog1.FileName);
+  for I := 0 to FDocs.Count - 1 do
+  begin
+    Other := TEditorDoc(FDocs[I]);
+    if (Other <> Doc) and (not Other.IsUntitled) and
+       (CompareFilenames(Other.FileName, Target) = 0) then
+    begin
+      MessageDlg('PhosphorIDE',
+        Format('%s is already open in another tab.'#10#10 +
+               'Close that tab first, or choose a different name.',
+               [ExtractFileName(Target)]), mtError, [mbOK], 0);
+      Exit;
+    end;
+  end;
+
   try
-    Doc.SaveToFile(SaveDialog1.FileName);
+    Doc.SaveToFile(Target);
   except
     on E: Exception do
     begin
       MessageDlg('PhosphorIDE', Format('Could not save %s:'#10'%s',
-        [SaveDialog1.FileName, E.Message]), mtError, [mbOK], 0);
+        [Target, E.Message]), mtError, [mbOK], 0);
       Exit;
     end;
   end;
@@ -790,11 +867,12 @@ begin
     mtError, [mbOK], 0);
 end;
 
-procedure TFrmMain.StartHost(const AArgs: array of String; const AWhat: String);
+function TFrmMain.StartHost(const AArgs: array of String; const AWhat: String): Boolean;
 var
   WorkDir: String;
   Doc: TEditorDoc;
 begin
+  Result := False;
   if FRunner.Running then
   begin
     MessageDlg('PhosphorIDE',
@@ -823,7 +901,7 @@ begin
     FRunPath := '';
   PagesOutput.ActivePage := TabOutput;
   AddOutput(Format('> %s', [AWhat]));
-  FRunner.Start(FHostPath, AArgs, WorkDir);
+  Result := FRunner.Start(FHostPath, AArgs, WorkDir);
   RefreshStatus;
 end;
 
@@ -904,8 +982,16 @@ begin
     and the second is started by RunnerFinished only if the first succeeded. }
   FPendingPackExe := SaveDialog1.FileName;
   FPendingPackPbc := GetTempDir(False) + ExtractFileName(Path) + '.pack.pbc';
-  StartHost(['compile', Path, FPendingPackPbc],
-    Format('compile %s for packing', [ExtractFileName(Path)]));
+  { ARMED ONLY IF THE COMPILE ACTUALLY STARTED. StartHost declines when something
+    is already running, and a pack left armed by a refusal fires on the NEXT run
+    that happens to succeed -- silently writing an executable the user asked for
+    minutes ago, from a different program. }
+  if not StartHost(['compile', Path, FPendingPackPbc],
+       Format('compile %s for packing', [ExtractFileName(Path)])) then
+  begin
+    FPendingPackExe := '';
+    FPendingPackPbc := '';
+  end;
 end;
 
 procedure TFrmMain.ActStopExecute(Sender: TObject);
