@@ -1,7 +1,7 @@
 # PhosphorIDE -- working rules
 
 PhosphorIDE is a small desktop editor for **Phosphor BASIC**, written in Free Pascal
-against Lazarus 4.8 / FPC 3.2.2 with the LCL and SynEdit. Windows and Linux, MIT, by
+against Lazarus 3.6 or 4.8 with FPC 3.2.2, and the LCL and SynEdit. Windows and Linux, MIT, by
 AndreMurtaX. It edits `.bas` files in tabs with a purpose-built highlighter, and it
 drives the `phosphor` binary from the sibling repository
 (<https://github.com/AndreMurtaX/Phosphor>) to run, check, compile and pack them. It is

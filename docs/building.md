@@ -5,14 +5,16 @@ which matter here more than usual, because several of the failures this project 
 already paid for do not look like build failures. They look like a build that never
 finishes.
 
-Everything below is Lazarus 4.8 with FPC 3.2.2 on Windows 11 and on Linux/gtk2. Those
+Everything below is Lazarus 4.8 with FPC 3.2.2 on Windows 11 and on Linux/gtk2. CI
+additionally builds and checks it on **Lazarus 3.6**, so the supported range is both.
+Those
 are the versions this was built and verified with, not a supported-matrix claim.
 
 ---
 
 ## What you need
 
-**Lazarus 4.8 / FPC 3.2.2.** Confirm both before blaming anything else:
+**Lazarus 3.6 or 4.8, FPC 3.2.2.** Confirm before blaming anything else:
 
 ```
 lazbuild --version      # 4.8

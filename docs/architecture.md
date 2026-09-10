@@ -2,7 +2,7 @@
 
 How PhosphorIDE is put together, and why each piece is shaped the way it is.
 
-PhosphorIDE is a Lazarus 4.8 / FPC 3.2.2 LCL application: a tabbed SynEdit editor
+PhosphorIDE is a Lazarus (3.6 or 4.8) / FPC 3.2.2 LCL application: a tabbed SynEdit editor
 with a purpose-built Phosphor BASIC highlighter, an output pane, and a set of
 actions that hand the file on screen to the `phosphor` binary. It links SynEdit
 and the LCL. It does not link the Phosphor engine, and the rest of this document
@@ -780,7 +780,7 @@ not at all.
 
 | | |
 | --- | --- |
-| Toolchain | Lazarus 4.8, FPC 3.2.2, LCL + SynEdit |
+| Toolchain | Lazarus 3.6 or 4.8, FPC 3.2.2, LCL + SynEdit |
 | Platforms | Windows and Linux |
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |

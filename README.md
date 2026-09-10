@@ -1,5 +1,7 @@
 # PhosphorIDE
 
+[![build](https://github.com/AndreMurtaX/PhosphorIDE/actions/workflows/build.yml/badge.svg)](https://github.com/AndreMurtaX/PhosphorIDE/actions/workflows/build.yml)
+
 An editor for [Phosphor BASIC](https://github.com/AndreMurtaX/Phosphor), written in
 Free Pascal against Lazarus/LCL and SynEdit. Desktop only -- Windows and Linux, the
 same source on both. MIT licensed.
@@ -19,8 +21,10 @@ debugger that has to be a protocol rather than a function call. See
 
 ## Quickstart
 
-Requires Lazarus 4.8 with FPC 3.2.2 and the LCL, SynEdit and LazUtils packages --
-all three ship with Lazarus, so a stock install is enough.
+Requires **Lazarus 3.6 or 4.8** with FPC 3.2.2 and the LCL, SynEdit and LazUtils
+packages, all three of which ship with Lazarus, so a stock install is enough. Both
+versions are measured rather than assumed: 4.8 is what it was written and driven by
+hand against, 3.6 is what CI builds and checks it with.
 
 ```powershell
 powershell -NoProfile -File scripts\build.ps1        # Windows

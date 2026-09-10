@@ -83,15 +83,18 @@ platform is what produced the question.**
 
 ## 2. Continuous integration on both platforms
 
-**What.** `.github/workflows/build.yml` exists and **has never run**. It is two jobs --
-`windows-latest` and `ubuntu-latest` -- each checking out `AndreMurtaX/Phosphor` beside
-this repository, installing Lazarus, and running that platform's build script, with xvfb
-on Linux so the selftest is not skipped.
+**DONE, 2026-09-10.** `.github/workflows/build.yml` runs two jobs -- `windows-latest`
+and `ubuntu-latest` -- each checking out `AndreMurtaX/Phosphor` beside this repository,
+installing Lazarus, and running that platform's build script, with xvfb on Linux so the
+selftest is not skipped. Both are green.
 
-The unverified part is the Lazarus version. This code was written and proved against
-Lazarus 4.8 / FPC 3.2.2, and `gcarreno/setup-lazarus@v3.3.1` is asked for `stable`, which
-is whatever that action currently pins -- not necessarily 4.8. Nothing in `src/` knowingly
-uses a 4.x-only API, but "knowingly" is not "checked". The first push is the experiment.
+The open question it answered was the Lazarus version. `gcarreno/setup-lazarus@v3.3.1`
+was asked for `stable` and installed **Lazarus 3.6 with FPC 3.2.2** on both platforms --
+not the 4.8 this was written against. It built with zero errors, warnings and notes,
+passed all 147 checks, and constructed all three forms on both widgetsets. So the
+supported range is wider than the machine it was written on: **Lazarus 3.6 and 4.8**.
+That is a measured fact now rather than a hope, and it is the kind that quietly stops
+being true, which is what the CI is for.
 
 **Why.** Three of the nine traps recorded on 2026-09-10 produced a binary `lazbuild` was
 perfectly happy with. Only a script catches those, and a script that runs on one machine
@@ -102,23 +105,27 @@ asserts `{'core': 534, 'package': 181, 'gui': 426}`, so a Phosphor release that 
 built-in turns this repository red instead of silently leaving the editor ignorant of the
 new name. That only works if something runs it on every push.
 
-**Done when.**
+**What is done.**
 
 - A push runs both jobs and both are green.
-- A deliberate temporary edit -- delete one word from a list in
-  `src/core/uphosphorlang.pas` -- turns the Linux job red at the table step, and the log
-  names the file. Then revert it. **A gate nobody has watched fail is not known to be able
-  to fail**, and that rule is why this condition is written down rather than assumed.
-- The Linux selftest step runs under xvfb and its log shows the four lines the report file
-  carries, including `language tables: 53 keywords, 538 core, 181 package, 426 gui`.
-- The Lazarus version the action actually installed is visible in the log, and either it
-  is 4.8 or the difference has been looked at rather than assumed away.
-- The artefact upload is understood to be the Default build: tens of megabytes, because
-  it carries debug info. If that is not wanted, the job builds `--release` instead --
-  what must not happen is a 40 MB download labelled as a release.
+- The Linux selftest runs under xvfb rather than being skipped, and its log carries the
+  report lines, including `status bar: 4 panels, simple=False, 1 tabs`.
+- The Lazarus version is visible in the log, and the difference from 4.8 was looked at
+  rather than assumed away.
 
-**Touches.** `.github/workflows/build.yml` (exists, unproven), `README.md` for a status
-badge once the workflow is actually green -- and not before, because a badge is a claim.
+**What is still owed on this item.**
+
+- **The gate has not been watched failing.** Delete one word from a list in
+  `src/core/uphosphorlang.pas`, push, confirm the job turns red at the table step with
+  the file named, then revert. A gate nobody has watched fail is not known to be able to
+  fail -- that rule is the sibling repository's and it applies here.
+- The artefact upload is the Default build: tens of megabytes, because it carries debug
+  info. Decide whether that is wanted, or build `--release` for it. What must not happen
+  is a 40 MB debug binary offered as a release.
+- The `actions/checkout@v4`, `upload-artifact@v4` and `setup-lazarus@v3.3.1` steps all
+  raise a Node 20 deprecation annotation on every run. Harmless today, a failure later.
+
+**Touches.** `.github/workflows/build.yml`.
 
 ---
 
