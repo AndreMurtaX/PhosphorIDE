@@ -46,7 +46,7 @@ Five things, and no more:
    SendInput             ---- stdin --------->   INPUT, LINE INPUT, INPUT$
    reader thread         <--- stdout --------    PRINT, PRINTLN, the program
    reader thread         <--- stderr --------    phosphor: x.bas:12: <message>
-   FProcess.ExitStatus   <--- exit code -----    0 | 1 | 2 | 3
+   FProcess.ExitCode     <--- exit code -----    0 | 1 | 2 | 3
    Kill                  ---- TerminateProcess / SIGKILL -->
 ```
 
@@ -125,10 +125,12 @@ known and recorded limit rather than something to discover later.
 
 Two honest consequences of having no ceilings:
 
-- A program that prints without stopping grows the output pane without bound.
-  `TFrmMain.AddOutput` appends to a `TMemo` and nothing trims it, so the memory
-  belongs to the editor even though the loop belongs to the child. Stop ends it.
-  A line cap on the pane is the obvious fix and is not written.
+- A program that prints without stopping would grow the output pane without
+  bound, so the pane keeps the last `MaxOutputLines` (5000) and drops the oldest
+  -- the half nobody was reading. It also scrolls with `GetTextLen` rather than
+  `Length(Memo.Text)`: reading `.Text` concatenates every line into one string, so
+  the obvious way to scroll costs O(total output) per line and the whole thing is
+  quadratic. That was measured as a hang, not reasoned about.
 - A program that allocates without stopping is the operating system's problem,
   and the editor's only involvement is that Stop still works while it happens.
   That is exactly the property the process boundary was bought for.
@@ -168,7 +170,8 @@ Two honest consequences of having no ceilings:
         |         |                       its breakpoints
         |         +-- core/ubreakpoints.pas .. the marks, and the arithmetic that
         |                                      keeps them on their statement
-        +-- core/uphosphorrun.pas ....... the child process: two reader threads
+        +-- core/uphosphorrun.pas ....... the child process: two readers, a
+        |                                 writer,
         |                                 and a drain timer
         +-- core/uphosphorsettings.pas .. the INI under the per-user config dir
         +-- core/usynphosphor.pas ....... the SynEdit highlighter
@@ -304,9 +307,10 @@ the host that decides at startup whether a graphical session is reachable.
 
 ## 3. The async runner
 
-`TPhosphorRunner` is **one thread per pipe, plus a timer on the main thread that
-drains what they collected.** Three alternatives were considered and each is
-rejected for a specific, reproducible reason.
+`TPhosphorRunner` is **one thread per pipe -- two readers and a writer -- plus a
+timer on the main thread that drains what the readers collected.** Three
+alternatives were considered and each is rejected for a specific, reproducible
+reason.
 
 ### Why not one thread reading both pipes
 

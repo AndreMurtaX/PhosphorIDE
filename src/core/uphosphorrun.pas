@@ -4,9 +4,10 @@ unit uphosphorrun;
 
   THE SHAPE, AND WHY IT IS THIS SHAPE.
 
-  One thread per pipe, plus a timer on the main thread that drains what they
-  collected. Not the obvious single-threaded `while Running do if
-  NumBytesAvailable > 0 then Read`, and not one thread reading both pipes:
+  One thread per pipe -- two readers and a writer -- plus a timer on the main
+  thread that drains what the readers collected. Not the obvious single-threaded
+  `while Running do if NumBytesAvailable > 0 then Read`, and not one thread
+  reading both pipes:
 
   - ONE THREAD READING BOTH PIPES DEADLOCKS. A blocking read on stdout does not
     return while the child is writing to stderr, and once the stderr pipe's buffer
@@ -17,6 +18,12 @@ unit uphosphorrun;
   - POLLING NumBytesAvailable WORKS BUT LIES ABOUT WHEN THE CHILD IS DONE. It
     also spends the interval asleep, so output arrives in visible jerks. A
     blocking read delivers the moment the child writes.
+
+  - AND THE UI THREAD MUST NOT WRITE STDIN EITHER, for the mirror-image reason: a
+    pipe write blocks when its 1 KB buffer is full, which is what happens after a
+    couple of dozen sends to a program that is not reading. TPipeWriterThread has
+    the details; the short version is that the editor would be hung by the program
+    it exists to stay outside of.
 
   The threads never touch the LCL. They append bytes to a guarded buffer, and
   DrainTimer -- on the main thread, where the VCL/LCL rule is that the UI is
@@ -71,6 +78,35 @@ type
     constructor Create(ARunner: TPhosphorRunner; AStream: TStream; AKind: TRunStream);
   end;
 
+  { The writer. THE UI THREAD MUST NOT WRITE TO THE CHILD'S STDIN.
+
+    A pipe write blocks when the buffer is full, and fcl-process gives the pipe
+    1024 bytes by default. A program that is not reading -- most of them, most of
+    the time -- fills that after a couple of dozen sends, and the next write parks
+    the main thread inside SendInput. The window stops repainting, Stop stops
+    working, and the only way out is the task manager: the editor is hung by the
+    program it was supposed to be safely outside of.
+
+    So SendInput hands the text to this thread and returns. A full pipe stalls the
+    writer, which is a thread nobody is looking at. }
+  TPipeWriterThread = class(TThread)
+  private
+    FRunner: TPhosphorRunner;
+    FStream: TStream;
+    FWake: TSimpleEvent;
+    FLock: TCriticalSection;
+    FQueue: String;          // guarded by FLock
+    FCloseWhenDrained: Boolean;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ARunner: TPhosphorRunner; AStream: TStream);
+    destructor Destroy; override;
+    procedure Post(const AText: String);
+    procedure RequestClose;
+    procedure Stop;
+  end;
+
   { TPhosphorRunner }
 
   TPhosphorRunner = class(TComponent)
@@ -78,6 +114,7 @@ type
     FProcess: TProcessUTF8;
     FOut: TPipeReaderThread;
     FErr: TPipeReaderThread;
+    FIn: TPipeWriterThread;
     FTimer: TTimer;
     FLock: TCriticalSection;
 
@@ -200,6 +237,95 @@ begin
   end;
 end;
 
+{ ---------------------------------------------------------------- the writer - }
+
+constructor TPipeWriterThread.Create(ARunner: TPhosphorRunner; AStream: TStream);
+begin
+  FRunner := ARunner;
+  FStream := AStream;
+  FQueue := '';
+  FCloseWhenDrained := False;
+  FLock := TCriticalSection.Create;
+  FWake := TSimpleEvent.Create;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+destructor TPipeWriterThread.Destroy;
+begin
+  inherited Destroy;
+  FWake.Free;
+  FLock.Free;
+end;
+
+procedure TPipeWriterThread.Post(const AText: String);
+begin
+  FLock.Acquire;
+  try
+    FQueue := FQueue + AText;
+  finally
+    FLock.Release;
+  end;
+  FWake.SetEvent;
+end;
+
+procedure TPipeWriterThread.RequestClose;
+begin
+  FLock.Acquire;
+  try
+    FCloseWhenDrained := True;
+  finally
+    FLock.Release;
+  end;
+  FWake.SetEvent;
+end;
+
+procedure TPipeWriterThread.Stop;
+begin
+  Terminate;
+  FWake.SetEvent;
+end;
+
+procedure TPipeWriterThread.Execute;
+var
+  Chunk: String;
+  Closing: Boolean;
+begin
+  Chunk := '';
+  while not Terminated do
+  begin
+    { A one-second cap rather than an infinite wait, so a thread whose event was
+      set and cleared in a race still notices Terminate. }
+    FWake.WaitFor(1000);
+    FWake.ResetEvent;
+
+    FLock.Acquire;
+    try
+      Chunk := FQueue;
+      FQueue := '';
+      Closing := FCloseWhenDrained;
+    finally
+      FLock.Release;
+    end;
+
+    if (Chunk <> '') and (FStream <> nil) then
+      try
+        { THIS is the call that may block, and it blocks HERE. }
+        FStream.WriteBuffer(Chunk[1], Length(Chunk));
+      except
+        { The child closed its input or exited. On Unix the write returns EPIPE
+          because SIGPIPE is ignored (see TPhosphorRunner.Create); on Windows it
+          is ERROR_NO_DATA. Either way there is nothing to report: the run's
+          outcome is its exit code. }
+        on E: Exception do
+          FStream := nil;
+      end;
+
+    if Closing then
+      Break;
+  end;
+end;
+
 { ---------------------------------------------------------------- the runner - }
 
 constructor TPhosphorRunner.Create(AOwner: TComponent);
@@ -318,6 +444,7 @@ begin
 
   FOut := TPipeReaderThread.Create(Self, FProcess.Output, rsStdOut);
   FErr := TPipeReaderThread.Create(Self, FProcess.Stderr, rsStdErr);
+  FIn := TPipeWriterThread.Create(Self, FProcess.Input);
   FTimer.Enabled := True;
   Result := True;
 end;
@@ -456,32 +583,21 @@ begin
 end;
 
 procedure TPhosphorRunner.SendInput(const ALine: String);
-var
-  Data: String;
 begin
-  if (FProcess = nil) or (not FProcess.Running) or (FProcess.Input = nil) then
+  { Queued, never written from here. See TPipeWriterThread's header: a 1 KB pipe
+    that the child is not reading turns a write on this thread into a frozen
+    editor. }
+  if (FIn = nil) or (FProcess = nil) or (not FProcess.Running) then
     Exit;
-  Data := ALine + LineEnding;
-  try
-    FProcess.Input.Write(Data[1], Length(Data));
-  except
-    { The child closed its input, or exited between the check and the write.
-      Nothing to report: the run's outcome is its exit code. }
-    on E: Exception do
-      ;
-  end;
+  FIn.Post(ALine + LineEnding);
 end;
 
 procedure TPhosphorRunner.CloseInput;
 begin
-  if (FProcess = nil) or (FProcess.Input = nil) then
-    Exit;
-  try
-    FProcess.CloseInput;
-  except
-    on E: Exception do
-      ;
-  end;
+  { Drains what is queued first, then closes. Closing underneath a queued line
+    would lose the answer the user has already typed. }
+  if FIn <> nil then
+    FIn.RequestClose;
 end;
 
 procedure TPhosphorRunner.Kill;
@@ -499,6 +615,25 @@ end;
 
 procedure TPhosphorRunner.Cleanup;
 begin
+  { THE WRITER GOES FIRST, and the child's input is closed before waiting on it:
+    a writer parked inside a blocking write would never see Terminate, and WaitFor
+    would then hang the main thread -- the exact failure the writer thread exists
+    to prevent, moved one place along. Closing the pipe makes that write fail
+    instead. }
+  if FIn <> nil then
+  begin
+    FIn.Stop;
+    if FProcess <> nil then
+      try
+        FProcess.CloseInput;
+      except
+        on E: Exception do
+          ;
+      end;
+    FIn.WaitFor;
+    FreeAndNil(FIn);
+  end;
+
   { The reader threads end on their own when their pipes report end of file, which
     the child's exit guarantees. Terminate is set anyway so that a reader still
     blocked on a pipe that never closes is asked to stop, and WaitFor makes the

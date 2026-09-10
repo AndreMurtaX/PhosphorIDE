@@ -110,13 +110,18 @@ the bar.
   never returns must still leave the user able to stop it, save around it and edit
   while it spins -- which is the whole point of the child process. The only sanctioned
   blocking call is `RunAndCapture`, and only because it has a deadline.
-- **One reader thread per pipe.** Not one thread reading both: a blocking read on
-  stdout does not return while the child is filling stderr, and once the stderr buffer
-  fills the child blocks on its write, so neither side moves again. The provoking
-  program is entirely ordinary -- one that prints a lot and then fails. Two threads
-  deposit into a lock-guarded buffer and a timer on the main thread drains it into
-  whole lines. No `Synchronize`, no `Queue`, and the threads never touch the LCL.
-  (`uphosphorrun.pas:5-33`.)
+- **One thread per pipe: two readers and a writer.** Not one thread reading both: a
+  blocking read on stdout does not return while the child is filling stderr, and once
+  the stderr buffer fills the child blocks on its write, so neither side moves again.
+  The provoking program is entirely ordinary -- one that prints a lot and then fails.
+  The readers deposit into a lock-guarded buffer and a timer on the main thread drains
+  it into whole lines. No `Synchronize`, no `Queue`, and no thread touches the LCL.
+  **Stdin is a thread for the mirror-image reason**: a pipe write blocks when its
+  1 KB buffer is full, which is what a couple of dozen sends to a program that is not
+  reading produce, and that write on the main thread is a frozen editor with Stop
+  included. `SendInput` queues and returns. `Cleanup` closes the child's input BEFORE
+  waiting on the writer, or a writer parked in a blocking write never sees `Terminate`
+  and `WaitFor` reproduces the hang one place along. (`uphosphorrun.pas`.)
 - **Lines, not bytes, cross the boundary.** A pipe read can end mid-line, and a parser
   fed half of `phosphor: x.bas:2: unexpected token` finds no error at all. The partial
   tail is held until its newline, and flushed unterminated at end of stream -- or,
