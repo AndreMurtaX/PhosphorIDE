@@ -91,6 +91,7 @@ object FrmMain: TFrmMain
     Height = 23
     Top = 677
     Width = 1000
+    SimplePanel = False
     Panels = <
       item
         Text = '1: 1'

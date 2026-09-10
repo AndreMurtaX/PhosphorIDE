@@ -197,6 +197,12 @@ type
     FPendingPackExe: String;    // set while a compile-then-pack is in flight
     FPendingPackPbc: String;
     FRunLabel: String;          // what the running command is, for the status bar
+    { The file THIS run was started on. A diagnostic belongs to the program that
+      was handed to the host, and the user is free to switch tabs while it runs --
+      so attributing an error to whatever happens to be active when stderr arrives
+      sends the caret into the wrong file. Captured at the moment the child is
+      spawned, and only cleared when the next one is. }
+    FRunPath: String;
     FProblemLines: TStringList; // 'path|line' parallel to ListProblems.Items
     { The output pane is one memo fed by two streams. When a stream hands over an
       unterminated line -- a prompt -- the next thing from THAT stream continues
@@ -231,6 +237,8 @@ type
     procedure AddOutput(const AText: String);
     procedure AppendOutput(AKind: TRunStream; const AText: String;
       ACompleteLine: Boolean);
+    procedure ScrollOutputToEnd;
+    procedure TrimOutput;
     procedure AddProblem(const AMsg: TPhosphorMessage; const AFallbackPath: String);
     procedure GotoSource(const APath: String; ALine: Integer);
 
@@ -271,6 +279,11 @@ const
   UrlDebugProtocol = 'https://github.com/AndreMurtaX/PhosphorIDE/blob/main/docs/debug-protocol.md';
 
   PhosphorFilter = 'Phosphor BASIC (*.bas)|*.bas|Bytecode (*.pbc)|*.pbc|All files|*.*';
+
+  { How much transcript the output pane keeps. Generous for reading a run, bounded
+    so that a program printing without end cannot make the editor its memory
+    problem. The oldest lines go first, which is the half nobody was reading. }
+  MaxOutputLines = 5000;
 
 { ---------------------------------------------------------------- lifecycle -- }
 
@@ -804,6 +817,10 @@ begin
     WorkDir := '';
 
   FRunLabel := AWhat;
+  if (Doc <> nil) and (not Doc.IsUntitled) then
+    FRunPath := Doc.FileName
+  else
+    FRunPath := '';
   PagesOutput.ActivePage := TabOutput;
   AddOutput(Format('> %s', [AWhat]));
   FRunner.Start(FHostPath, AArgs, WorkDir);
@@ -907,8 +924,6 @@ procedure TFrmMain.RunnerOutput(Sender: TObject; AKind: TRunStream; const AText:
   ACompleteLine: Boolean);
 var
   Msg: TPhosphorMessage;
-  Doc: TEditorDoc;
-  Fallback: String;
 begin
   AppendOutput(AKind, AText, ACompleteLine);
 
@@ -922,12 +937,7 @@ begin
   if Msg.Kind = pmkPlain then
     Exit;
 
-  Doc := ActiveDoc;
-  if Doc <> nil then
-    Fallback := Doc.FullDisplayName
-  else
-    Fallback := '';
-  AddProblem(Msg, Fallback);
+  AddProblem(Msg, FRunPath);
 end;
 
 procedure TFrmMain.RunnerFinished(Sender: TObject; AExitCode: Integer; AKilled: Boolean);
@@ -973,13 +983,48 @@ begin
   RefreshStatus;
 end;
 
+procedure TFrmMain.ScrollOutputToEnd;
+begin
+  { NOT `SelStart := Length(MemoOutput.Text)`. Reading .Text CONCATENATES every
+    line into one string, so scrolling that way costs O(total output) per line and
+    the whole thing is quadratic: a program printing in a loop wedges the editor
+    inside the one call that was supposed to be a scroll. GetTextLen asks the
+    widget for the length it already knows. Measured as a hang risk during the
+    review on 2026-09-10. }
+  MemoOutput.SelStart := MemoOutput.GetTextLen;
+end;
+
+procedure TFrmMain.TrimOutput;
+var
+  Excess: Integer;
+begin
+  { An output pane is a transcript, not an archive. Left unbounded it is a
+    program's memory ceiling as well as its own -- a runaway loop printing a line
+    per iteration grows this without limit, and the run cannot be watched because
+    the editor is busy holding it. }
+  Excess := MemoOutput.Lines.Count - MaxOutputLines;
+  if Excess <= 0 then
+    Exit;
+  MemoOutput.Lines.BeginUpdate;
+  try
+    while Excess > 0 do
+    begin
+      MemoOutput.Lines.Delete(0);
+      Dec(Excess);
+    end;
+  finally
+    MemoOutput.Lines.EndUpdate;
+  end;
+end;
+
 procedure TFrmMain.AddOutput(const AText: String);
 begin
   { The editor's own notes -- `> run x.bas`, `> finished (0)` -- always start a
     line of their own. }
   FOutputOpen := False;
   MemoOutput.Lines.Add(AText);
-  MemoOutput.SelStart := Length(MemoOutput.Text);
+  TrimOutput;
+  ScrollOutputToEnd;
 end;
 
 procedure TFrmMain.AppendOutput(AKind: TRunStream; const AText: String;
@@ -996,8 +1041,9 @@ begin
   FOutputOpen := not ACompleteLine;
   FOutputOpenKind := AKind;
 
+  TrimOutput;
   { Keep the newest line visible without stealing the caret from the editor. }
-  MemoOutput.SelStart := Length(MemoOutput.Text);
+  ScrollOutputToEnd;
 end;
 
 procedure TFrmMain.AddProblem(const AMsg: TPhosphorMessage; const AFallbackPath: String);
@@ -1051,14 +1097,28 @@ var
 begin
   Doc := nil;
   for I := 0 to FDocs.Count - 1 do
-    if TEditorDoc(FDocs[I]).FullDisplayName = APath then
+    if CompareFilenames(TEditorDoc(FDocs[I]).FullDisplayName, APath) = 0 then
     begin
       PagesEditors.ActivePageIndex := I;
       Doc := TEditorDoc(FDocs[I]);
       Break;
     end;
-  if Doc = nil then
-    Doc := ActiveDoc;
+
+  { Not open -- the tab was closed while the program ran, or the diagnostic named
+    a file this window never had. Open it, and if that is not possible, do
+    NOTHING. Falling back to the active document, which is what this used to do,
+    moves the caret to a line number in the WRONG FILE: a plausible-looking jump
+    to somewhere the error is not. }
+  if (Doc = nil) and (APath <> '') and FileExistsUTF8(APath) then
+  begin
+    OpenPath(APath);
+    for I := 0 to FDocs.Count - 1 do
+      if CompareFilenames(TEditorDoc(FDocs[I]).FullDisplayName, APath) = 0 then
+      begin
+        Doc := TEditorDoc(FDocs[I]);
+        Break;
+      end;
+  end;
   if Doc = nil then
     Exit;
 

@@ -219,7 +219,14 @@ end;
 
 function TPhosphorRunner.GetRunning: Boolean;
 begin
-  Result := (FProcess <> nil) and FProcess.Running;
+  { The drain timer counts. A child can exit up to one tick before DrainTimer
+    notices, and in that window the process is gone but the run is NOT over: the
+    last output has not been delivered and OnFinished has not fired. Reporting
+    "not running" there lets the UI enable Run, and a second Start then replaces
+    FProcess before the first run is finalised -- so the first run's OnFinished
+    never arrives, its final lines are dropped, and a compile-then-pack chain
+    stops halfway with no message. A run is over when the drain says so. }
+  Result := ((FProcess <> nil) and FProcess.Running) or FTimer.Enabled;
 end;
 
 function TPhosphorRunner.Start(const AExe: String; const AArgs: array of String;
@@ -369,6 +376,16 @@ var
   ChunkOut, ChunkErr: String;
   ReadersDone, ProcDone: Boolean;
 begin
+  { ORDER MATTERS, and it is the opposite of the obvious one. Ask whether the
+    readers have finished BEFORE taking what they left, never after: a reader that
+    deposits a chunk between the sampling and the question, and then finishes, has
+    its last bytes sitting in the buffer while this method concludes that
+    everything has arrived -- and the timer stops with them still there. Asking
+    first is safe in the other direction: if the readers were done a moment ago,
+    nothing can be added afterwards. }
+  ReadersDone := ((FOut = nil) or FOut.Finished) and ((FErr = nil) or FErr.Finished);
+  ProcDone := (FProcess = nil) or (not FProcess.Running);
+
   FLock.Acquire;
   try
     ChunkOut := FPendingOut;
@@ -378,9 +395,6 @@ begin
   finally
     FLock.Release;
   end;
-
-  ReadersDone := ((FOut = nil) or FOut.Finished) and ((FErr = nil) or FErr.Finished);
-  ProcDone := (FProcess = nil) or (not FProcess.Running);
 
   { The last drain flushes any unterminated tail. Both conditions matter: the
     child can have exited while a reader still has buffered bytes to hand over,
@@ -408,7 +422,12 @@ begin
 
   FTimer.Enabled := False;
   if FProcess <> nil then
-    FExitCode := FProcess.ExitStatus;
+    { ExitCode, not ExitStatus. On Unix ExitStatus is the RAW wait status, so a
+      program that exited 1 reads back as 256 and a program killed by a signal
+      reads back as the signal number -- and the status bar would then explain
+      exit code 256 to a user whose program failed with 1. ExitCode is the decoded
+      one, and on Windows the two are the same. }
+    FExitCode := FProcess.ExitCode;
   Cleanup;
 
   if Assigned(FOnFinished) then

@@ -152,7 +152,7 @@ Whole-set replacement rather than add and remove is deliberate: an incremental
 protocol requires both ends to agree on what is currently set, and they will not.
 The editor's list moves every time a line is inserted above a mark, and a breakpoint
 whose line was deleted is dropped rather than slid onto its neighbour
-(`src/core/ueditordoc.pas`, `TrackEdit`). Sending the whole set makes the editor's
+(`src/core/ubreakpoints.pas`, `TrackEdit`). Sending the whole set makes the editor's
 view authoritative by construction.
 
 `path` is the path as the editor knows it. The host resolves it against the file it

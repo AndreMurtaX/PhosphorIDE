@@ -138,6 +138,17 @@ begin
       child that never writes and never exits cannot be given up on. }
     while True do
     begin
+      { THE DEADLINE IS TESTED FIRST, on every pass. Testing it only when the child
+        happened to be idle -- which is what this loop used to do -- means a child
+        that keeps producing output is never given up on, and `--version` against
+        the wrong binary hangs the editor's startup for as long as that binary
+        feels like talking. }
+      if MilliSecondsBetween(Now, Started) > AMaxWaitMs then
+      begin
+        P.Terminate(1);
+        Exit(False);
+      end;
+
       Avail := P.Output.NumBytesAvailable;
       if Avail > 0 then
       begin
@@ -147,13 +158,21 @@ begin
           AOutput := AOutput + Copy(Chunk, 1, Got);
         Continue;
       end;
+
+      { STDERR MUST BE DRAINED TOO, even though it is thrown away. poUsePipes gives
+        the child all three streams, and a child that fills the stderr pipe blocks
+        on the write -- forever, if nothing ever reads it. Only stdout is wanted
+        here, but a pipe nobody reads is a pipe that stops the child. }
+      Avail := P.Stderr.NumBytesAvailable;
+      if Avail > 0 then
+      begin
+        SetLength(Chunk, Avail);
+        P.Stderr.Read(Chunk[1], Avail);
+        Continue;
+      end;
+
       if not P.Running then
         Break;
-      if MilliSecondsBetween(Now, Started) > AMaxWaitMs then
-      begin
-        P.Terminate(1);
-        Exit(False);
-      end;
       Sleep(10);
     end;
 

@@ -68,6 +68,15 @@ begin
     try
       Application.CreateForm(TFrmMain, FrmMain);
       Report.Add(Format('main form: ok, %d components', [FrmMain.ComponentCount]));
+      { A collection inside an .lfm streams separately from the components, so a
+        `Panels = <...>` that fails to arrive leaves a status bar that is present,
+        sized and completely blank -- which is exactly what it looked like on both
+        platforms on 2026-09-10 before anyone counted them. Reported here because
+        "it is there but says nothing" is not a thing a screenshot can diagnose. }
+      Report.Add(Format('status bar: %d panels, simple=%s, %d tabs',
+        [FrmMain.StatusBar1.Panels.Count,
+         BoolToStr(FrmMain.StatusBar1.SimplePanel, True),
+         FrmMain.PagesEditors.PageCount]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

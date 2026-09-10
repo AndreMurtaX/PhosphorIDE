@@ -42,39 +42,42 @@ The sibling repository's rule holds here: nothing is done on a claim.
 
 ---
 
-## 1. Run `scripts/build.sh` on a Linux box
+## 1. Drive the editor by hand under gtk2
 
-**What.** `scripts/build.sh` exists and is a bash peer of `scripts/build.ps1`: the same
-`-B` builds of both `.lpi` files, the same refusal to trust an exit code that produced no
-binary, the same unit checks, selftest-under-`timeout` and `gen-keywords.py --check`, and
-`--release` for the Release mode. **It has never been run.** Every line of it is reasoned
-from the source rather than measured, which is exactly the state this repository's own
-rules say is not done.
+**What.** `scripts/build.sh` has been run on Ubuntu with Lazarus 4.8: both projects build
+with zero errors, warnings and notes, `bin/phosphoridetest` is green, `gen-keywords.py
+--check` is clean, and `phosphoride --selftest` constructs all three forms **under gtk2**
+when a display is reachable. The window has been opened there and photographed: menu,
+toolbar, tab, gutter, splitter, output tabs and input row all land where they should.
 
-**Why.** The project claims Windows and Linux, and only the first claim has been watched
-to hold. Two of this repository's hazards are Linux-only -- `cthreads` and the gtk2
-widgetset -- and neither can show up on the machine the script was written on.
+What has NOT happened is anyone USING it under gtk2 -- opening a file, running it,
+feeding its stdin, stopping it, dragging the splitter, resizing the window.
 
-**The part most likely to be wrong.** `bin/phosphoridetest` runs headless by
-construction, but `phosphoride --selftest` cannot: `src/phosphoride.lpr:19` lists
-`Interfaces`, whose initialization section calls `CreateWidgetset`, and on gtk2 that opens
-the X display before `main`. The script therefore *skips* the selftest when both
-`$DISPLAY` and `$WAYLAND_DISPLAY` are empty, and announces the skip, because a check that
-quietly does not run reads as a pass. Under `xvfb-run -a` it should run instead, and that
-is the branch nobody has seen.
+**Why.** Construction and layout are the cheap half. The expensive half is behaviour that
+differs by widgetset: gtk2 fires `OnResize` and `OnChangeBounds` at different moments than
+win32, `TStatusBar` panel sizing differs, `TSplitter` minimum sizes differ, and modal
+dialog parenting differs. None of that shows up in a form that is merely built.
+
+It is also the half that found the last defect. The status bar looked empty in a gtk2
+screenshot; counting its panels showed `SimplePanel = True`, an LCL default that is the
+opposite of Delphi's, and the same bar was blank on Windows. **Looking at it on the other
+platform is what produced the question.**
 
 **Done when.**
 
-- `bash scripts/build.sh` builds `src/phosphoride.lpi` and `tests/phosphoridetest.lpi`
-  with zero errors, warnings and notes, and the failure branch has been watched to fire
-  on a deliberately introduced warning.
-- `bin/phosphoridetest` exits 0 there, with the same 147 checks.
-- `xvfb-run -a bash scripts/build.sh` runs the selftest rather than skipping it, and it
-  exits 0 inside `timeout 60`.
-- A bare headless run announces the skip instead of passing in silence.
-- `--release` produces a Release build.
+- A file is opened, run with F9, and its output appears; a diagnostic is double-clicked
+  and the caret lands on the right line in the right file.
+- A program that reads `LINE INPUT` is answered from the input row, and its prompt is
+  seen BEFORE the answer -- the idle-flush path in `DrainTimer`.
+- A runaway program is stopped with Ctrl+F2 while the window stays responsive.
+- The splitter is dragged and the window resized, without the output pane collapsing or
+  the editor losing its gutter.
+- `xvfb-run -a bash scripts/build.sh` runs the selftest rather than skipping it. This is
+  still unwatched: the measurement above used a real Xwayland session, and a virtual
+  framebuffer is not quite the same thing.
+- `--release` produces a Release build there.
 
-**Touches.** `scripts/build.sh`, if running it proves any of the above wrong.
+**Touches.** Whatever it proves wrong. Nothing is expected; that is why it is worth doing.
 
 ---
 
@@ -90,7 +93,7 @@ Lazarus 4.8 / FPC 3.2.2, and `gcarreno/setup-lazarus@v3.3.1` is asked for `stabl
 is whatever that action currently pins -- not necessarily 4.8. Nothing in `src/` knowingly
 uses a 4.x-only API, but "knowingly" is not "checked". The first push is the experiment.
 
-**Why.** Three of the seven traps recorded on 2026-09-10 produced a binary `lazbuild` was
+**Why.** Three of the nine traps recorded on 2026-09-10 produced a binary `lazbuild` was
 perfectly happy with. Only a script catches those, and a script that runs on one machine
 catches them on one machine.
 
@@ -319,7 +322,7 @@ wire the six actions that already exist and are greyed out -- `ActDebugStart`, `
 `RefreshDebugActions` at `src/umainform.pas:1141`; send the breakpoint set on launch and on
 every change; and paint the line execution is stopped on.
 
-**The marker is nearly free.** `EditorSpecialLineMarkup` (`src/umainform.pas:1222`) already
+**The marker is nearly free.** `EditorSpecialLineMarkup` (`src/umainform.pas:1237`) already
 colours breakpoint lines by looking a number up in a short sorted array, and the same handler
 answers for the stopped line. The precedence matters: a line that is both a breakpoint and
 the stopped line must read as **stopped**, or the user cannot see where they are. Keep the
@@ -328,10 +331,10 @@ handler cheap -- SynEdit asks it for every visible line.
 **Breakpoints go over the wire as a whole set per file, never as add/remove.**
 `EncodeSetBreakpoints` replaces, and says why: the editor's list moves every time a line is
 inserted above a mark, so the two ends will not agree on what is currently set
-(`src/core/udebugproto.pas:241-244`). `TEditorDoc.TrackEdit`
-(`src/core/ueditordoc.pas:260`) is what would move them -- it is written and has no
-caller, so wiring it to `EditorChange` belongs to this item too, and a re-send after an
-edit while stopped is then mandatory rather than an optimisation.
+(`src/core/udebugproto.pas:241-244`). `TBreakpointSet.TrackEdit`
+(`src/core/ubreakpoints.pas`) is what moves them, driven by `TEditorDoc.LinesChanged`
+off SynEdit's `senrLineCount` notification, so a re-send after an edit while stopped is
+mandatory rather than an optimisation.
 
 **Keep telling the truth.** An action stays greyed with a reason attached whenever the
 capability is absent. A host reporting `stepOut: false` gets a greyed Step Out whose hint

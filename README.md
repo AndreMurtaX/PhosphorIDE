@@ -285,7 +285,7 @@ already survives editing is what the other half will need the day the host can a
 | ------------------- | ------------------------------------------------------------------- |
 | `src/`              | `phosphoride.lpr` (the program and `--selftest`), the three forms.  |
 | `src/umainform.pas` | the editor window and every action. Nothing here waits.             |
-| `src/core/`         | the units: `usynphosphor` (highlighter), `uphosphorrun` (the async child), `uphosphormsg` (diagnostics), `uphosphorhost` (finding the binary), `uphosphorsettings`, `ueditordoc`, `udebugproto` + `udebugsession` (PDBP), `uphosphorlang` (**generated**). |
+| `src/core/`         | the units: `usynphosphor` (highlighter), `uphosphorrun` (the async child), `uphosphormsg` (diagnostics), `uphosphorhost` (finding the binary), `uphosphorsettings`, `ueditordoc` + `ubreakpoints`, `udebugproto` + `udebugsession` (PDBP), `uphosphorlang` (**generated**). |
 | `tools/`            | `gen-keywords.py` -- regenerates `uphosphorlang.pas` from a Phosphor checkout. |
 | `tests/`            | `phosphoridetest.lpr`, the headless unit checks.                     |
 | `scripts/`          | `build.ps1` / `build.sh`: lazbuild, then `--selftest` under a timeout. |

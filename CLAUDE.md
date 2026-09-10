@@ -84,15 +84,20 @@ selftest of a GUI program cannot run on a bare headless box the way
 `bin/phosphoridetest` can. That is the same fact `tests/phosphoridetest.lpr:26-38`
 exploits in the other direction: the test program names `InterfaceBase` plus
 `Win32Int`/`Gtk2Int` directly and never `Interfaces`, so it links the LCL without
-connecting to anything. **Confirm the `xvfb-run` form on the Linux box before relying
-on it**; it is reasoned from the source, not yet measured here.
+connecting to anything.
+
+Measured on 2026-09-10 on Ubuntu with Lazarus 4.8: `bash scripts/build.sh` builds both
+projects clean, `bin/phosphoridetest` is green, and the selftest constructs all three
+forms under **gtk2** when a display is reachable -- there, through a real Xwayland
+session (`DISPLAY=:0` with the mutter Xwayland cookie in `XAUTHORITY`) rather than
+xvfb. The `xvfb-run` form above is still the one CI uses and is still the one nobody
+has watched; a session and a virtual framebuffer are not quite the same thing.
 
 `src/phosphoride.lpr:40-41` says `scripts/build.ps1` runs the selftest after
-`lazbuild`, and it does. Both scripts exist -- `scripts/build.ps1` and
-`scripts/build.sh` run the commands above in order and refuse to trust an exit code
-that produced no binary. What is *not* yet met is the fifth condition: neither script
-has been run on a Linux box, so `build.sh` is reasoned from the source rather than
-measured, and its `xvfb-run` requirement is the part to confirm first.
+`lazbuild`, and it does. Both scripts exist and both have been run: `build.ps1` on
+Windows and `build.sh` on Ubuntu, each green end to end. What remains unmeasured is
+narrower than it was -- the `xvfb-run` branch of `build.sh`, and the editor DRIVEN by
+hand under gtk2 rather than merely constructed there.
 
 If one of the five cannot be met you are **blocked**. Say so precisely; do not lower
 the bar.
@@ -173,7 +178,7 @@ the bar.
 
 ## Traps that have already cost real time
 
-All seven were paid for on **2026-09-10**, building this repository.
+All nine were paid for on **2026-09-10**, building this repository.
 
 - **A Windows GUI-subsystem binary has no console.** `WriteLn` hits an invalid handle,
   and the RTL's I/O error surfaces as a **modal dialog with nobody there to dismiss
@@ -209,6 +214,19 @@ All seven were paid for on **2026-09-10**, building this repository.
   to undo -- the single-threaded `while Running do if NumBytesAvailable > 0` version
   looks simpler, and it both lies about when the child is done and delivers output in
   visible jerks.
+- **`TStatusBar.SimplePanel` defaults to TRUE in the LCL** (`lcl/comctrls.pp:198`,
+  `default True`), which is the opposite of Delphi. A status bar whose `.lfm` defines
+  four panels and does not say `SimplePanel = False` streams all four, sizes itself,
+  draws its bevel and its resize grip, and then renders **`SimpleText`** -- which is
+  empty. The result is a status bar that is plainly there and says nothing, on BOTH
+  platforms, with no error anywhere. It survived a screenshot on each OS before
+  anyone counted the panels; `--selftest` now reports the count and the flag, because
+  "present but blank" is not a thing a screenshot can diagnose.
+- **A changed `.lfm` needs `lazbuild -B`.** Without it the old form resource is kept
+  and the binary streams the previous version of the form -- so the fix above appeared
+  not to work, twice, until the rebuild was made a clean one. Both build scripts pass
+  `-B` for exactly this reason. **Never diagnose an .lfm change from an incremental
+  build.**
 
 ---
 
