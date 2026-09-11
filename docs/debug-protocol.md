@@ -170,6 +170,19 @@ smaller: a line holding no executable statement -- a blank line, a comment, `end
 -- has nowhere to stop. The editor draws the difference, so a breakpoint that will
 never fire looks different from one that will.
 
+The host answers that cheaply, because `opStmt` is a stoppable-line index in
+disguise: the set of `Instr(i).Line where Op = opStmt` is exactly the set of lines a
+breakpoint can bind to. De-duplicate it -- `a = 1 : b = 2` emits two `opStmt` on one
+line, and so does the inline `if c then ...` form.
+
+A richer answer is worth considering before version 2 freezes this: report each
+breakpoint as **requested line, effective line, verified** rather than as a filtered
+list, so a mark that slid to the next stoppable statement can say where it went
+instead of silently either vanishing or lying. That is the shape
+`C:/Dev/Lyra/src/Lyra.Debug.pas` settled on (`TLyraBreakpoint.RequestedLine`,
+`EffectiveLine`, `Verified`, `Bindings`), in the same language, against the same
+problem.
+
 May be sent at any time, including while the program is running.
 
 ### `launch`
@@ -426,17 +439,50 @@ order:
    separate seam, called at each source-line boundary, that CAN block and whose
    return value tells the VM what to do next -- run, step, stop.
 
-2. **A step state machine in `ExecFrom`.** Line-granular stepping needs the
-   fetch-decode-execute loop to know when the current instruction's line differs
-   from the last one, and to compare frame depth against the depth the step started
-   at. This is the change with the widest blast radius, and it must cost nothing
-   when no debugger is attached -- the seam is nil in every other host, and the
-   check has to be as cheap as the existing `if FTrace and Assigned(...)`.
+2. **A step state machine, hung on the statement boundary that already exists.**
+   This entry used to say the fetch-decode-execute loop should notice when the
+   current instruction's line differs from the last one. **That was wrong**, and
+   measuring the emitted bytecode is what showed it: disassembling a compiled
+   `for i = 1 to N / s = s + i / next` puts the loop's increment instructions on the
+   `for` line and the body on its own, so a per-instruction line comparison fires
+   twice per iteration and one Step Over would land back on the `for` every time.
 
-3. **Accessors for globals and frames.** `variables` and `stackTrace` need to
-   enumerate the global table and walk the frame stack, both of which are private
-   today with no accessor (`FCallStack` is an `array of Integer` of GOSUB return
-   addresses -- explicitly not what `stackTrace` reports).
+   The engine already emits `opStmt` once per source statement, carrying the line
+   (`engine/PhosphorCompiler.pas:2049`), and its VM handler already records the
+   triple a stepper needs -- pc, stack depth, frame depth
+   (`engine/PhosphorVM.pas:2256-2260`). The hook belongs inside that one case arm,
+   and the rule is **stop at an `opStmt` whose line differs from the line the step
+   began on, or whose frame depth is lower**.
+
+   That also settles the cost question the right way round. Phosphor measured a test
+   *per instruction* at 3-4% and deleted it as decoration
+   (`engine/PhosphorVM.pas:2020-2024`); tests added to existing case arms measured at
+   no cost at all (`:2045-2053`). One `opStmt` occurs per ~14 executed instructions in
+   a tight loop, so a Boolean guard there is the cheap shape -- but it is still a
+   number to put in a commit message, not a claim.
+
+3. **Accessors for globals and frames -- AND a name table, which does not exist.**
+   `variables` and `stackTrace` need to enumerate the global table and walk the
+   frame stack, both private today with no accessor (`FCallStack` is an `array of
+   Integer` of GOSUB return addresses -- explicitly not what `stackTrace` reports).
+
+   The harder half was missed when this document was first written: **the compiled
+   program carries no variable names at all.** `TProgram` declares `VarCount` and
+   `VarTypes` and no name table (`engine/PhosphorOpcodes.pas:126-152`); `TUserFunc`
+   declares the function's own name and no names for its locals (`:115-122`). The
+   compiler has them and throws them away (`FVarNames`, `FLocalNames`). So
+   `variables` is not merely unimplemented, it is unanswerable until `TProgram`
+   carries names.
+
+   They must NOT be serialised into the `.pbc`: `PBC_VERSION = 1` and `LoadProgram`
+   refuses any other version, so a bump would brick every packed executable.
+   `phosphor debug <file.bas>` compiles in-process, where the names are already in
+   hand.
+
+   One more thing this end cannot see: **a seam that blocks corrupts `TimeoutMs`**,
+   which is wall-clock sampled once per run (`engine/PhosphorVM.pas:2030-2036`). The
+   host must discount the time spent parked, or a session that pauses for a minute
+   kills the program on resume.
 
 4. **A `phosphor debug` subcommand** in `host/console/phosphor.lpr` that opens the
    socket, installs the seam, and speaks everything above. This is where the JSON

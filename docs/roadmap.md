@@ -129,12 +129,55 @@ new name. That only works if something runs it on every push.
 
 ---
 
+## 2a. A contract test against the real phosphor binary
+
+**What.** A check that runs the ACTUAL `phosphor` binary against a handful of deliberately
+broken `.bas` files and asserts the shapes this editor parses: the four diagnostic forms,
+the four exit codes, that diagnostics go to stderr one per failed run, and that `--help`
+still carries the usage block `udebugsession.pas` reads.
+
+**Why.** `src/core/uphosphormsg.pas` is tested by 40-odd checks -- against strings THIS
+repository wrote down, not against the binary. If Phosphor reworded a message, renumbered
+an exit code or moved a diagnostic to stdout, every test here would still pass and
+jump-to-error would silently stop working. That is the one coupling between the two
+repositories with no automatic check behind it; the other three
+(`docs/phosphor-engine-work-order.md`, "Keeping the two repositories in step") already
+have one.
+
+It also cuts the other way, which is the better half: it would have caught the wording of
+`phosphor: file not found:` changing under us, and it is the only thing that can tell the
+engine's authors that a message they improved broke a consumer.
+
+**Done when.**
+
+- A new `tests/` target runs the real binary and asserts every shape
+  `uphosphormsg.pas` claims to handle, with the .bas fixtures committed.
+- It SKIPS with a printed announcement when no host is found, the way
+  `scripts/build.sh` announces a skipped selftest -- a check that quietly does not run
+  reads as a pass.
+- CI runs it: the workflow already checks out `AndreMurtaX/Phosphor` beside this
+  repository, so the binary has to be built there first or the step has to build it.
+- A deliberate temporary edit to one expected shape turns it red, and the log names
+  which shape moved. Then revert.
+
+**Touches.** `tests/` (new fixtures and a target), `.github/workflows/build.yml`,
+`scripts/build.ps1` and `scripts/build.sh`.
+
+---
+
 ## The debugger, first half: the Phosphor repository
 
 Items 3 to 6 are work in `C:/Dev/Phosphor`, not here. They are on this roadmap because
 without them items 7 to 10 cannot start, and because the editor already says so out loud to
 the user: `src/core/udebugsession.pas:111-121` explains the gap in the Debug menu, and
 `docs/debug-protocol.md` specifies the protocol that closes it.
+
+**`docs/phosphor-engine-work-order.md` is the version of this to hand to an agent working
+over there.** It carries what this roadmap cannot: the reproduction for each defect, the
+timings, the `file:line` for every insertion point, and the list of tempting changes that
+would break a packed executable. It also corrects two things the protocol document got
+wrong -- the step rule and the missing variable-name table -- which were found by measuring
+the engine rather than by reading this side's description of it.
 
 Nothing in this repository can shorten them. **Never describe stepping as working, or as
 coming soon, without saying that it needs work in the Phosphor repository first.**
