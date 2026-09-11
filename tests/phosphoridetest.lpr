@@ -152,6 +152,17 @@ begin
   ParsePhosphorMessage('phosphor: 0: not really a line number', M);
   Check('line 0 is not a location', not HasSourceLocation(M));
 
+  { A LINE THE PARSER DOES NOT RECOGNISE MUST NOT BECOME A JUMP TARGET. The shapes
+    below do not exist yet -- the host will start emitting the first one when the
+    BREAKPOINT seam is wired (see docs/phosphor-engine-work-order.md, B0). Until the
+    parser learns them, the property that has to hold is the safe one: whatever they
+    are classified as, they carry no location, so nothing sends the caret anywhere. }
+  ParsePhosphorMessage('phosphor: breakpoint at line 7: checkpoint x=5', M);
+  Check('an unrecognised phosphor: line is a host error', M.Kind = pmkHostError);
+  Check('  and never a jump target', not HasSourceLocation(M));
+  ParsePhosphorMessage('phosphor: trace on at line 3', M);
+  Check('and so is any other new shape', not HasSourceLocation(M));
+
   Group('uphosphormsg: exit codes');
   CheckEq('0', 'finished', PhosphorExitCodeText(0));
   CheckEq('1 is the program''s fault', 'the program failed', PhosphorExitCodeText(1));
