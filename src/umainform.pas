@@ -26,7 +26,7 @@ uses
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
-  usynphosphor, udebugsession;
+  usynphosphor, udebugproto, udebugsession;
 
 type
 
@@ -153,6 +153,9 @@ type
     procedure ActCompileExecute(Sender: TObject);
     procedure ActCopyExecute(Sender: TObject);
     procedure ActCutExecute(Sender: TObject);
+    procedure ActContinueExecute(Sender: TObject);
+    procedure ActDebugStartExecute(Sender: TObject);
+    procedure ActDebugStopExecute(Sender: TObject);
     procedure ActDebugWhyExecute(Sender: TObject);
     procedure ActExitExecute(Sender: TObject);
     procedure ActFindExecute(Sender: TObject);
@@ -212,6 +215,23 @@ type
     FOutputOpen: Boolean;
     FOutputOpenKind: TRunStream;
 
+    { The debug session's clock. Created in code rather than dropped on the form:
+      a .lfm component is one more thing that can name a property its .pas does
+      not publish, and the fix for that is a modal dialog nobody can dismiss.
+      A non-visual timer costs nothing to build here and cannot mismatch.
+
+      It belongs to the FORM and not to udebugtransport, which is not a style
+      choice: TTimer needs a widgetset, and phosphoridetest links the LCL while
+      deliberately never creating one. A timer inside the transport killed that
+      program the first time the transport was exercised -- group header printed,
+      nothing after it, exit 0, no summary. }
+    FDebugTimer: TTimer;
+
+    { Where execution is stopped, and in which file. Line 0 means nowhere, which
+      is what clears the current-line paint. }
+    FDebugPath: String;
+    FDebugLine: Integer;
+
     function ActiveDoc: TEditorDoc;
     function DocOfPage(APage: TTabSheet): TEditorDoc;
     procedure FocusEditor(ADoc: TEditorDoc);
@@ -227,6 +247,17 @@ type
     procedure RefreshRecentMenu;
     procedure RefreshStatus;
     procedure RefreshDebugActions;
+    procedure RepaintEditors;
+    function StartDebugSession: Boolean;
+    procedure EndDebugSession(const AWhy: String);
+    procedure DebugTimerTick(Sender: TObject);
+    procedure DebugStateChanged(Sender: TObject);
+    procedure DebugStopped(Sender: TObject; const APath: String; ALine: Integer;
+      AReason: TPdbpStopReason);
+    procedure DebugExited(Sender: TObject; AExitCode: Integer);
+    procedure DebugNote(Sender: TObject; const AText: String);
+    procedure DebugLinesInstalled(Sender: TObject; const APath: String;
+      const AInstalled: TPdbpLines);
 
     procedure OpenPath(const APath: String);
     procedure RecentClick(Sender: TObject);
@@ -286,6 +317,11 @@ const
     problem. The oldest lines go first, which is the half nobody was reading. }
   MaxOutputLines = 5000;
 
+  { How often the session is asked to drain its socket. The same 40 ms the output
+    pane drains the child's pipes at, and for the same reason: fast enough that a
+    stop feels immediate, slow enough that an idle session costs nothing. }
+  DebugPollIntervalMs = 40;
+
 { ---------------------------------------------------------------- lifecycle -- }
 
 procedure TFrmMain.FormCreate(Sender: TObject);
@@ -306,6 +342,17 @@ begin
   FRunner.OnStartFailed := @RunnerFailed;
 
   FDebug := TDebugSession.Create(Self);
+  FDebug.OnStateChange := @DebugStateChanged;
+  FDebug.OnStopped := @DebugStopped;
+  FDebug.OnExited := @DebugExited;
+  FDebug.OnNote := @DebugNote;
+  FDebug.OnLinesInstalled := @DebugLinesInstalled;
+
+  FDebugTimer := TTimer.Create(Self);
+  FDebugTimer.Enabled := False;
+  FDebugTimer.Interval := DebugPollIntervalMs;
+  FDebugTimer.OnTimer := @DebugTimerTick;
+  FDebugLine := 0;
 
   OpenDialog1.Filter := PhosphorFilter;
   SaveDialog1.Filter := PhosphorFilter;
@@ -1030,6 +1077,17 @@ procedure TFrmMain.RunnerFinished(Sender: TObject; AExitCode: Integer; AKilled: 
 var
   PackExe, PackPbc: String;
 begin
+  { THE CHILD DYING IS THE END OF THE SESSION, whatever the protocol did or did
+    not say. A debuggee that faults, or is killed, or exits before the socket ever
+    carried an `exited` event leaves the timer polling a socket with nobody on the
+    other end and the Debug menu claiming a session is live. The process is the
+    authority on whether the program is still there. }
+  if FDebugTimer.Enabled then
+  begin
+    FDebug.Stop(False);
+    EndDebugSession('');
+  end;
+
   if AKilled then
     AddOutput('> killed')
   else
@@ -1286,17 +1344,39 @@ end;
 
 procedure TFrmMain.RefreshDebugActions;
 var
-  Live: Boolean;
+  Live, InSession, Stopped: Boolean;
 begin
+  { Keyed on the STATE and not only on Available. Available says this host could
+    debug; it says nothing about whether a session is running, and an enabled
+    Start in the middle of one is an offer to listen on a second socket. }
   Live := FDebug.Available;
-  ActDebugStart.Enabled := Live;
-  ActStepOver.Enabled := Live;
-  ActStepInto.Enabled := Live;
-  ActStepOut.Enabled := Live;
-  ActContinue.Enabled := Live;
-  ActDebugStop.Enabled := Live;
+  InSession := FDebug.State in [dsStarting, dsRunning, dsStopped, dsTerminating];
+  Stopped := FDebug.State = dsStopped;
 
-  if not Live then
+  ActDebugStart.Enabled := Live and (not InSession);
+  ActDebugStop.Enabled := InSession;
+  ActContinue.Enabled := Stopped;
+
+  { The three step actions arrive with stepping itself. They stay off here rather
+    than being enabled against a handler that does not exist, because a live
+    shortcut that does nothing is worse than a grey one that explains itself. }
+  ActStepOver.Enabled := False;
+  ActStepInto.Enabled := False;
+  ActStepOut.Enabled := False;
+
+  { Hints are CLEARED when they stop being true. Leaving the "stepping is not
+    available" text on an action that is now live is the same defect as the menu
+    that lies, one layer down. }
+  if Live then
+  begin
+    ActDebugStart.Hint := 'Run under the debugger and stop at your breakpoints';
+    ActDebugStop.Hint := 'End the debug session and kill the program';
+    ActContinue.Hint := 'Run on until the next breakpoint';
+    ActStepOver.Hint := 'Arrives with stepping';
+    ActStepInto.Hint := 'Arrives with stepping';
+    ActStepOut.Hint := 'Arrives with stepping';
+  end
+  else
   begin
     ActDebugStart.Hint := FDebug.UnavailableReason;
     ActStepOver.Hint := FDebug.UnavailableReason;
@@ -1305,6 +1385,163 @@ begin
     ActContinue.Hint := FDebug.UnavailableReason;
     ActDebugStop.Hint := FDebug.UnavailableReason;
   end;
+end;
+
+{ --------------------------------------------------------- the debug session - }
+
+procedure TFrmMain.RepaintEditors;
+var
+  I: Integer;
+begin
+  { The stop can be in a file that is not the active tab, so every editor is
+    asked to redraw rather than just this one. There are a handful of tabs. }
+  for I := 0 to FDocs.Count - 1 do
+    if TEditorDoc(FDocs[I]).Edit <> nil then
+      TEditorDoc(FDocs[I]).Edit.Invalidate;
+end;
+
+function TFrmMain.StartDebugSession: Boolean;
+var
+  Doc: TEditorDoc;
+  Path: String;
+  Lines: TPdbpLines;
+  I, Port: Integer;
+begin
+  Result := False;
+  if not RequireHost then
+    Exit;
+  if not EnsureSavedForRun(Path) then
+    Exit;
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Exit;
+
+  Lines := nil;
+  SetLength(Lines, Doc.BreakpointCount);
+  for I := 0 to Doc.BreakpointCount - 1 do
+    Lines[I] := Doc.Breakpoints[I];
+
+  { STOP AT ENTRY WHEN THERE ARE NO BREAKPOINTS. Otherwise Start Debugging on a
+    program with no marks runs to completion and is indistinguishable from Run --
+    the user pressed the debug button and watched nothing happen. With a mark,
+    entry would be a stop they did not ask for. }
+  Port := FDebug.BeginListen(Path, Lines, Length(Lines) = 0);
+  if Port = 0 then
+  begin
+    MessageDlg('PhosphorIDE',
+      'Could not open a local socket for the debugger.', mtError, [mbOK], 0);
+    Exit;
+  end;
+
+  { The session listens; THIS spawns. Through TPhosphorRunner like everything
+    else, which is not ceremony: the debuggee's stdout and stderr still have to
+    be read, and an editor holding the socket but not the pipes stalls the
+    program behind a full pipe buffer with no protocol symptom at all. }
+  if not StartHost(['debug', '--port', IntToStr(Port), Path],
+       Format('debug %s', [ExtractFileName(Path)])) then
+  begin
+    FDebug.AbandonListen('the host would not start');
+    Exit;
+  end;
+
+  FDebugPath := Path;
+  FDebugLine := 0;
+  FDebugTimer.Enabled := True;
+  RefreshDebugActions;
+  Result := True;
+end;
+
+procedure TFrmMain.EndDebugSession(const AWhy: String);
+begin
+  FDebugTimer.Enabled := False;
+  FDebugLine := 0;
+  FDebugPath := '';
+  if AWhy <> '' then
+    AddOutput('> ' + AWhy);
+  RepaintEditors;
+  RefreshDebugActions;
+  RefreshStatus;
+end;
+
+procedure TFrmMain.DebugTimerTick(Sender: TObject);
+begin
+  FDebug.Poll;
+end;
+
+procedure TFrmMain.DebugStateChanged(Sender: TObject);
+begin
+  RefreshDebugActions;
+  RefreshStatus;
+end;
+
+procedure TFrmMain.DebugStopped(Sender: TObject; const APath: String;
+  ALine: Integer; AReason: TPdbpStopReason);
+begin
+  FDebugLine := ALine;
+  { The host echoes the path it was LAUNCHED with, and the editor already keeps
+    that in FRunPath for exactly this reason -- resolving the echo against a
+    working directory would be a second way to be wrong about the same file. }
+  if FRunPath <> '' then
+    FDebugPath := FRunPath
+  else
+    FDebugPath := APath;
+
+  AddOutput(Format('> stopped at line %d (%s)',
+    [ALine, PdbpStopReasonName(AReason)]));
+  GotoSource(FDebugPath, ALine);
+  RepaintEditors;
+  RefreshDebugActions;
+  RefreshStatus;
+end;
+
+procedure TFrmMain.DebugExited(Sender: TObject; AExitCode: Integer);
+begin
+  EndDebugSession(Format('the debugged program finished: %s',
+    [PhosphorExitCodeText(AExitCode)]));
+end;
+
+procedure TFrmMain.DebugNote(Sender: TObject; const AText: String);
+begin
+  AddOutput('  debug: ' + AText);
+end;
+
+procedure TFrmMain.DebugLinesInstalled(Sender: TObject; const APath: String;
+  const AInstalled: TPdbpLines);
+var
+  Doc: TEditorDoc;
+begin
+  { A line with no executable statement on it -- a blank, a comment, an `endif` --
+    comes back ABSENT, and that absence is the only verified/unverified marker the
+    protocol has. Drawing it is the next step; saying it is this one, because a
+    breakpoint that silently will not fire is worse than one that says so. }
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Exit;
+  if Length(AInstalled) < Doc.BreakpointCount then
+    AddOutput(Format('  debug: %d of %d breakpoints installed; the rest are on ' +
+      'lines with no statement to stop at',
+      [Length(AInstalled), Doc.BreakpointCount]));
+end;
+
+procedure TFrmMain.ActDebugStartExecute(Sender: TObject);
+begin
+  StartDebugSession;
+end;
+
+procedure TFrmMain.ActDebugStopExecute(Sender: TObject);
+begin
+  { A process kill, deliberately. `disconnect` while the program is RUNNING is
+    never answered -- the host is inside the program, not inside the protocol --
+    so asking politely is asking into silence. }
+  FDebug.Stop(True);
+  if FRunner.Running then
+    FRunner.Kill;
+  EndDebugSession('debug session ended');
+end;
+
+procedure TFrmMain.ActContinueExecute(Sender: TObject);
+begin
+  FDebug.Resume;
 end;
 
 { ------------------------------------------------------------------ editor --- }
@@ -1391,6 +1628,22 @@ begin
   Doc := DocOfPage(PagesEditors.ActivePage);
   if Doc = nil then
     Exit;
+
+  { THE STOP OUTRANKS THE BREAKPOINT. A line is usually both -- you stopped there
+    because you marked it -- and the two paints answer different questions: the
+    mark says "I asked to stop here", the stop says "you ARE here". Only the
+    second one moves, so only the second one tells you anything while you step.
+    Painting the mark on top would freeze the cursor at the first breakpoint for
+    the rest of the session. }
+  if (FDebugLine = ALine) and (FDebugLine > 0) and
+     (CompareFilenames(Doc.FullDisplayName, FDebugPath) = 0) then
+  begin
+    ASpecial := True;
+    AMarkup.Background := clNavy;
+    AMarkup.Foreground := clWhite;
+    Exit;
+  end;
+
   if Doc.HasBreakpoint(ALine) then
   begin
     ASpecial := True;

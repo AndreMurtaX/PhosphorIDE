@@ -476,6 +476,7 @@ object FrmMain: TFrmMain
     object ActDebugStart: TAction
       Caption = 'Start &Debugging'
       Enabled = False
+      OnExecute = ActDebugStartExecute
       ShortCut = 8312
     end
     object ActStepOver: TAction
@@ -496,10 +497,12 @@ object FrmMain: TFrmMain
     object ActContinue: TAction
       Caption = 'C&ontinue'
       Enabled = False
+      OnExecute = ActContinueExecute
     end
     object ActDebugStop: TAction
       Caption = 'Stop Debu&gging'
       Enabled = False
+      OnExecute = ActDebugStopExecute
     end
     object ActDebugWhy: TAction
       Caption = '&Why is stepping unavailable?'
