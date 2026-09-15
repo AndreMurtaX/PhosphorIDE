@@ -41,7 +41,7 @@ uses
   { The transport is exercised against a socket this program opens itself:
     no host is started, nothing is spawned, and the test runs the same on a
     headless machine as on a desktop. Sockets and ExtCtrls come with it. }
-  udebugtransport, Sockets;
+  udebugtransport, udebugsession, Sockets;
 
 var
   Checks: Integer = 0;
@@ -667,6 +667,97 @@ begin
   end;
 end;
 
+
+{ ---------------------------------------------------------------------------
+  THE SESSION DRIVER, WITHOUT A HOST AND WITHOUT A DISPLAY.
+
+  What is worth testing here is the half that decides rather than the half that
+  talks: which command may be sent in which state, and that one refused locally
+  sends NOTHING. That rule is not caution. Measured against the real host: while
+  the program runs it answers nothing at all, so an editor that sent `continue`
+  mid-run would sit waiting for a reply that is not coming and look hung. A local
+  refusal turns that into an immediate, visible no.
+
+  A session with no transport is the honest fixture for it: every command must
+  refuse, and none may reach a socket that does not exist.
+  --------------------------------------------------------------------------- }
+
+type
+  TNoteSink = class
+    Notes: TStringList;
+    States: Integer;
+    procedure GotNote(Sender: TObject; const AText: String);
+    procedure GotState(Sender: TObject);
+  end;
+
+procedure TNoteSink.GotNote(Sender: TObject; const AText: String);
+begin
+  Notes.Add(AText);
+end;
+
+procedure TNoteSink.GotState(Sender: TObject);
+begin
+  Inc(States);
+end;
+
+procedure TestSession;
+var
+  S: TDebugSession;
+  sink: TNoteSink;
+  none: TPdbpLines;
+begin
+  Group('debug session: what may be asked when');
+
+  none := nil;
+  S := TDebugSession.Create(nil);
+  sink := TNoteSink.Create();
+  sink.Notes := TStringList.Create();
+  try
+    S.OnNote := @sink.GotNote;
+    S.OnStateChange := @sink.GotState;
+
+    Check('a fresh session is unavailable until a host is probed',
+          S.State = dsUnavailable);
+    Check('  and it says why in a sentence', S.UnavailableReason <> '');
+    Check('  and nothing is stopped anywhere', (S.CurrentLine = 0) and (S.CurrentPath = ''));
+    Check('  and the handshake has not happened', not S.Live);
+
+    { EVERY command refuses, and each says which one it was. An editor that
+      enabled its Debug menu on Available alone would otherwise send these into a
+      socket that is not there. }
+    sink.Notes.Clear;
+    Check('Continue refuses when nothing is stopped', not S.Resume);
+    Check('Step Over refuses', not S.StepOver);
+    Check('Step Into refuses', not S.StepInto);
+    Check('Step Out refuses', not S.StepOut);
+    Check('Pause refuses when nothing is running', not S.Pause);
+    Check('the call stack refuses', not S.RequestStackTrace);
+    Check('variables refuse', not S.RequestVariables(0));
+    Check('breakpoints refuse before a handshake', not S.SetBreakpoints('x.bas', none));
+    Check('  and each refusal said something', sink.Notes.Count = 8);
+
+    { A probe with no host is the state a fresh install is in. }
+    S.Probe('');
+    Check('probing no host at all is unavailable', S.State = dsUnavailable);
+    Check('  and the reason names Preferences', Pos('Preferences', S.UnavailableReason) > 0);
+
+    S.Probe('this-binary-does-not-exist-anywhere.exe');
+    Check('probing a path that is not there is unavailable', S.State = dsUnavailable);
+
+    { Listening is refused while unavailable, so a caller cannot spawn a child
+      against a port that was never opened. }
+    Check('listening refuses while unavailable',
+          S.BeginListen('x.bas', none, False) = 0);
+
+    Check('stopping an idle session is harmless', True);
+    S.Stop(False);
+  finally
+    sink.Notes.Free;
+    sink.Free;
+    S.Free;
+  end;
+end;
+
 begin
   WriteLn('PhosphorIDE unit checks');
 
@@ -676,6 +767,7 @@ begin
   TestBreakpoints;
   TestProtocol;
   TestTransport;
+  TestSession;
 
   WriteLn;
   if Failures = 0 then

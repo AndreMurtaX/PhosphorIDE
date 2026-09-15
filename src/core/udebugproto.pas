@@ -99,6 +99,8 @@ type
   end;
   TPdbpFrames = array of TPdbpFrame;
 
+  TPdbpLines = array of Integer;
+
   TPdbpVariable = record
     Name: String;     // includes the type suffix: count%, name$, list@
     Value: String;    // already rendered by the host, as PRINT would render it
@@ -135,6 +137,15 @@ type
     // pcInitialize's response
     Protocol: Integer;
     Capabilities: TPdbpCapabilities;
+
+    // pcSetBreakpoints' response: the set the host ACTUALLY INSTALLED, which
+    // may be smaller than the one asked for. A line holding no executable
+    // statement -- a blank line, a comment, `endif` -- has nowhere to stop, and
+    // the editor draws the difference so a breakpoint that will never fire looks
+    // different from one that will. Reading this is the whole point of the reply;
+    // until 2026-09-15 the host echoed the request back and every mark looked
+    // verified, so there was nothing here to read.
+    Lines: TPdbpLines;
 
     // pcStackTrace's response
     Frames: TPdbpFrames;
@@ -351,6 +362,32 @@ begin
   Result.ConditionalBreakpoints := GetBool(Caps, 'conditionalBreakpoints', False);
 end;
 
+procedure ParseInstalledLines(AObj: TJSONObject; out ALines: TPdbpLines);
+var
+  Item: TJSONData;
+  Arr: TJSONArray;
+  I, N: Integer;
+begin
+  ALines := nil;
+  Item := AObj.Find('lines');
+  if (Item = nil) or (Item.JSONType <> jtArray) then
+    Exit;
+  Arr := TJSONArray(Item);
+  SetLength(ALines, Arr.Count);
+  N := 0;
+  for I := 0 to Arr.Count - 1 do
+  begin
+    { A non-number is dropped rather than raising. The host it talks to drops
+      malformed elements on the way in for the same reason, and neither end
+      should die of the other's bug. }
+    if Arr.Items[I].JSONType <> jtNumber then
+      Continue;
+    ALines[N] := Arr.Items[I].AsInteger;
+    Inc(N);
+  end;
+  SetLength(ALines, N);
+end;
+
 procedure ParseFrames(AObj: TJSONObject; out AFrames: TPdbpFrames);
 var
   Item: TJSONData;
@@ -500,6 +537,7 @@ begin
     Result.Protocol := GetInt(Obj, 'protocol', 0);
     Result.Text := GetStr(Obj, 'result', '');
     Result.Capabilities := ParseCapabilities(Obj);
+    ParseInstalledLines(Obj, Result.Lines);
     ParseFrames(Obj, Result.Frames);
     ParseVariables(Obj, Result.Variables);
   finally
