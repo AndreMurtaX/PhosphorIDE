@@ -274,8 +274,10 @@ No check here runs a BASIC program. Run, Check Syntax, Compile to `.pbc`, Pack, 
 stdin box and the output pane are exercised by driving the editor against a real
 `phosphor` binary by hand. And there is nothing to build or test behind the Debug menu's
 Step items: they are greyed out with the reason attached, because the phosphor host
-cannot pause a running program -- its `BREAKPOINT` seam is documented as
-report-and-continue and "must never block" (Phosphor `engine/PhosphorValue.pas:73-74`).
+could not pause a running program when this was written -- its `BREAKPOINT` seam was
+report-and-continue and "must never block". That changed on 2026-09-15: the engine has
+a debug seam that returns an action, and `phosphor debug --port` can be paused mid-run.
+What is still unbuilt is the editor's Debug menu; see `docs/debugger-lane.md`.
 `docs/debug-protocol.md` specifies what would close that gap, and closing it is work in
 the *Phosphor* repository, not this one.
 

@@ -250,7 +250,13 @@ The reason is a property of the engine, not an oversight a flag would fix
 - the `BREAKPOINT` seam "must not block: the engine treats it as a report, never a
   wait" (`Phosphor engine/PhosphorValue.pas:73-74`), and it returns **void**, so there
   is nothing for a debugger to answer with;
-- `TPhosphorEngine` has **no step API at all** -- no `Step`, `OnStep`, `OnLine` or
+- ~~`TPhosphorEngine` has **no step API at all**~~ -- FALSE SINCE 2026-09-15, and left
+  struck rather than deleted because it was load-bearing for a year. The engine now has
+  `TPhosphorDebugProc` (which returns an action and may block), `ArmDebug`, `DebugVM`,
+  the four step actions and the `Dbg*` frame accessors, and `phosphor debug --port`
+  speaks PDBP. `src/core/udebugtransport.pas` and `src/core/udebugsession.pas` are this
+  side of it; `docs/debugger-lane.md` has what is left. The original claim read:
+  no `Step`, `OnStep`, `OnLine` or
   `Continue`, and no opcode-level trap;
 - the frame stack is **private with no accessor**, so there is no call stack to report
   and no way to name a variable and read it;

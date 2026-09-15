@@ -4,7 +4,7 @@ This document specifies the conversation between PhosphorIDE and a debug-capable
 `phosphor` host. It is written so that the two ends can be implemented from this
 page alone, by two people who never read each other's code.
 
-**Nothing speaks it yet.** The editor end exists -- `src/core/udebugproto.pas`
+**Both ends speak it now** (2026-09-15; this sentence used to read "nothing speaks it yet"). The host half ships in Phosphor as `phosphor debug --port`, driven by a 43-assertion contract test there; this side has the transport and the session driver, and what is missing is the menu. Original note follows, for the history of why the shape is what it is: The editor end exists -- `src/core/udebugproto.pas`
 encodes and decodes every message below, and `tests/phosphoridetest.lpr` pins the
 wire format -- but the host end does not, and cannot, without work inside the
 Phosphor engine. [What the host is missing](#what-the-host-is-missing) says exactly

@@ -106,7 +106,7 @@ the editor to ask what a variable holds, no way to install a hook. The editor
 knows what a text stream told it and what an integer said at the end. That is the
 whole of it.
 
-In particular: **the editor cannot pause the child, and cannot bound it.**
+In particular, for an ordinary `Run`: **the editor cannot pause the child, and cannot bound it.** A DEBUG session is the exception and always was the plan -- `phosphor debug --port` can be paused mid-run, and §6 below is stale about why it could not be.
 
 Phosphor's execution ceilings -- `MaxSteps`, `TimeoutMs`, `MaxOutputBytes` and
 `MaxMemoryBytes` -- are the *embedder's* to set. They are set in Pascal, by the
@@ -621,6 +621,12 @@ scanned (`engine/PhosphorLexer.pas:392`), so `PrintLn` and `println` are one wor
 inspection, and no way to add one from this repository.
 
 The obstruction is in Phosphor, and it is structural rather than a missing flag:
+
+> **STALE AS OF 2026-09-15.** The four bullets below describe an engine that has since
+> gained everything they say it lacks: a blocking debug seam that returns an action,
+> `ArmDebug` / `DebugVM` / four step actions, the `Dbg*` frame accessors, and a console
+> host that installs the seam and speaks PDBP. They are kept because they explain why
+> the protocol is shaped the way it is. See `docs/debugger-lane.md`.
 
 - The engine's `BREAKPOINT` seam is documented as report-and-continue and **"must
   never block"** (`Phosphor engine/PhosphorValue.pas:73-74`). It returns void, so

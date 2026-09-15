@@ -238,28 +238,20 @@ attached to each as its hint, and **Debug > Why is stepping unavailable?** shows
 full. Greyed-out items with a reason are more honest than a hidden menu and more useful
 than a Step that silently does nothing.
 
-The reason is a property of the interpreter, not a missing switch in the editor and not
-a flag on the host:
+THAT REASON IS NOW OUT OF DATE, and the paragraphs that used to stand here said so
+with four citations. They claimed the engine's `BREAKPOINT` seam must never block,
+that the VM had no step API, that the frame stack was private with no accessor, and
+that the console host installed no seam at all. All four were true when written and
+none is true now. Phosphor has `TPhosphorDebugProc`, which **returns** an action and
+may block; `ArmDebug`, `DebugVM` and four step actions; `DbgFrameDepth`,
+`DbgFrameFunc`, `DbgLocal` and `DbgGlobal`; and `phosphor debug --port <n> <file.bas>`
+speaks PDBP end to end, pinned by a 43-assertion contract test in that repository.
 
-- the engine's `BREAKPOINT` seam is documented as report-and-continue and "must never
-  block" (`Phosphor engine/PhosphorValue.pas:73-74`), and it returns void, so there is
-  nothing for a debugger to answer with;
-- the VM has no step API -- no `Step`, `OnStep`, `OnLine` or `Continue` on
-  `TPhosphorEngine`, and no opcode-level trap;
-- the frame stack is private with no accessor, so there is no call stack to report and
-  no way to name a variable and read it;
-- and the console host does not install the seam at all, with a recorded exemption in
-  `Phosphor scripts/check-seams.py`: "BREAKPOINT is report-and-continue; there is
-  nowhere for a host to pause to".
-
-So a step debugger needs work **in the Phosphor repository**, and
-[docs/debug-protocol.md](docs/debug-protocol.md) specifies exactly what work and in
-what order: PDBP, a line-delimited JSON protocol over its own socket. The editor half
-is written already -- `src/core/udebugproto.pas` encodes and decodes every frame, and
-`src/core/udebugsession.pas` holds the state machine -- deliberately, because the wire
-format is the half two independent implementations have to agree on, and agreeing on
-it before either end exists is cheaper than discovering the disagreement afterwards.
-It currently has no counterpart to talk to.
+What remains unbuilt is the MENU, here: six Debug actions in `umainform.lfm` carry no
+`OnExecute` at all, so enabling them would give live shortcuts that do nothing. The two
+layers beneath them are built and tested -- `src/core/udebugtransport.pas` is the
+loopback listener and framing, `src/core/udebugsession.pas` drives the session -- and
+`docs/debugger-lane.md` says what is left and in what order.
 
 Two decisions in that specification are worth stating here because they constrain the
 Phosphor side. It is **not DAP**: the Debug Adapter Protocol is the right answer if
@@ -272,12 +264,13 @@ are unusable for a language whose entire observable behaviour is `PRINT`, since 
 `PRINTLN` of a forged `exited` event would end the session from inside the program
 being debugged.
 
-Availability is detected by asking the host binary for its `--help` and looking for a
-`phosphor debug` line, rather than by comparing version numbers -- which version first
-shipped it is a fact about the future, whereas what the binary in front of us can do is
-a fact about the binary in front of us. A host that advertises the subcommand still
-reports unavailable today, because this build does not yet connect: saying "available"
-there would be the one lie these two units exist to avoid.
+Availability is asked of the binary rather than computed from a version number --
+which version first shipped the subcommand is a fact about the future, whereas what the
+binary in front of us can do is a fact about the binary in front of us. `--help` is the
+cheap pre-filter, and it is only that: the usage block advertises `phosphor debug` and
+says nothing about `--port`, so a host with only the terminal debugger looks identical
+there. **Available means the handshake succeeded**, which is the only thing that
+actually proves it.
 
 Everything else meanwhile is unaffected. Breakpoints are kept and tracked because the
 editor side is the half that can be built and tested now, and a breakpoint list that
@@ -293,7 +286,7 @@ already survives editing is what the other half will need the day the host can a
 | `tools/`            | `gen-keywords.py` -- regenerates `uphosphorlang.pas` from a Phosphor checkout. |
 | `tests/`            | `phosphoridetest.lpr`, the headless unit checks.                     |
 | `scripts/`          | `build.ps1` / `build.sh`: lazbuild, then `--selftest` under a timeout. |
-| `docs/`             | `architecture.md`, `building.md`, `roadmap.md`, and `debug-protocol.md` -- the PDBP specification. |
+| `docs/`             | `architecture.md`, `building.md`, `roadmap.md`, `debug-protocol.md` -- the PDBP specification -- and `debugger-lane.md`, which says what is built on each side and what is next. |
 | `bin/`, `lib/`      | build output. Both ignored.                                          |
 
 ## Testing
