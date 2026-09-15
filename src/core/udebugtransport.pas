@@ -1,0 +1,443 @@
+unit udebugtransport;
+
+{ The PDBP socket: the editor listens, the debuggee connects.
+
+  THE DIRECTION IS THE THING IMPLEMENTERS GET BACKWARDS FIRST, and the
+  specification says it in as many words (docs/debug-protocol.md): the EDITOR
+  listens on loopback, and `phosphor debug --port N file.bas` connects back to it.
+  So this is a server, not a client, and the port it binds is ephemeral -- bind 0,
+  ask the kernel what it gave us, and pass that number on the child's command line.
+
+  WHY NOT fcl-net's TInetServer. Measured in the RTL rather than assumed, because
+  this project has lost patches to assumptions about the RTL twice:
+
+    ssockets.pp:863-873  TInetServer.Bind calls fpBind and sets FBound. It never
+                         calls fpGetSockName, and Port is read-only (:202). So a
+                         bind on port 0 leaves Port reading 0 and the number we
+                         must hand the child is simply unobtainable.
+    ssockets.pp:911-916  Accept CLOSES the socket it just accepted unless
+                         FAccepting is true, and only StartAccepting sets that.
+                         The obvious bind/listen/accept-once therefore accepts the
+                         debuggee and drops it on the floor.
+
+  Unit `Sockets` directly, then. Also read rather than assumed: its Windows half
+  (rtl-extra/src/win/sockets.pp:278-280) calls WSAStartUp in its own
+  initialization, so `uses Sockets` is the whole of the Winsock ceremony, and
+  fpSocket / fpBind / fpListen / fpAccept / fpGetSockName / CloseSocket all exist
+  under those names on both platforms.
+
+  THE THREADING IS uphosphorrun.pas's, because that shape is already paid for.
+  An accept thread and a reader thread deposit into a lock-guarded buffer, and
+  Poll -- called on the main thread -- turns that buffer into whole lines and
+  fires the events. No TThread.Synchronize and no TThread.Queue: draining a buffer
+  has one obvious order of operations and no re-entrancy to reason about. The UI
+  thread never blocks, which is this repository's first rule.
+
+  THE TIMER BELONGS TO THE CALLER, NOT TO THIS UNIT, and that is not tidiness. A
+  TTimer needs a widgetset: `phosphoridetest` links the LCL and deliberately never
+  creates one, so constructing a timer here killed the test program the moment the
+  transport was first exercised -- the group header printed and nothing after it,
+  exit 0, no summary. Owning the timer would have made this unit the only one in
+  src/core that cannot be tested headless. The owner calls Poll on whatever cadence
+  it likes; uphosphorrun.pas uses 40 ms and there is no reason to differ.
+
+  WHAT IS DELIBERATELY NOT COPIED FROM THERE: FlushPrompt. The runner emits an
+  unterminated tail after about 80 ms of quiet, because a program that ends in
+  PRINT rather than PRINTLN would otherwise lose its last line. That is right for
+  a program's stdout and fatal for a protocol: half a frame handed to a JSON
+  parser is not a prompt, it is a session that ends with "not JSON". A partial
+  line waits here for its newline however long that takes.
+
+  FRAMING. One JSON object per line, UTF-8, terminated by a BARE #10 -- never
+  LineEnding, which is CRLF on Windows and which the specification forbids on
+  output (docs/debug-protocol.md:64-65). A #13 before the #10 is tolerated on
+  input. The accumulated line is capped: the peer is on loopback and is trusted,
+  but trusted is not unbounded, and a peer that never sends a newline would
+  otherwise grow a String until the editor died. The host caps its own side the
+  same way and at the same size.
+
+  MIT License. Copyright (c) 2026 Andre Murta.
+}
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  Classes, SysUtils, Sockets, syncobjs;
+
+const
+  { A protocol frame is a few hundred bytes; a megabyte is far past any honest one
+    and short of anything that hurts. The host uses the same number, which is not
+    a coincidence -- both ends refuse the same shape of peer. }
+  MaxFrameBytes = 1024 * 1024;
+
+type
+  TDebugFrameEvent = procedure(Sender: TObject; const AFrame: String) of object;
+  TDebugLinkEvent = procedure(Sender: TObject) of object;
+
+  TDebugTransport = class;
+
+  { Parked in fpAccept until the debuggee connects or the listening socket is
+    closed under it. Closing the listener is how Stop wakes this thread; the
+    accept then fails and the loop ends, which is the same wake-and-join
+    discipline uphosphorrun.pas:616-655 uses on the child's pipes. }
+  TDebugAcceptThread = class(TThread)
+  private
+    FOwner: TDebugTransport;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AOwner: TDebugTransport);
+  end;
+
+  { Blocking reads on the accepted socket. Deposits bytes and nothing else. }
+  TDebugReadThread = class(TThread)
+  private
+    FOwner: TDebugTransport;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AOwner: TDebugTransport);
+  end;
+
+  TDebugTransport = class
+  private
+    FListenSock: LongInt;
+    FPeerSock: LongInt;
+    FPort: Word;
+    FLock: TCriticalSection;
+    FPending: String;        // bytes the reader has delivered, not yet split
+    FPartial: String;        // a line whose newline has not arrived
+    FAccepter: TDebugAcceptThread;
+    FReader: TDebugReadThread;
+    FConnected: Boolean;     // guarded by FLock: the accept succeeded
+    FEnded: Boolean;         // guarded by FLock: the peer went away
+    FRaisedLink: Boolean;    // the main thread has reported the connection
+    FRaisedEnd: Boolean;     // ...and the disconnection
+    FOverflow: Boolean;      // guarded by FLock: the cap was hit
+    FOnFrame: TDebugFrameEvent;
+    FOnConnect: TDebugLinkEvent;
+    FOnDisconnect: TDebugLinkEvent;
+    procedure Drain;
+    procedure Deposit(const AChunk: String);
+    procedure NotePeer(ASock: LongInt);
+    procedure NoteEnd;
+    function TakePending: String;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    { Bind loopback on an ephemeral port and start listening. Returns the port the
+      kernel gave us -- the number to put on the child's command line -- or 0 if
+      the socket could not be made. }
+    function Listen: Word;
+    { Stop everything: wake the threads, join them, close both sockets. Safe to
+      call more than once, and safe to call when Listen failed. }
+    procedure Stop;
+    { Send one frame. The terminator is added here so no caller can get it wrong. }
+    function SendFrame(const AFrame: String): Boolean;
+    { Drain now, from the calling thread, instead of waiting for the timer. The
+      timer's only purpose is to arrive on the main thread; a caller that IS the
+      main thread -- a headless test, a host with its own loop -- can say so. }
+    procedure Poll;
+    property Port: Word read FPort;
+    property OnFrame: TDebugFrameEvent read FOnFrame write FOnFrame;
+    property OnConnect: TDebugLinkEvent read FOnConnect write FOnConnect;
+    property OnDisconnect: TDebugLinkEvent read FOnDisconnect write FOnDisconnect;
+  end;
+
+implementation
+
+const
+  ReadBufferSize  = 4096;
+
+{ ------------------------------------------------------------ accept thread - }
+
+constructor TDebugAcceptThread.Create(AOwner: TDebugTransport);
+begin
+  FOwner := AOwner;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+procedure TDebugAcceptThread.Execute;
+var
+  addr: TInetSockAddr;
+  len: TSockLen;
+  h: LongInt;
+begin
+  FillChar(addr{%H-}, SizeOf(addr), 0);
+  len := SizeOf(addr);
+  h := fpAccept(FOwner.FListenSock, @addr, @len);
+  if Terminated then
+  begin
+    { Stop closed the listener under us. If an accept still slipped through, the
+      socket is ours and nobody will ever read it. }
+    if h >= 0 then CloseSocket(h);
+    Exit;
+  end;
+  if h < 0 then
+  begin
+    FOwner.NoteEnd();   // the listener was closed, or the accept failed outright
+    Exit;
+  end;
+  FOwner.NotePeer(h);
+end;
+
+{ -------------------------------------------------------------- read thread - }
+
+constructor TDebugReadThread.Create(AOwner: TDebugTransport);
+begin
+  FOwner := AOwner;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+procedure TDebugReadThread.Execute;
+var
+  buf: array[0..ReadBufferSize - 1] of Byte;
+  n: LongInt;
+  chunk: String;
+begin
+  FillChar(buf{%H-}, SizeOf(buf), 0);
+  while not Terminated do
+  begin
+    n := fpRecv(FOwner.FPeerSock, @buf[0], SizeOf(buf), 0);
+    if n <= 0 then Break;      // the debuggee closed, or the socket went away
+    SetLength(chunk, n);
+    Move(buf[0], chunk[1], n);
+    FOwner.Deposit(chunk);
+  end;
+  FOwner.NoteEnd();
+end;
+
+{ ---------------------------------------------------------------- transport - }
+
+constructor TDebugTransport.Create;
+begin
+  inherited Create();
+  FListenSock := -1;
+  FPeerSock := -1;
+  FLock := TCriticalSection.Create();
+end;
+
+destructor TDebugTransport.Destroy;
+begin
+  Stop();
+  FLock.Free;
+  inherited Destroy;
+end;
+
+function TDebugTransport.Listen: Word;
+var
+  addr: TInetSockAddr;
+  len: TSockLen;
+begin
+  Result := 0;
+  FListenSock := fpSocket(AF_INET, SOCK_STREAM, 0);
+  if FListenSock < 0 then Exit;
+
+  FillChar(addr{%H-}, SizeOf(addr), 0);
+  addr.sin_family := AF_INET;
+  addr.sin_port := 0;                              // the kernel picks
+  addr.sin_addr.s_addr := htonl($7F000001);        // 127.0.0.1, loopback only
+  if fpBind(FListenSock, @addr, SizeOf(addr)) <> 0 then
+  begin
+    CloseSocket(FListenSock); FListenSock := -1; Exit;
+  end;
+  if fpListen(FListenSock, 1) <> 0 then
+  begin
+    CloseSocket(FListenSock); FListenSock := -1; Exit;
+  end;
+
+  { THE STEP TInetServer DOES NOT TAKE. Without it the bind above is useless:
+    port 0 means "give me one", and this is the only way to learn which. }
+  FillChar(addr, SizeOf(addr), 0);
+  len := SizeOf(addr);
+  if fpGetSockName(FListenSock, @addr, @len) <> 0 then
+  begin
+    CloseSocket(FListenSock); FListenSock := -1; Exit;
+  end;
+  FPort := ntohs(addr.sin_port);
+  if FPort = 0 then
+  begin
+    CloseSocket(FListenSock); FListenSock := -1; Exit;
+  end;
+
+  FAccepter := TDebugAcceptThread.Create(Self);
+  Result := FPort;
+end;
+
+procedure TDebugTransport.NotePeer(ASock: LongInt);
+begin
+  FLock.Acquire();
+  try
+    FPeerSock := ASock;
+    FConnected := True;
+  finally
+    FLock.Release();
+  end;
+  { Started from the accept thread, which is about to end. The reader owns the
+    socket from here; the drain timer reports the connection on the main thread. }
+  FReader := TDebugReadThread.Create(Self);
+end;
+
+procedure TDebugTransport.NoteEnd;
+begin
+  FLock.Acquire();
+  try
+    FEnded := True;
+  finally
+    FLock.Release();
+  end;
+end;
+
+procedure TDebugTransport.Deposit(const AChunk: String);
+begin
+  { Called from the reader thread. Touches nothing but the buffer. }
+  FLock.Acquire();
+  try
+    if Length(FPending) + Length(FPartial) > MaxFrameBytes then
+      FOverflow := True
+    else
+      FPending := FPending + AChunk;
+  finally
+    FLock.Release();
+  end;
+end;
+
+function TDebugTransport.TakePending: String;
+begin
+  FLock.Acquire();
+  try
+    Result := FPending;
+    FPending := '';
+  finally
+    FLock.Release();
+  end;
+end;
+
+procedure TDebugTransport.Drain;
+var
+  buf, line: String;
+  p: Integer;
+  connected, ended, over: Boolean;
+begin
+  { ASK WHETHER THE PEER FINISHED BEFORE TAKING WHAT IT LEFT -- the ordering rule
+    at uphosphorrun.pas:527-535. The other way round loses the last frames: the
+    reader can deposit and end between the two reads, and a drain that checked
+    "ended" first would then return without collecting them. }
+  FLock.Acquire();
+  try
+    connected := FConnected;
+    ended := FEnded;
+    over := FOverflow;
+  finally
+    FLock.Release();
+  end;
+
+  if connected and (not FRaisedLink) then
+  begin
+    FRaisedLink := True;
+    if Assigned(FOnConnect) then FOnConnect(Self);
+  end;
+
+  buf := FPartial + TakePending();
+  FPartial := '';
+  p := Pos(#10, buf);
+  while p > 0 do
+  begin
+    line := Copy(buf, 1, p - 1);
+    { A #13 before the #10 is tolerated on input and never produced on output --
+      the specification's own words. }
+    if (line <> '') and (line[Length(line)] = #13) then
+      SetLength(line, Length(line) - 1);
+    Delete(buf, 1, p);
+    if (line <> '') and Assigned(FOnFrame) then FOnFrame(Self, line);
+    p := Pos(#10, buf);
+  end;
+  { NO FLUSH. An unterminated tail is held, however long it takes -- see the unit
+    header. Half a frame is not a frame. }
+  FPartial := buf;
+
+  if over then
+  begin
+    { A peer that will not end a line is not a peer worth keeping. }
+    FPartial := '';
+    NoteEnd();
+    ended := True;
+  end;
+
+  if ended and (not FRaisedEnd) then
+  begin
+    FRaisedEnd := True;
+    if Assigned(FOnDisconnect) then FOnDisconnect(Self);
+  end;
+end;
+
+procedure TDebugTransport.Poll;
+begin
+  Drain();
+end;
+
+function TDebugTransport.SendFrame(const AFrame: String): Boolean;
+var
+  wire: String;
+  sock: LongInt;
+  sent: LongInt;
+begin
+  Result := False;
+  FLock.Acquire();
+  try
+    sock := FPeerSock;
+  finally
+    FLock.Release();
+  end;
+  if sock < 0 then Exit;
+  { BARE #10, never LineEnding: CRLF on output is forbidden by the specification,
+    and writing it here is the single easiest way to break a conformant host. }
+  wire := AFrame + #10;
+  { A request frame is tens of bytes and the host reads continuously, so this is
+    written from the calling thread. If it is ever made to carry bulk -- a
+    setVariable with a long string, say -- it needs a writer thread, for the
+    reason uphosphorrun.pas:81-108 gives about a full pipe buffer. }
+  sent := fpSend(sock, @wire[1], Length(wire), 0);
+  Result := sent = Length(wire);
+end;
+
+procedure TDebugTransport.Stop;
+var
+  lsock, psock: LongInt;
+begin
+  { WAKE BEFORE JOIN, both threads, and by closing the socket each is parked on.
+    The accept thread is inside fpAccept and the reader inside fpRecv; neither
+    returns for a Terminate alone. Terminated is set first so that a thread woken
+    by the close knows it was asked to stop rather than that the peer went away. }
+  if FAccepter <> nil then FAccepter.Terminate();
+  if FReader <> nil then FReader.Terminate();
+
+  FLock.Acquire();
+  try
+    lsock := FListenSock; FListenSock := -1;
+    psock := FPeerSock;   FPeerSock := -1;
+  finally
+    FLock.Release();
+  end;
+  if lsock >= 0 then CloseSocket(lsock);
+  if psock >= 0 then CloseSocket(psock);
+
+  if FAccepter <> nil then
+  begin
+    FAccepter.WaitFor();
+    FreeAndNil(FAccepter);
+  end;
+  if FReader <> nil then
+  begin
+    FReader.WaitFor();
+    FreeAndNil(FReader);
+  end;
+  FPartial := '';
+  FPending := '';
+end;
+
+end.

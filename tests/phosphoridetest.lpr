@@ -37,7 +37,11 @@ uses
   InterfaceBase,
   {$IFDEF WINDOWS}Win32Int,{$ELSE}Gtk2Int,{$ENDIF}
   SysUtils, Classes,
-  uphosphorlang, uphosphormsg, usynphosphor, udebugproto, ubreakpoints;
+  uphosphorlang, uphosphormsg, usynphosphor, udebugproto, ubreakpoints,
+  { The transport is exercised against a socket this program opens itself:
+    no host is started, nothing is spawned, and the test runs the same on a
+    headless machine as on a desktop. Sockets and ExtCtrls come with it. }
+  udebugtransport, Sockets;
 
 var
   Checks: Integer = 0;
@@ -512,6 +516,157 @@ begin
   Check('an empty line is refused', not M.Valid);
 end;
 
+
+{ ---------------------------------------------------------------------------
+  THE TRANSPORT, WITHOUT A HOST.
+
+  The editor listens and the debuggee connects, so a test can BE the debuggee:
+  this opens a second socket in the same process, connects to the transport's own
+  port, and writes bytes at it. No child process, no phosphor binary, nothing to
+  find on disk -- which is what makes it honest on a machine that has neither.
+
+  The three cases are the three ways a stream arrives, and the third is the one
+  that matters: a chunk with no terminator must produce NOTHING. The runner this
+  code is modelled on deliberately emits an unterminated tail after a moment of
+  quiet, because a program that ends in PRINT would otherwise lose its last line;
+  copying that here would hand half a frame to a JSON parser and end the session.
+  --------------------------------------------------------------------------- }
+
+type
+  TFrameSink = class
+    Frames: TStringList;
+    Linked: Boolean;
+    Ended: Boolean;
+    procedure GotFrame(Sender: TObject; const AFrame: String);
+    procedure GotLink(Sender: TObject);
+    procedure GotEnd(Sender: TObject);
+  end;
+
+procedure TFrameSink.GotFrame(Sender: TObject; const AFrame: String);
+begin
+  Frames.Add(AFrame);
+end;
+
+procedure TFrameSink.GotLink(Sender: TObject);
+begin
+  Linked := True;
+end;
+
+procedure TFrameSink.GotEnd(Sender: TObject);
+begin
+  Ended := True;
+end;
+
+{ The drain is a TTimer, and this program creates no widgetset and runs no message
+  loop, so nothing would ever fire it. Calling it directly is not a shortcut around
+  the design: the timer's only job is to arrive on the main thread, and here we ARE
+  the main thread. Give the reader a moment to deposit first. }
+procedure Pump(ATransport: TDebugTransport; ASink: TFrameSink; ATimes: Integer);
+var
+  i: Integer;
+begin
+  for i := 1 to ATimes do
+  begin
+    Sleep(25);
+    ATransport.Poll();
+  end;
+end;
+
+procedure TestTransport;
+var
+  T: TDebugTransport;
+  sink: TFrameSink;
+  peer: LongInt;
+  addr: TInetSockAddr;
+  port: Word;
+  s: String;
+begin
+  Group('debug transport');
+
+  T := TDebugTransport.Create();
+  sink := TFrameSink.Create();
+  sink.Frames := TStringList.Create();
+  try
+    T.OnFrame := @sink.GotFrame;
+    T.OnConnect := @sink.GotLink;
+    T.OnDisconnect := @sink.GotEnd;
+
+    port := T.Listen();
+    { THE STEP fcl-net's TInetServer CANNOT TAKE. Bind on port 0 and the kernel
+      picks; without fpGetSockName the number is unobtainable, and the number is
+      exactly what has to go on the child's command line. }
+    Check('a listener binds an ephemeral port and can say which', port <> 0);
+
+    peer := fpSocket(AF_INET, SOCK_STREAM, 0);
+    Check('the debuggee side opens a socket', peer >= 0);
+    FillChar(addr{%H-}, SizeOf(addr), 0);
+    addr.sin_family := AF_INET;
+    addr.sin_port := htons(port);
+    addr.sin_addr.s_addr := htonl($7F000001);
+    Check('and connects to the editor, not the other way round',
+          fpConnect(peer, @addr, SizeOf(addr)) = 0);
+
+    Pump(T, sink, 4);
+    Check('the connection is reported on the main thread', sink.Linked);
+
+    { (a) two whole frames in one write }
+    s := '{"a":1}' + #10 + '{"b":2}' + #10;
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 4);
+    Check('two frames in one write arrive as two', sink.Frames.Count = 2);
+    if sink.Frames.Count = 2 then
+    begin
+      Check('  the first is whole', sink.Frames[0] = '{"a":1}');
+      Check('  and so is the second', sink.Frames[1] = '{"b":2}');
+    end;
+
+    { (b) one frame split across two writes }
+    sink.Frames.Clear;
+    s := '{"split":';
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 2);
+    Check('half a frame produces nothing', sink.Frames.Count = 0);
+    s := 'true}' + #10;
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 4);
+    Check('the other half completes it', sink.Frames.Count = 1);
+    if sink.Frames.Count = 1 then
+      Check('  and it is the whole frame', sink.Frames[0] = '{"split":true}');
+
+    { (c) a chunk with no terminator, and QUIET AFTERWARDS. This is the case the
+      runner's FlushPrompt would get wrong. }
+    sink.Frames.Clear;
+    s := '{"never":"terminated"}';
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 8);
+    Check('an unterminated tail is never emitted, however long the quiet',
+          sink.Frames.Count = 0);
+
+    { a CR before the LF is tolerated on input }
+    s := #13 + #10;
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 4);
+    Check('a CRLF terminator is accepted and the CR stripped',
+          (sink.Frames.Count = 1) and (sink.Frames[0] = '{"never":"terminated"}'));
+
+    { the editor writes back, and the terminator is the transport's job }
+    Check('a frame can be sent to the debuggee', T.SendFrame('{"cmd":"pause"}'));
+
+    { the peer goes away }
+    CloseSocket(peer);
+    Pump(T, sink, 8);
+    Check('a closed peer is reported as a disconnection', sink.Ended);
+
+    T.Stop();
+    Check('stopping twice is safe', True);
+    T.Stop();
+  finally
+    sink.Frames.Free;
+    sink.Free;
+    T.Free;
+  end;
+end;
+
 begin
   WriteLn('PhosphorIDE unit checks');
 
@@ -520,6 +675,7 @@ begin
   TestHighlighter;
   TestBreakpoints;
   TestProtocol;
+  TestTransport;
 
   WriteLn;
   if Failures = 0 then
