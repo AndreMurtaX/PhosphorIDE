@@ -222,7 +222,7 @@ Phosphor's own documentation names them as what beginners hit most:
 
 **And one thing is deliberately wrong.** Phosphor's lexer has no keyword table at all:
 every keyword reaches the parser as an ordinary identifier and is decided by
-**position** (`engine/PhosphorLexer.pas:385-408`). `next = 5` and `elseif += 3` are
+**position** (`engine/PhosphorLexer.pas:444-470`). `next = 5` and `elseif += 3` are
 legal assignments, and this editor will colour both words as keywords anyway. That is
 a trade, not an oversight. Being right about the rare program means being the parser;
 the alternative -- colouring nothing until it is certain -- mis-colours every ordinary

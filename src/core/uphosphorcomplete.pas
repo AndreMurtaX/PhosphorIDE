@@ -10,7 +10,7 @@ unit uphosphorcomplete;
 
   THE PREFIX IS SCANNED BY THE HIGHLIGHTER'S RULE, NOT BY A LOOSER ONE. A type
   suffix is part of the name -- `left$` is one word, never `left` followed by an
-  operator (engine/PhosphorLexer.pas:389-392, and usynphosphor's own IdentChar /
+  operator (engine/PhosphorLexer.pas:448-451, and usynphosphor's own IdentChar /
   SuffixChar sets). Get that wrong and typing `lef`, then accepting `left$`,
   inserts a second `$`: the editor replaced three characters and wrote four.
 
@@ -18,7 +18,7 @@ unit uphosphorcomplete;
   from the current line alone. That is not a simplification, it is a property of
   the language: `'` and `rem` run to end of line, nothing else starts a comment,
   and a string that reaches a newline is the hard error `unterminated string`
-  rather than a continuation (engine/PhosphorLexer.pas:361-366). It is the same
+  rather than a continuation (engine/PhosphorLexer.pas:420-435). It is the same
   property that lets usynphosphor have no range state at all.
 
   NOTHING HERE IS INFERRED FROM A COLOUR. usynphosphor:24-31 records that the
@@ -85,7 +85,7 @@ function InLiteralOrComment(const ALine: String; ACol: Integer): Boolean;
 { Every name that begins with APrefix at or below AMaxTier, sorted by word and
   de-duplicated. An empty prefix is everything. The comparison is
   case-insensitive because Phosphor lowercases every identifier as it is scanned
-  (engine/PhosphorLexer.pas:392): `PrintLn` and `println` are one word. }
+  (engine/PhosphorLexer.pas:452): `PrintLn` and `println` are one word. }
 function CompletionCandidates(const APrefix: String;
   AMaxTier: TPhosphorTier): TCompletionItems;
 
@@ -230,7 +230,7 @@ begin
         Inc(I);
       { `rem` is the LEXER's, not the parser's: it swallows the rest of the line
         the moment it sees it, and `remark` is an ordinary identifier
-        (engine/PhosphorLexer.pas:393-398). Scanning the whole word rather than
+        (engine/PhosphorLexer.pas:453-458). Scanning the whole word rather than
         matching three characters is the difference. }
       Word := LowerCase(Copy(ALine, Start, I - Start));
       if Word = 'rem' then

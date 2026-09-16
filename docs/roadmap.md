@@ -530,7 +530,7 @@ Three things must be right:
   caret must be scanned by the same rule the highlighter uses, or typing `lef` and accepting
   `left$` inserts a second `$`.
 - **Case-insensitive lookup, case-preserving insertion.** Phosphor lowercases every
-  identifier as it is scanned (`engine/PhosphorLexer.pas:392`), so `PrintLn` and `println`
+  identifier as it is scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println`
   are one word; the insertion should follow what the user typed rather than forcing lower
   case on their file.
 
@@ -745,7 +745,7 @@ jumping to its definition.
 **What makes it tractable, and what makes it a trap.** `function` and `endfunction` are
 keywords by **position**, not by lexing: Phosphor's lexer has no keyword table at all, and
 every keyword reaches the parser as an ordinary identifier
-(`src/core/usynphosphor.pas:24-31`, citing `engine/PhosphorLexer.pas:385-408`). A scanner
+(`src/core/usynphosphor.pas:24-31`, citing `engine/PhosphorLexer.pas:444-470`). A scanner
 that treats the first word of a line as structural is therefore right for every ordinary
 program and wrong for a legal one.
 
@@ -825,7 +825,7 @@ already written down in `docs/architecture.md` and in the highlighter's own head
 - **It changes the highlighter's base class and its cost model.** `TSynPhosphorSyn` derives
   from `TSynCustomHighlighter` and carries **no range state on purpose**: Phosphor has no
   block comment and no multi-line string -- a string literal reaching a newline is the hard
-  lexical error `unterminated string` (`engine/PhosphorLexer.pas:361-366`) -- so every line
+  lexical error `unterminated string` (`engine/PhosphorLexer.pas:420-435`) -- so every line
   can be coloured by looking at that line alone, `GetRange`/`SetRange` stay the base class's
   no-ops, and editing line 10 never repaints line 400
   (`src/core/usynphosphor.pas:5-12`). SynEdit's fold support lives in a different base class

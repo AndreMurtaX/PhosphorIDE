@@ -261,7 +261,7 @@ here as a red build, not as an editor that has quietly stopped knowing about a b
 
 What `--check` cannot catch: **the keywords.** Phosphor's lexer has no keyword table at
 all -- it emits every one of them as a plain identifier and the parser decides from
-position (`engine/PhosphorLexer.pas:385-408`), so there is nothing to extract. The 53
+position (`engine/PhosphorLexer.pas:444-470`), so there is nothing to extract. The 53
 keywords are held by hand in `gen-keywords.py` and checked against
 `TPhosphorCompiler.IsReservedWord` by a person. `--check` proves the committed unit
 matches the script; it does not prove the script matches Phosphor. A Phosphor release

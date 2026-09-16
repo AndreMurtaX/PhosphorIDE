@@ -459,10 +459,21 @@ the three known directories.
 
 Where extraction is not possible -- an exit code, a seam's contract, a lexer rule the
 highlighter depends on -- **cite the source with a line number**, as the unit headers
-already do (`PhosphorLexer.pas:361-366` for unterminated strings, `:385-408` for
-keywords-by-position, `:392` for case folding, `:399` for `mod`). Then a change over
-there is findable from here. Do not paraphrase a Phosphor rule from memory; open the
-file.
+already do (`PhosphorLexer.pas:420-435` for unterminated strings, `:444-470` for
+keywords-by-position, `:452` for case folding, `:459-460` for `mod`). Then a change
+over there is findable from here. Do not paraphrase a Phosphor rule from memory; open
+the file.
+
+**AND A CITATION ROTS SILENTLY.** Every one of those four numbers was wrong on
+2026-09-16 -- `:361-366` had become the `strClosed` reasoning, and `:385-408`, cited
+in seven places here for "the lexer has no keyword table", had become the
+backslash-escape table inside a string literal. The CLAIMS were all still true; the
+line numbers had drifted by roughly sixty as the sibling file grew, and nothing in
+either repository could notice. They were found only because roadmap item 15 was
+about to copy one of them into an eighth place. So: when you touch a unit whose
+header cites `../Phosphor`, OPEN THE CITED LINES and fix them if they have moved --
+a citation nobody re-reads is a comment that lies with a reference attached, which is
+worse than no reference at all.
 
 One consequence worth keeping in mind while touching the highlighter: Phosphor's lexer
 has **no keyword table**. Every keyword reaches the parser as an ordinary identifier

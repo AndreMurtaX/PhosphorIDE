@@ -170,7 +170,7 @@ def collect(phosphor_root):
 #
 # Phosphor's lexer has no keyword table at all -- it emits every one of these as
 # a plain identifier and the PARSER decides, from position, whether the word is a
-# keyword (engine/PhosphorLexer.pas:385-408). So there is nothing to extract:
+# keyword (engine/PhosphorLexer.pas:444-470). So there is nothing to extract:
 # the authority is TPhosphorCompiler.IsReservedWord, and these lists are checked
 # against it by hand when Phosphor changes. `rem` and `mod` are the only two
 # words the lexer itself owns.
@@ -190,7 +190,7 @@ KEYWORDS = """
 """.split()
 
 # Word operators. `mod` is special: the lexer turns it into an operator token, so
-# unlike every other word here it can never be a variable (PhosphorLexer.pas:399).
+# unlike every other word here it can never be a variable (PhosphorLexer.pas:459-460).
 OPERATORS = 'and mod not or'.split()
 
 # `true` and `false` are parser-level (PhosphorCompiler.pas:796-797). `null` is a
@@ -228,7 +228,7 @@ HEADER = """unit uphosphorlang;
   program that calls one is portable in a way `print` is not.
 
   Lookup is case-insensitive: Phosphor lowercases every identifier as it is
-  scanned (engine/PhosphorLexer.pas:392), so `PrintLn` and `println` are one word.
+  scanned (engine/PhosphorLexer.pas:452), so `PrintLn` and `println` are one word.
   A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
   word, not `left` followed by an operator.
 }

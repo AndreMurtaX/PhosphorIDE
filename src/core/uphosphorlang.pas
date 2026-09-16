@@ -17,7 +17,7 @@ unit uphosphorlang;
   program that calls one is portable in a way `print` is not.
 
   Lookup is case-insensitive: Phosphor lowercases every identifier as it is
-  scanned (engine/PhosphorLexer.pas:392), so `PrintLn` and `println` are one word.
+  scanned (engine/PhosphorLexer.pas:452), so `PrintLn` and `println` are one word.
   A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
   word, not `left` followed by an operator.
 }

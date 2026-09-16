@@ -7,7 +7,7 @@ unit usynphosphor;
   changes how line 400 is coloured. Phosphor has neither: `'` and `rem` run to end
   of line and nothing else starts a comment, and a string literal that reaches a
   newline is the hard lexical error `unterminated string` rather than a
-  continuation (engine/PhosphorLexer.pas:361-366). So every line can be coloured
+  continuation (engine/PhosphorLexer.pas:420-435). So every line can be coloured
   by looking at that line alone -- GetRange/SetRange stay the base class's no-ops,
   and editing line 10 never repaints line 400.
 
@@ -23,7 +23,7 @@ unit usynphosphor;
 
   WHAT IT DELIBERATELY GETS WRONG. Phosphor's lexer has NO keyword table -- every
   keyword arrives at the parser as an ordinary identifier and is decided by
-  POSITION (engine/PhosphorLexer.pas:385-408). `next = 5` and `elseif += 3` are
+  POSITION (engine/PhosphorLexer.pas:444-470). `next = 5` and `elseif += 3` are
   legal assignments. Colouring those words as keywords everywhere is therefore
   wrong in a way no highlighter can fix without being the parser. It is the right
   trade -- the alternative mis-colours every ordinary program to be correct about
@@ -135,14 +135,14 @@ type
 implementation
 
 const
-  { The complete escape set (engine/PhosphorLexer.pas:329-359). Anything else
+  { The complete escape set (engine/PhosphorLexer.pas:394-404). Anything else
     after a backslash is a compile error, which is what ptkError paints. }
   ValidEscapes = ['n', 't', 'r', '0', 'a', 'b', 'f', 'v', '\', '"'];
 
   IdentStart = ['A'..'Z', 'a'..'z', '_'];
   IdentChar = ['A'..'Z', 'a'..'z', '0'..'9', '_'];
   { A type suffix is PART of the name -- `left$` is one token, never `left` then a
-    symbol (engine/PhosphorLexer.pas:389-392). }
+    symbol (engine/PhosphorLexer.pas:448-451). }
   SuffixChar = ['$', '%', '@', '?'];
   DigitChar = ['0'..'9'];
 
@@ -294,7 +294,7 @@ begin
   { [0-9]+ ( . [0-9]+ )? ( [eE] [+-]? [0-9]+ )?  -- and every optional part is
     taken only when the digits that justify it are actually there, so `1.` is the
     number 1 followed by a stray dot, exactly as the lexer sees it
-    (engine/PhosphorLexer.pas:219, 230-240). }
+    (engine/PhosphorLexer.pas:265-292). }
   while (FRun <= FLineLen) and (FLine[FRun] in DigitChar) do
     Inc(FRun);
 
@@ -358,7 +358,7 @@ begin
 
   { `rem` is not a word the parser decides about: the LEXER swallows the rest of
     the line the moment it sees it, so `rem` is a comment and `remark` is not
-    (engine/PhosphorLexer.pas:393-398). }
+    (engine/PhosphorLexer.pas:453-458). }
   if Word = 'rem' then
   begin
     FRun := FLineLen + 1;

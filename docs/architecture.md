@@ -433,7 +433,7 @@ Phosphor has neither construct:
 - `'` and `rem` run to end of line, and nothing else starts a comment. There is
   no `/* */`.
 - A string literal that reaches a newline is not a continuation. It is the hard
-  lexical error `unterminated string` (`engine/PhosphorLexer.pas:361-366`).
+  lexical error `unterminated string` (`engine/PhosphorLexer.pas:420-435`).
 
 So every line can be coloured by looking at that line alone. `GetRange` and
 `SetRange` stay the base class's no-ops, editing line 10 never repaints line 400,
@@ -451,7 +451,7 @@ than waiting for the compiler to say so:
 - **An unknown backslash escape.** `"C:\temp"` is not a path, it is a tab.
   `"\x"` is not a literal backslash-x, it is the compile error `unknown escape
   sequence`. The valid set is `n t r 0 a b f v \ "`
-  (`engine/PhosphorLexer.pas:329-359`) and anything else is a defect.
+  (`engine/PhosphorLexer.pas:394-404`) and anything else is a defect.
 - **An unterminated string**, which runs to end of line.
 
 For the first of these, colouring the *whole* literal red would be wrong: the
@@ -471,7 +471,7 @@ because the literal cannot then close either.
 
 **Phosphor's lexer has no keyword table.** Every keyword arrives at the parser as
 an ordinary identifier, and the parser decides from POSITION whether the word is
-a keyword (`engine/PhosphorLexer.pas:385-408`). `next = 5` and `elseif += 3` are
+a keyword (`engine/PhosphorLexer.pas:444-470`). `next = 5` and `elseif += 3` are
 legal assignments to legal variables.
 
 Colouring those words as keywords everywhere is therefore *wrong*, in a way no
@@ -592,7 +592,7 @@ a word belongs to once per identifier token on every visible line; a linear scan
 over that would be felt while scrolling.
 
 Lookup is case-insensitive because Phosphor lowercases every identifier as it is
-scanned (`engine/PhosphorLexer.pas:392`), so `PrintLn` and `println` are one word.
+scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println` are one word.
 
 ---
 
