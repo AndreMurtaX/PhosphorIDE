@@ -148,7 +148,8 @@ the values would simply have been from a moment that had passed.
 ### What the host still owes
 
 Measured on 2026-09-16 by speaking PDBP to `phosphor debug --port` directly, with no
-editor involved:
+editor involved. Both are written up with their mechanism, read in the Phosphor sources
+rather than guessed, in [`phosphor-debugger-debts.md`](phosphor-debugger-debts.md):
 
 - **A breakpoint on the first statement is reported installed and never fires.**
   `setBreakpoints lines:[1]` answers `lines:[1]`; the program runs to completion. This

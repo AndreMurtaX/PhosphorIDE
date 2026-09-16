@@ -463,8 +463,10 @@ other repository any more. Two things found on 2026-09-16 belong with it:
   `setBreakpoints lines:[1]` on any file answers `lines:[1]`.
 - **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
   because a mark needs the `TImageList` of item 13.
-- **Phosphor owes a second fix**: `stackTrace` answers every frame but the innermost
-  with `line: 0`. The engine does not record a call site per frame, so a call-stack
+- **Phosphor owes a second fix** (both are written up with their mechanism, their
+  reproduction and the proposed patch sites in
+  [`phosphor-debugger-debts.md`](phosphor-debugger-debts.md)): `stackTrace` answers
+  every frame but the innermost with `line: 0`. The engine does not record a call site per frame, so a call-stack
   pane can list the callers and cannot take you to them. Reproduce with
   `tools/lane/pdbp-probe.py` against a recursive program.
 - ~~The debuggee inherits the editor's listening socket.~~ **Fixed 2026-09-16**,

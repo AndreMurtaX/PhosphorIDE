@@ -26,6 +26,7 @@ item 2a is the contract test that would turn part of it into a gate.
 | `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, same commands as the Linux one |
 | `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the earlier, single-purpose Windows drivers |
 | `pdbp-probe.py` | speaks PDBP to the host with no editor involved, which is how the host's own defects were separated from the editor's |
+| `first-statement-probe.py` | the reproduction for the first of the two debts in `docs/phosphor-debugger-debts.md`: a breakpoint on the first executed statement is answered installed and never fires |
 
 ## Linux
 

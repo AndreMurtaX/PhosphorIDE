@@ -10,7 +10,18 @@ the repository that must satisfy it tends to be edited into agreement with whate
 built. See [Keeping the two repositories in
 step](#keeping-the-two-repositories-in-step) at the end.
 
-Nothing in this document has been applied. It is an ask, with evidence attached.
+**MOSTLY LANDED.** Parts A and B were taken up in the Phosphor repository on
+2026-09-15 and the editor's half followed on 2026-09-16; `docs/debugger-lane.md` records
+what each step was verified against. The document is kept unedited below, as the ask it
+was, because the evidence in it is what made the case and because a work order rewritten
+after the fact stops being one.
+
+Two debts found while building the editor's half are **not** in it, because nobody knew
+about them when it was written. They have their own document:
+[`phosphor-debugger-debts.md`](phosphor-debugger-debts.md).
+
+Original note follows. Nothing in this document has been applied. It is an ask, with
+evidence attached.
 
 ---
 
