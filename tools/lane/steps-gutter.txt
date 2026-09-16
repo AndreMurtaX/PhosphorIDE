@@ -1,0 +1,24 @@
+# The hollow mark. Line 3 of lane345.bas is blank, so the host cannot bind a
+# breakpoint to it; line 10 is a statement.
+#
+# TWO SHOTS, AND THE FIRST ONE MATTERS AS MUCH AS THE SECOND. Before a session
+# there is no answer from any host, and both marks must be SOLID: the editor
+# draws what the user meant rather than claiming a mark is dead on no
+# information. Only after setBreakpoints answers does line 3 go hollow.
+key ^g
+wait 700
+type 3{ENTER}
+wait 500
+key {F5}
+wait 400
+key ^g
+wait 700
+type 10{ENTER}
+wait 500
+key {F5}
+wait 600
+shot 51-before-any-session
+key +{F9}
+wait 5000
+shot 52-stopped-line-3-hollow
+memo

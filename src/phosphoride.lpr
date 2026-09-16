@@ -106,6 +106,8 @@ begin
         the machine nobody is looking at. }
       Report.Add(Format('toolbar icons: %d images at %s px',
         [FrmMain.ImagesToolbar.Count, IconSizes]));
+      Report.Add(Format('gutter marks: %d images, %d resolutions',
+        [FrmMain.ImagesGutter.Count, FrmMain.ImagesGutter.ResolutionCount]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

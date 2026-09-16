@@ -183,7 +183,7 @@ tables current -- and then the same lane driven with `tools/lane/`:
 | | |
 | --- | --- |
 | steps 1-4 | stop on line 10, stripe, variables `a=5 b=10 s=0` local and `total=5` global, 10 → 11 → 12 by F8, into `add` at line 5 by F7, out by Shift+F8 |
-| step 3 | line 3 grey, line 10 maroon, pixel for pixel what Windows shows |
+| step 3 | line 3 grey, line 10 maroon, pixel for pixel what Windows shows (both are **gutter marks** since 2026-09-16 — a hollow ring and a solid dot; the rows are no longer coloured) |
 | the stripe fix | a program blocked at `line input`, running, with no stripe anywhere |
 | ordering | `before the breakpoint` / `> stopped at line 3 (breakpoint)` / `at the breakpoint` / `type something:` |
 | Preferences during a session | accepted, and the debuggee is still there |

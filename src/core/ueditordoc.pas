@@ -33,17 +33,25 @@ uses
   Classes, SysUtils, Controls, SynEdit, LazSynEditText, ubreakpoints;
 
 type
+  { Says the breakpoint SET moved, and whether an edit is what moved it. The
+    flag exists because those two cases need different timing from a listener;
+    TEditorDoc.LinesChanged says why. }
+  TBreakpointsChangedEvent = procedure(Sender: TObject;
+    AFromEdit: Boolean) of object;
+
   TEditorDoc = class
   private
     FEdit: TSynEdit;
     FFileName: String;
     FUntitledIndex: Integer;
     FBreakpoints: TBreakpointSet;
+    FOnBreakpointsChanged: TBreakpointsChangedEvent;
     { SynEdit's own notification that lines were inserted or removed. Registering
       for it is what makes a breakpoint follow its statement; without it the marks
       stay on their line numbers while the text slides out from under them, which
       is invisible until the day something actually stops at one. }
     procedure LinesChanged(Sender: TSynEditStrings; AIndex, ACount: Integer);
+    procedure Changed(AFromEdit: Boolean);
     function GetModified: Boolean;
     procedure SetModified(AValue: Boolean);
     function GetCaretLine: Integer;
@@ -93,6 +101,21 @@ type
     property Breakpoints[AIndex: Integer]: Integer read GetBreakpoint;
     { The whole set, for handing to a debug adapter. }
     property BreakpointSet: TBreakpointSet read FBreakpoints;
+
+    { Fired whenever the SET changed -- a toggle, a clear, or an edit that moved
+      or dropped one. It exists because the gutter's marks are a SECOND copy of
+      this information, drawn by SynEdit and kept by the window, and the two
+      copies must not be allowed to disagree.
+
+      THE EDIT CASE IS THE ONE THAT NEEDS AN EVENT. A toggle is a call the window
+      already makes, so it could refresh afterwards by hand; an edit is not.
+      SynEdit moves its own marks when lines are inserted or removed, and
+      TBreakpointSet.TrackEdit moves these -- two pieces of arithmetic that agree
+      until they do not: TrackEdit DROPS a breakpoint whose line was deleted, and
+      nothing says SynEdit's marks make the same choice. So the set stays the
+      truth, this says it moved, and the window rebuilds the marks from it. }
+    property OnBreakpointsChanged: TBreakpointsChangedEvent
+      read FOnBreakpointsChanged write FOnBreakpointsChanged;
   end;
 
 implementation
@@ -159,6 +182,17 @@ begin
     AIndex+1 is untouched -- pressing Enter at the end of line 5 inserts line 6
     and must leave a mark on line 5 exactly where it was. }
   FBreakpoints.TrackEdit(AIndex + 1, ACount);
+  { TRUE: this is SynEdit's own line-count notification, and other handlers on it
+    have not run yet. Whoever listens has to know that, because SynEdit moves ITS
+    marks on the same notification and a listener that redraws from here is
+    redrawing into the middle of an edit. }
+  Changed(True);
+end;
+
+procedure TEditorDoc.Changed(AFromEdit: Boolean);
+begin
+  if Assigned(FOnBreakpointsChanged) then
+    FOnBreakpointsChanged(Self, AFromEdit);
 end;
 
 procedure TEditorDoc.LoadFromFile(const APath: String);
@@ -292,11 +326,13 @@ end;
 procedure TEditorDoc.ToggleBreakpoint(ALine: Integer);
 begin
   FBreakpoints.Toggle(ALine);
+  Changed(False);
 end;
 
 procedure TEditorDoc.ClearBreakpoints;
 begin
   FBreakpoints.Clear;
+  Changed(False);
 end;
 
 end.

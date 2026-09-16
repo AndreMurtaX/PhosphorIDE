@@ -1,0 +1,20 @@
+# A gutter mark has to follow its statement, and this is the case nobody calls:
+# typing a line ABOVE a breakpoint moves the breakpoint, and the mark is a second
+# copy of that fact drawn by SynEdit. Set one on line 10, insert a line at the
+# top, and the mark must be on 11 -- not left behind on 10.
+key ^g
+wait 700
+type 10{ENTER}
+wait 500
+key {F5}
+wait 600
+shot 61-mark-on-10
+key ^g
+wait 700
+type 2{ENTER}
+wait 500
+key {HOME}
+wait 200
+key {ENTER}
+wait 800
+shot 62-mark-followed-to-11

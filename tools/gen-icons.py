@@ -120,6 +120,19 @@ class Canvas(object):
                 if (x + 0.5 - pcx) ** 2 + (y + 0.5 - pcy) ** 2 <= pr * pr:
                     self.put(x, y, c)
 
+    def ring(self, cx, cy, r_out, r_in, c):
+        """An annulus, drawn as one shape rather than as a disc with a hole
+        punched in it: `put` will not write a transparent pixel -- it is what
+        keeps every glyph from squaring off its own background -- so there is no
+        erasing here, and the hollow mark has to be filled as a ring."""
+        pcx, pcy = cx * self.s / 8.0, cy * self.s / 8.0
+        ro, ri = r_out * self.s / 8.0, r_in * self.s / 8.0
+        for y in range(self.s):
+            for x in range(self.s):
+                d = (x + 0.5 - pcx) ** 2 + (y + 0.5 - pcy) ** 2
+                if ri * ri <= d <= ro * ro:
+                    self.put(x, y, c)
+
     def png(self):
         raw = bytearray()
         for row in self.px:
@@ -206,6 +219,36 @@ def step_into(c):
     c.disc(4, 6.6, 0.85, INK)              # clear of the bottom edge at 16
 
 
+# ------------------------------------------------------------ gutter marks --
+# These do not go on the toolbar. They go in SynEdit's gutter, one per
+# breakpoint, and the pair carries the one fact the editor learned from the host
+# and cannot show any other way: whether the mark is bound to a statement.
+#
+# SOLID MEANS ARMED, HOLLOW MEANS THE HOST COULD NOT BIND IT -- the convention
+# every debugger uses, and the reason it is a convention is that the two read as
+# the same KIND of thing at a glance and as different states on a second look.
+# A hollow ring at 16 px is a 5-pixel circle with a hole in it, which is why the
+# outer radius is generous and the hole is small: at that size a one-pixel ring
+# is a smudge and a two-pixel one is a dot.
+#
+# Both are maroon. Grey for the inert one was tried on paper and rejected: the
+# gutter already greys things it considers unimportant, and a breakpoint the user
+# deliberately placed is not unimportant -- it is a breakpoint that will not
+# fire, which is a thing to notice rather than to overlook.
+
+def break_armed(c):
+    c.disc(4, 4, 2.4, MAROON)
+
+
+def break_inert(c):
+    c.ring(4, 4, 2.4, 1.15, MAROON)
+
+
+GUTTER = (
+    ('BreakArmed', break_armed),
+    ('BreakInert', break_inert),
+)
+
 ICONS = (
     ('New', new_page),
     ('Open', open_folder),
@@ -273,12 +316,19 @@ const
     reordering is one edit in the generator and not nine silent ones. }
 %s
   ToolbarIconCount = %d;
+  GutterMarkCount = %d;
 
 { Fill AList with the nine icons, at both resolutions, replacing whatever was
   there. The list's own Width and Height are set to 16: the 24 is a REGISTERED
   RESOLUTION of the same list, not a second list, which is what lets the
   widgetset pick per monitor. }
 procedure InstallToolbarIcons(AList: TCustomImageList);
+
+{ The same, for the gutter's marks. SynEdit draws a TSynEditMark from the image
+  list in BookMarkOptions.BookmarkImages, so this is a SECOND list rather than
+  more slots in the first: mixing them would make the toolbar's indices and the
+  gutter's share a numbering that nothing enforces. }
+procedure InstallGutterMarks(AList: TCustomImageList);
 
 implementation
 
@@ -323,7 +373,7 @@ begin
   end;
 end;
 
-procedure InstallToolbarIcons(AList: TCustomImageList);
+procedure Prepare(AList: TCustomImageList);
 begin
   AList.Clear;
   AList.Width := 16;
@@ -331,6 +381,17 @@ begin
   { BEFORE the first Add, because registering a resolution afterwards leaves the
     images already in the list without one. }
   AList.RegisterResolutions([16, 24]);
+end;
+
+procedure InstallToolbarIcons(AList: TCustomImageList);
+begin
+  Prepare(AList);
+%s
+end;
+
+procedure InstallGutterMarks(AList: TCustomImageList);
+begin
+  Prepare(AList);
 %s
 end;
 
@@ -340,7 +401,7 @@ end.
 
 def render():
     blobs = {}
-    for name, draw in ICONS:
+    for name, draw in ICONS + GUTTER:
         for size in SIZES:
             c = Canvas(size)
             draw(c)
@@ -352,11 +413,19 @@ def build_unit():
     blobs = render()
     names = '\n'.join('  icon%s = %d;' % (n, i)
                       for i, (n, _) in enumerate(ICONS))
+    names += '\n\n  { ...and the gutter\'s, which is a SECOND list: SynEdit\n' \
+             '    takes one image list for its marks and the toolbar takes\n' \
+             '    another, and an index means nothing without knowing which. }\n'
+    names += '\n'.join('  mark%s = %d;' % (n, i)
+                        for i, (n, _) in enumerate(GUTTER))
     consts = '\n'.join(pascal_bytes('Png' + k, v)
                        for k, v in sorted(blobs.items()))
     calls = '\n'.join('  AddPair(AList, Png%s16, Png%s24);' % (n, n)
                       for n, _ in ICONS)
-    return (HEADER % (names, len(ICONS))) + consts + (BODY % calls)
+    gcalls = '\n'.join('  AddPair(AList, Png%s16, Png%s24);' % (n, n)
+                        for n, _ in GUTTER)
+    return (HEADER % (names, len(ICONS), len(GUTTER))) + consts + \
+        (BODY % (calls, gcalls))
 
 
 def preview_png():
@@ -369,10 +438,11 @@ def preview_png():
     than by remembering."""
     scale = 6
     cell = 24
-    sheet_w = cell * len(ICONS) * scale
+    all_icons = ICONS + GUTTER
+    sheet_w = cell * len(all_icons) * scale
     sheet_h = cell * 2 * scale
     rows = [[(0x20, 0x20, 0x20, 0xFF)] * sheet_w for _ in range(sheet_h)]
-    for col, (name, draw) in enumerate(ICONS):
+    for col, (name, draw) in enumerate(all_icons):
         for r, size in enumerate(SIZES):
             c = Canvas(size)
             draw(c)

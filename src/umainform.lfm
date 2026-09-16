@@ -625,6 +625,10 @@ object FrmMain: TFrmMain
     Left = 152
     Top = 128
   end
+  object ImagesGutter: TImageList
+    Left = 152
+    Top = 184
+  end
   object OpenDialog1: TOpenDialog
     Options = [ofFileMustExist, ofEnableSizing, ofViewDetail]
     Left = 256

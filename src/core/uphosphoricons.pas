@@ -42,7 +42,14 @@ const
   iconToggleBreakpoint = 6;
   iconStepOver = 7;
   iconStepInto = 8;
+
+  { ...and the gutter's, which is a SECOND list: SynEdit
+    takes one image list for its marks and the toolbar takes
+    another, and an index means nothing without knowing which. }
+  markBreakArmed = 0;
+  markBreakInert = 1;
   ToolbarIconCount = 9;
+  GutterMarkCount = 2;
 
 { Fill AList with the nine icons, at both resolutions, replacing whatever was
   there. The list's own Width and Height are set to 16: the 24 is a REGISTERED
@@ -50,9 +57,53 @@ const
   widgetset pick per monitor. }
 procedure InstallToolbarIcons(AList: TCustomImageList);
 
+{ The same, for the gutter's marks. SynEdit draws a TSynEditMark from the image
+  list in BookMarkOptions.BookmarkImages, so this is a SECOND list rather than
+  more slots in the first: mixing them would make the toolbar's indices and the
+  gutter's share a numbering that nothing enforces. }
+procedure InstallGutterMarks(AList: TCustomImageList);
+
 implementation
 
 const
+  PngBreakArmed16: array[0..102] of Byte = (
+    $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
+    $52, $00, $00, $00, $10, $00, $00, $00, $10, $08, $06, $00, $00, $00, $1F,
+    $F3, $FF, $61, $00, $00, $00, $2E, $49, $44, $41, $54, $78, $DA, $63, $60,
+    $18, $BE, $60, $99, $B4, $F4, $7F, $64, $4C, $91, $66, $92, $0C, $C1, $A5,
+    $99, $28, $43, $08, $69, $26, $68, $C8, $30, $30, $80, $E2, $40, $A4, $4A,
+    $34, $52, $25, $21, $0D, $2D, $00, $00, $5D, $50, $8D, $05, $A0, $EE, $E2,
+    $7A, $00, $00, $00, $00, $49, $45, $4E, $44, $AE, $42, $60, $82
+  );
+  PngBreakArmed24: array[0..113] of Byte = (
+    $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
+    $52, $00, $00, $00, $18, $00, $00, $00, $18, $08, $06, $00, $00, $00, $E0,
+    $77, $3D, $F8, $00, $00, $00, $39, $49, $44, $41, $54, $78, $DA, $63, $60,
+    $18, $05, $A3, $00, $04, $96, $49, $4B, $FF, $C7, $86, $69, $66, $30, $55,
+    $2C, $22, $D6, $70, $B2, $2D, $A1, $A9, $05, $A4, $1A, $4E, $B2, $25, $A3,
+    $16, $8C, $00, $0B, $86, $7E, $3E, $A0, $4B, $51, $41, $97, $C2, $6E, $14,
+    $0C, $0F, $00, $00, $9E, $2B, $30, $5C, $92, $13, $CF, $DD, $00, $00, $00,
+    $00, $49, $45, $4E, $44, $AE, $42, $60, $82
+  );
+  PngBreakInert16: array[0..102] of Byte = (
+    $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
+    $52, $00, $00, $00, $10, $00, $00, $00, $10, $08, $06, $00, $00, $00, $1F,
+    $F3, $FF, $61, $00, $00, $00, $2E, $49, $44, $41, $54, $78, $DA, $63, $60,
+    $18, $BE, $60, $99, $B4, $F4, $7F, $64, $4C, $91, $66, $92, $0C, $C1, $A5,
+    $99, $28, $43, $F0, $29, $24, $CA, $90, $61, $60, $00, $C5, $81, $48, $95,
+    $68, $A4, $4A, $42, $1A, $5A, $00, $00, $14, $A4, $6F, $55, $70, $3D, $33,
+    $9A, $00, $00, $00, $00, $49, $45, $4E, $44, $AE, $42, $60, $82
+  );
+  PngBreakInert24: array[0..118] of Byte = (
+    $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
+    $52, $00, $00, $00, $18, $00, $00, $00, $18, $08, $06, $00, $00, $00, $E0,
+    $77, $3D, $F8, $00, $00, $00, $3E, $49, $44, $41, $54, $78, $DA, $63, $60,
+    $18, $05, $A3, $00, $04, $96, $49, $4B, $FF, $C7, $86, $69, $66, $30, $55,
+    $2C, $22, $D6, $70, $B2, $2D, $A1, $A9, $05, $C4, $18, $40, $91, $25, $C4,
+    $6A, $1C, $B5, $80, $7E, $16, $50, $3D, $92, $87, $7E, $3E, $A0, $4B, $51,
+    $41, $97, $C2, $6E, $14, $0C, $0F, $00, $00, $A6, $89, $F4, $ED, $7E, $14,
+    $49, $3C, $00, $00, $00, $00, $49, $45, $4E, $44, $AE, $42, $60, $82
+  );
   PngCheckSyntax16: array[0..112] of Byte = (
     $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
     $52, $00, $00, $00, $10, $00, $00, $00, $10, $08, $06, $00, $00, $00, $1F,
@@ -266,7 +317,7 @@ begin
   end;
 end;
 
-procedure InstallToolbarIcons(AList: TCustomImageList);
+procedure Prepare(AList: TCustomImageList);
 begin
   AList.Clear;
   AList.Width := 16;
@@ -274,6 +325,11 @@ begin
   { BEFORE the first Add, because registering a resolution afterwards leaves the
     images already in the list without one. }
   AList.RegisterResolutions([16, 24]);
+end;
+
+procedure InstallToolbarIcons(AList: TCustomImageList);
+begin
+  Prepare(AList);
   AddPair(AList, PngNew16, PngNew24);
   AddPair(AList, PngOpen16, PngOpen24);
   AddPair(AList, PngSave16, PngSave24);
@@ -283,6 +339,13 @@ begin
   AddPair(AList, PngToggleBreakpoint16, PngToggleBreakpoint24);
   AddPair(AList, PngStepOver16, PngStepOver24);
   AddPair(AList, PngStepInto16, PngStepInto24);
+end;
+
+procedure InstallGutterMarks(AList: TCustomImageList);
+begin
+  Prepare(AList);
+  AddPair(AList, PngBreakArmed16, PngBreakArmed24);
+  AddPair(AList, PngBreakInert16, PngBreakInert24);
 end;
 
 end.

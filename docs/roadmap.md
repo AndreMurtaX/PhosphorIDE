@@ -461,8 +461,11 @@ other repository any more. Two things found on 2026-09-16 belong with it:
   EXECUTED statement rather than line 1, which is why it survived a year: every
   fixture anyone writes opens with a comment. Reproduce the before-state with
   `tools/lane/first-statement-probe.py`.
-- **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
-  because a mark needs the `TImageList` of item 13.
+- ~~A hollow gutter icon for an un-armable breakpoint is still a grey row instead.~~
+  **DONE 2026-09-16**, once item 13 gave it an image list: solid dot for a breakpoint
+  the host bound, hollow ring for one it could not, and the full-row colours retired.
+  Both drawn by `tools/gen-icons.py`, at 16 and 24, in a second image list of their
+  own.
 - ~~Phosphor owes a second fix: `stackTrace` answers every frame but the innermost
   with `line: 0`.~~ **Fixed 2026-09-16** in the same commit. The data was already on
   the frame; the repair was one accessor and an off-by-one. Both are written up in

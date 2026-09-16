@@ -187,6 +187,21 @@ the bar.
 - **Bytes from the child are passed through untouched.** The host emits UTF-8 and the
   LCL wants UTF-8. Any "helpful" conversion -- `SysToUTF8`, a CP1252 round trip --
   corrupts exactly the strings Phosphor is careful about.
+- **The gutter mark is a SECOND copy of the breakpoint set, and it is rebuilt, never
+  patched.** `TFrmMain.SyncGutterMarks` removes every `TPhosphorBreakMark` and adds one
+  per breakpoint, solid or hollow from `BreakpointIsArmed`. It is a subclass with
+  nothing in it so that `is` can answer "did this window put this here": SynEdit's mark
+  list is shared, and clearing all of it would delete somebody else's.
+
+  **TWO HANDLERS ON ONE NOTIFICATION, AND THE ORDER IS NOT OURS.** SynEdit adjusts its
+  own marks for an insertion through a handler on `senrLineCount`, and
+  `TEditorDoc.LinesChanged` is another handler on the same one. Rebuilding from inside
+  it puts the new marks in BEFORE that adjustment runs, and the adjustment then shifts
+  them a second time: on 2026-09-16 one line typed above a breakpoint on line 10 left
+  the mark on **12** while the statement went to 11. So `OnBreakpointsChanged` carries
+  an `AFromEdit` flag, an edit only raises `FMarksDirty`, and `EditorChange` — which
+  SynEdit fires once the change is finished — does the rebuild. A toggle is not an
+  edit and is rebuilt on the spot.
 - **Breakpoints are line numbers, and they must follow edits.** A mark that stays put
   while text is inserted above it points at a statement the user did not choose.
   `TBreakpointSet.TrackEdit` (`core/ubreakpoints.pas`) is the arithmetic, and it drops
@@ -324,9 +339,13 @@ What is still absent, and must not be described otherwise:
 - **No watches and no evaluate.** `capabilities.evaluate` is `false` on every host
   today, and the editor must never close that gap in-process: an expression evaluator
   here would be an interpreter here. See the invariant at the top.
-- **No conditional breakpoints, and no hollow gutter ICON.** A breakpoint the host
-  could not arm is shown as a **grey row** rather than a hollow mark, because a mark
-  needs a `TImageList` and the gtk2 image-list work is roadmap item 13.
+- **No conditional breakpoints.** A breakpoint the host could not arm IS drawn, as a
+  **hollow ring in the gutter** beside the solid dot of one that will fire — the
+  convention every debugger uses, and what roadmap item 13's image list was for. The
+  full-row maroon and grey it replaced were a stand-in the code said so about at the
+  time: a band of colour behind a line of code is a line of code that is harder to
+  read, and a breakpoint is a thing you set and then read around. The one band that
+  stays is the navy one for the current statement, because "you are here" IS a band.
 
 The **call stack pane** landed on 2026-09-16 and is driven on both platforms. Two
 rules in it are worth keeping: every `variables` request goes **by frame index**, which

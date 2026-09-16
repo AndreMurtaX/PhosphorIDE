@@ -132,6 +132,7 @@ type
     SplitterOutput: TSplitter;
     StatusBar1: TStatusBar;
     TabOutput: TTabSheet;
+    ImagesGutter: TImageList;
     ImagesToolbar: TImageList;
     TabProblems: TTabSheet;
     TabStack: TTabSheet;
@@ -268,6 +269,10 @@ type
       dsStopped, which is true and is not the whole truth: nothing may be sent. }
     FDebugTerminal: Boolean;
 
+    { An edit moved the breakpoint set and the gutter has not caught up yet.
+      See DocBreakpointsChanged for why it cannot catch up immediately. }
+    FMarksDirty: Boolean;
+
     { Whether THIS FORM believes a debug session is under way, which is a
       different question from what TDebugSession.State says and is the one the
       form's own bookkeeping turns on.
@@ -310,6 +315,8 @@ type
     procedure RefreshStatus;
     procedure RefreshDebugActions;
     procedure RepaintEditors;
+    procedure SyncGutterMarks(ADoc: TEditorDoc);
+    procedure DocBreakpointsChanged(Sender: TObject; AFromEdit: Boolean);
     function StartDebugSession: Boolean;
     procedure EndDebugSession(const AWhy: String);
     procedure DebugTimerTick(Sender: TObject);
@@ -373,6 +380,17 @@ implementation
 uses
   LCLIntf, LazFileUtils, uaboutform, upreferencesform;
 
+type
+  { A breakpoint's mark in the gutter, and OURS.
+
+    A subclass with nothing in it, because the only question ever asked of it is
+    "did this window put this here": SynEdit's mark list is shared -- bookmarks
+    land in it too, and anything added later will -- and rebuilding the set by
+    clearing every mark would quietly delete somebody else's. `is` answers that
+    question and a flag on a shared base class would not. }
+  TPhosphorBreakMark = class(TSynEditMark)
+  end;
+
 const
   { Where Help points. These are the canonical documents in the Phosphor
     repository; the editor does not ship a copy, because a copy of a reference for
@@ -406,6 +424,7 @@ begin
 
     First, so that nothing drawn before this has an empty list to draw from. }
   InstallToolbarIcons(ImagesToolbar);
+  InstallGutterMarks(ImagesGutter);
 
   FDocs := TList.Create;
   FProblemLines := TStringList.Create;
@@ -599,6 +618,16 @@ begin
   Result.Edit.OnStatusChange := @EditorStatusChange;
   Result.Edit.OnSpecialLineMarkup := @EditorSpecialLineMarkup;
   Result.Edit.OnGutterClick := @EditorGutterClick;
+  { WHERE THE GUTTER GETS ITS PICTURES. SynEdit draws a TSynEditMark from
+    BookMarkOptions.BookmarkImages unless the mark names a list of its own, and
+    without one it falls back to its built-in bookmark glyphs -- which are the
+    numbered bookmarks 0..9, not anything this program means. }
+  Result.Edit.BookMarkOptions.BookmarkImages := ImagesGutter;
+  { AND THE GUTTER FOLLOWS THE SET, WHATEVER MOVED IT. Subscribed rather than
+    called after each toggle, because the case that needs it is the one nobody
+    calls: typing above a breakpoint moves it, and a mark left on the old line
+    is the defect TrackEdit exists to prevent, one layer out. }
+  Result.OnBreakpointsChanged := @DocBreakpointsChanged;
   ApplyEditorSettings(Result);
 
   PagesEditors.ActivePage := Page;
@@ -1511,6 +1540,72 @@ end;
 
 { --------------------------------------------------------- the debug session - }
 
+procedure TFrmMain.DocBreakpointsChanged(Sender: TObject; AFromEdit: Boolean);
+begin
+  if not (Sender is TEditorDoc) then
+    Exit;
+
+  { AN EDIT IS REBUILT LATER, AND THAT IS MEASURED RATHER THAN CAUTIOUS. SynEdit
+    adjusts its OWN marks for an insertion through a handler on the same
+    senrLineCount notification that brought us here, and the order of the two is
+    not ours to choose. Rebuilding from inside it puts the new marks in BEFORE
+    that adjustment runs, and the adjustment then shifts them a second time: one
+    line typed above a breakpoint on line 10 left the mark on 12 while the
+    statement itself went to 11. Measured on 2026-09-16, on the first edit
+    anybody tried after the marks existed at all.
+
+    So an edit raises a flag and EditorChange -- which SynEdit fires once the
+    change is finished -- does the rebuild. A toggle is not an edit, produces no
+    OnChange, and is rebuilt here and now. }
+  if AFromEdit then
+    FMarksDirty := True
+  else
+    SyncGutterMarks(TEditorDoc(Sender));
+end;
+
+procedure TFrmMain.SyncGutterMarks(ADoc: TEditorDoc);
+var
+  I: Integer;
+  Mark: TSynEditMark;
+begin
+  if (ADoc = nil) or (ADoc.Edit = nil) then
+    Exit;
+
+  { REBUILT, NOT PATCHED. The set changes for four different reasons -- a toggle,
+    an edit that moved a line, the host answering which lines it installed, and a
+    session ending and taking that answer with it -- and three of the four change
+    more than one mark. Rebuilding a list of at most a few dozen is cheaper to
+    write than four incremental paths and cannot drift from the truth.
+
+    Only ours are removed. Marks.Remove takes a mark OUT of the list without
+    freeing it (syneditmarks.pp:1127), and the list frees whatever is still in it
+    when the editor goes (:990), so removing and freeing here is the pair. }
+  for I := ADoc.Edit.Marks.Count - 1 downto 0 do
+  begin
+    Mark := ADoc.Edit.Marks[I];
+    if Mark is TPhosphorBreakMark then
+    begin
+      ADoc.Edit.Marks.Remove(Mark);
+      Mark.Free;
+    end;
+  end;
+
+  for I := 0 to ADoc.BreakpointCount - 1 do
+  begin
+    Mark := TPhosphorBreakMark.Create(ADoc.Edit);
+    Mark.Line := ADoc.Breakpoints[I];
+    { SOLID IF THE HOST BOUND IT, HOLLOW IF IT COULD NOT. Outside a session
+      nothing is known and BreakpointIsArmed answers True, which draws the mark
+      the way the user meant it -- see its own comment: unknown is not dead. }
+    if BreakpointIsArmed(ADoc, ADoc.Breakpoints[I]) then
+      Mark.ImageIndex := markBreakArmed
+    else
+      Mark.ImageIndex := markBreakInert;
+    Mark.Visible := True;
+    ADoc.Edit.Marks.Add(Mark);
+  end;
+end;
+
 procedure TFrmMain.RepaintEditors;
 var
   I: Integer;
@@ -1519,7 +1614,10 @@ begin
     asked to redraw rather than just this one. There are a handful of tabs. }
   for I := 0 to FDocs.Count - 1 do
     if TEditorDoc(FDocs[I]).Edit <> nil then
+    begin
+      SyncGutterMarks(TEditorDoc(FDocs[I]));
       TEditorDoc(FDocs[I]).Edit.Invalidate;
+    end;
 end;
 
 function TFrmMain.StartDebugSession: Boolean;
@@ -2122,6 +2220,14 @@ end;
 procedure TFrmMain.EditorChange(Sender: TObject);
 begin
   RefreshTabCaption(ActiveDoc);
+  { The other half of the note in DocBreakpointsChanged: by here the edit is
+    finished and SynEdit has already moved whatever it was going to move, so a
+    rebuild from the breakpoint set is the last word rather than an early one. }
+  if FMarksDirty then
+  begin
+    FMarksDirty := False;
+    SyncGutterMarks(ActiveDoc);
+  end;
 end;
 
 procedure TFrmMain.EditorStatusChange(Sender: TObject; AChanges: TSynStatusChanges);
@@ -2157,30 +2263,17 @@ begin
     Exit;
   end;
 
-  if Doc.HasBreakpoint(ALine) then
-  begin
-    ASpecial := True;
-    if BreakpointIsArmed(Doc, ALine) then
-    begin
-      AMarkup.Background := clMaroon;
-      AMarkup.Foreground := clWhite;
-    end
-    else
-    begin
-      { ARMED AND INERT MUST NOT LOOK THE SAME. The host reported this line back
-        as not installed: there is no statement on it to stop at, so the program
-        will run past it forever and the user will conclude the debugger is
-        broken. A grey row says "I heard you, and nothing will happen here".
+  { AND THE BREAKPOINT IS NOT PAINTED HERE AT ALL ANY MORE. It used to colour
+    the whole row -- maroon for armed, grey for a mark the host could not bind --
+    and that comment said in as many words that a hollow gutter ICON was the
+    better answer and was missing only because it needed a TImageList. It has
+    one now (roadmap item 13), so the mark moved to the gutter where every other
+    debugger puts it: SEE SyncGutterMarks.
 
-        A hollow gutter ICON is the better answer and is not here, because it
-        needs a TImageList, and the gtk2 image-list trap -- register 16x16 AND
-        24x24 or the mark is blurry on one platform and missing on the other --
-        is a piece of work with its own roadmap item. The row colour costs
-        nothing and carries the same fact. }
-      AMarkup.Background := clGray;
-      AMarkup.Foreground := clWhite;
-    end;
-  end;
+    Which is not only convention. A full-width maroon band behind a line of code
+    is a line of code that is harder to read, and a breakpoint is a thing you set
+    and then read around. The stop above keeps its band, because a band is what
+    "you are here" should be. }
 end;
 
 procedure TFrmMain.EditorGutterClick(Sender: TObject; X, Y, ALine: Integer;
