@@ -224,6 +224,20 @@ begin
       Tap('colon', [])
     else if C = ';' then
       Tap('semicolon', [])
+    else if C = '*' then
+      Tap('asterisk', [])
+    else if C = '/' then
+      Tap('slash', [])
+    else if C = '?' then
+      Tap('question', [])
+    else if C = '@' then
+      Tap('at', [])
+    else if C = '<' then
+      Tap('less', [])
+    else if C = '>' then
+      Tap('greater', [])
+    else if C = '#' then
+      Tap('numbersign', [])
     else
     begin
       WriteLn(StdErr, 'xdrive: cannot type ', C);

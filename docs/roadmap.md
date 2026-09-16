@@ -842,6 +842,86 @@ visibly partial list into one that reads as complete and is not.
 
 ## 16. An integrated REPL pane
 
+**DONE 2026-09-16.** `Ctrl+Shift+R`, or **Run > REPL**, and the transcript below was
+read back out of the pane rather than imagined:
+
+```
+phosphor> println 6*7
+42
+phosphor> x = 1
+phosphor> println x
+1
+phosphor> for i = 1 to 3
+     ...> println i
+     ...> next
+1
+2
+3
+phosphor> nosuchthing(
+error: unexpected token in expression
+phosphor>
+> end of input
+> the REPL ended, exit code 0
+```
+
+`docs/architecture.md` said this should not be built, and ended "a proper REPL pane is a
+second execution model and it should be built as one, or not at all". That was the right
+instruction and it is the shape here: a second `TPhosphorRunner` in its own field, bound
+to three new handlers, so **the binding is the discrimination** -- `FRunner` is untouched,
+nothing on the Run path learns a new question, and `ActionList1Update`'s
+`Busy := FRunner.Running` is deliberately left alone so Run stays available for the whole
+life of a prompt.
+
+**The item's two named hazards, and a third it did not know about.**
+
+- *The prompt arrives but is not a line.* Correct, and it worked first time -- the two-tick
+  threshold in `uphosphorrun.pas` had been a reasoned number since 2026-09-10 and this is
+  the first thing that ever exercised it. What the item did not predict is that a line
+  printing NOTHING puts two prompts on one line (`phosphor> phosphor> 1`), so
+  `uphosphorrepl.SplitReplPrompts` gives each its own, with the invariant that the segments
+  rebuild the input byte for byte.
+- *A REPL nobody closes never exits.* Correct, and worse than stated: **`CloseInput` closed
+  nothing**. It called `RequestClose` on the writer thread, which ends that thread's loop
+  and touches no handle, so the one way a REPL is meant to end did not work. Repaired in
+  `cadfe7e`, and the repair has to wait a tick because the writer blocks inside
+  `WriteBuffer`. **And the pipes were inherited by the next child** on Unix -- so with a
+  REPL live, any Run forked afterwards held its stdin write end open and end-of-input
+  never arrived at all. `MakeHandlePrivate` is `MakeSocketPrivate` on a different kind of
+  descriptor.
+- *Not predicted, and the host's rather than ours:* **a REPL error is buffered on Unix** and
+  does not arrive until the process exits, so on Linux the diagnostic for a line lands
+  underneath whatever happened since. Measured on both platforms with no editor involved
+  (`tools/lane/repl-probe.py`), written up with the one-line ask in
+  [`phosphor-repl-debt.md`](phosphor-repl-debt.md). Nothing here compensates for it: the
+  runner shows lines in the order the bytes arrive, and inventing an order would be this
+  side guessing at something only the host knows.
+
+**The done-when, clause by clause.** `println 6*7` shows 42; `x = 1` then `println x`
+shows 1; a block shows `     ...> `; closing the pane leaves no `phosphor` behind, checked
+by process name on both platforms and printed by both lane drivers; and the Run path's
+checks pass unchanged, with a run driven beside a live prompt to prove the two children
+coexist.
+
+One clause is answered NO and it is better said than papered over: **`error:` lines are
+not STYLED as diagnostics.** A `TMemo` has one colour, and the alternatives were to mutate
+the host's text with a prefix or to replace the widget -- the first puts characters in the
+transcript that the host did not write, and the second is a feature of its own. They are
+verbatim, in the place they happened, and never offered as a jump target, which is the
+half of that clause that could do harm.
+
+**Two things the pane does that the item did not ask for.** The typed line is echoed onto
+the prompt's own line, so the record afterwards reads the way the session happened rather
+than the way the bytes arrived; and Up and Down walk what was typed, with the first Up
+stashing the half-finished line so Down brings it back -- one keystroke may not silently
+destroy what somebody was writing.
+
+Driven on both platforms with `tools/lane/steps-repl.txt` and `steps-repl-linux.txt`. The
+Windows script also covers the window being closed with a live REPL, which asks about it by
+name; the gtk2 script cannot read text back -- that VM has no text reader, only XTest and
+`xwd` -- so its assertions are screenshots plus the process check.
+
+**Was:**
+
 **What.** A pane that runs `phosphor` with no arguments and feeds it a line at a time. A bare
 `phosphor` is a REPL whose variables and functions persist across lines, which is the one
 thing Run cannot offer: Run hands the host a **file**
@@ -899,7 +979,12 @@ platforms; and the ordinary Run path's line handling is unchanged with its check
 passing.
 
 **Touches.** `src/core/uphosphorrun.pas`, `src/umainform.pas`, `src/umainform.lfm`,
-`tests/phosphoridetest.lpr`.
+`tests/phosphoridetest.lpr` -- and, not listed and all of them necessary: a new
+`src/core/uphosphorrepl.pas`, `src/phosphoride.lpr` for the selftest line,
+`docs/architecture.md` for the paragraph this item struck, `tools/lane/` for the two step
+scripts and the probe without which "verified by process name on both platforms" cannot be
+satisfied, and `tools/lane/win.ps1` -- a second `TMemo` in the window would otherwise have
+silently redirected every existing `memo` step.
 
 ---
 

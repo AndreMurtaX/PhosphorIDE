@@ -26,6 +26,8 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
 | `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
 | `steps-signature.txt`, `steps-signature-linux.txt` | every arity of `mid$`, the argument marked as it moves, the hint gone when the call closes, and nothing at all for `callfunc` |
+| `steps-repl.txt`, `steps-repl-linux.txt` | the REPL pane: the prompt arriving as an unterminated tail, 42, a variable surviving the line, the continuation prompt, an error in the transcript, Up and Down, End leaving no child behind, and a run beside a live prompt |
+| `repl-probe.py` | speaks to the REPL over pipes with no editor involved -- how it was found that stderr is buffered on Unix (`docs/phosphor-repl-debt.md`) |
 | `steps-outline-linux.txt` | the same under gtk2, including the Go to Definition dialog through `popshot` |
 | `steps-outline.txt` + `outline.bas` | the outline pane and F12: ten definitions including two on one line, a click that keeps the keyboard, a jump, and the three answers F12 gives when there is nothing to jump to |
 | `steps-accent.txt` + `acentos.bas` | the byte column: the same statement with and without accents, and the popup filtered on both |

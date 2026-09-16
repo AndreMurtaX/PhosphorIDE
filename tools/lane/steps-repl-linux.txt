@@ -1,0 +1,63 @@
+# The REPL pane under gtk2. The Linux driver has no text reader -- keys go in
+# through XTest and frames come out through xwd, because this VM has neither
+# xdotool nor ImageMagick -- so every assertion here is a screenshot rather than
+# a transcript read back. What it CAN check that the Windows side cannot as
+# directly is the done-when's last clause: the driver prints `phosphor children`
+# after the steps, and after End it must say none.
+raise
+key ctrl+shift+r
+wait 2500
+shot 150-the-prompt-arrived
+
+# 42, which is the whole of what a REPL is for.
+type println 6*7
+key Return
+wait 1500
+shot 151-six-times-seven
+
+# AND THE PERSISTENCE THAT JUSTIFIES THE PANE: Run hands the host a FILE and
+# every run starts from nothing; these two lines are one session.
+type x = 1
+key Return
+wait 1000
+type println x
+key Return
+wait 1500
+shot 152-a-variable-survives-the-line
+
+# A block waits for its terminator and says so with `     ...> `.
+type for i = 1 to 3
+key Return
+wait 1000
+type println i
+key Return
+wait 1000
+shot 153-the-continuation-prompt
+type next
+key Return
+wait 1500
+shot 154-the-block-ran
+
+# An error belongs in the transcript, where it happened.
+type nosuchthing(
+key Return
+wait 1500
+shot 155-an-error-in-the-transcript
+
+# Up walks what was typed; the first Up stashes the half-typed line.
+type half typed
+key Up
+wait 500
+shot 156-up-recalls-the-last-line
+key Down
+wait 500
+shot 157-down-gives-the-draft-back
+
+# END closes stdin. The host writes a newline and exits 0, and the transcript
+# says which of the two endings it was -- after which `phosphor children` below
+# must say none.
+key ctrl+a
+key Delete
+bot 949 37
+wait 2500
+shot 158-ended-by-closing-its-input

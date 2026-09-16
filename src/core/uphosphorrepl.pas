@@ -40,6 +40,16 @@ unit uphosphorrepl;
     `uphosphormsg` already classifies that as `pmkReplError` and already refuses
     it as a jump target; nothing here needs to know about it.
 
+    ON LINUX IT ARRIVES LATE, and that is the host's and not this editor's.
+    FPC's StdErr is a buffered text file, nothing in the REPL loop flushes it,
+    and on Unix the bytes therefore sit in the buffer until the process exits --
+    so a diagnostic for a line typed at 10:00 lands underneath whatever has
+    happened since. Measured on both platforms with a driver holding the pipes,
+    2026-09-16, and written up in `docs/phosphor-repl-debt.md` with the one-line
+    ask. Nothing here compensates for it: `TPhosphorRunner` shows lines in the
+    order the bytes arrive, and inventing an order would be this side guessing
+    at something only the host knows.
+
   THE PROMPTS ARE CITED, NOT EXTRACTED, and that is a deliberate exception to the
   rule at the top of CLAUDE.md. There is no registry to read them out of -- they
   are two string literals inside a `Writeln` in another repository -- so the rule
