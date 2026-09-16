@@ -101,6 +101,7 @@ on line 1 of an otherwise perfect program, and every Windows editor and
 | `F5`       | Toggle Breakpoint on the caret line                              |
 | gutter click | the same toggle, where every other editor puts it              |
 | `Ctrl+G`   | Go to Line; `Ctrl+F` / `F3` / `Ctrl+R` find, find next, replace  |
+| `Ctrl+Shift+F` | Find in Files -- searches a directory tree, not the buffer  |
 | `Ctrl+N` `Ctrl+O` `Ctrl+S` `Ctrl+Shift+S` `Ctrl+W` `Ctrl+Q` | new, open, save, save as, close tab, exit |
 
 Compile to Bytecode and Pack Executable sit in the Run menu without shortcuts. Pack
@@ -260,6 +261,36 @@ parameter names — and a name whose arities are assembled at run time, or which
 the compiler handles as a special form, shows nothing rather than something
 invented.
 
+## Find in files
+
+`Ctrl+Shift+F`, or **Edit > Find in Files**, searches a directory tree rather
+than the buffer -- the one question `Ctrl+F`, `F3` and `Ctrl+R` cannot answer,
+since all three are scoped to the active document. The root starts as the
+directory of the file being edited and the selection starts as the search text;
+both are guesses, and both give way to anything typed over them. The file mask is
+a semicolon-separated list like `*.bas;*.txt`, and emptying it searches every
+file.
+
+Rows read `deep.bas:4: println "bottom"` and double-click to that line, opening
+the file if it is not already in a tab -- through the same `GotoSource` the
+Problems pane uses, because an editor with two navigators has two sets of the
+bugs a navigator has.
+
+Three things it does deliberately:
+
+- **The walk is a thread, and Stop stops it.** A search over 57,000 files can be
+  abandoned a fraction of a second after the button is pressed, and it says so:
+  `stopped after 702 files, 0 matches`, not a list that quietly stopped growing.
+- **A binary file produces no rows.** A `.pbc`, a PNG or a compiled executable in
+  a source tree will contain any search string sooner or later by accident, and a
+  row of control characters is worse than a match nobody wanted. A NUL byte in
+  the first four kilobytes is the test -- read *before* the rest of the file, so
+  skipping a 5 MB executable costs 4 KB.
+- **Match case is offered and whole word is not.** The editor's own Find and
+  Replace dialogs are created with `frHideWholeWord`, so that box has never been
+  shown; offering it here alone would make this the one search in the program
+  that can do something the others cannot.
+
 ## Debugging
 
 **Stepping works.** Set a breakpoint in the gutter or with F5, press **Shift+F9**,
@@ -341,7 +372,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 255 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 291 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

@@ -203,6 +203,116 @@ object FrmMain: TFrmMain
         TabOrder = 0
       end
     end
+    object TabFind: TTabSheet
+      Caption = 'Find in Files'
+      ClientHeight = 152
+      ClientWidth = 992
+      object PanelFind: TPanel
+        Left = 0
+        Height = 60
+        Top = 0
+        Width = 992
+        Align = alTop
+        BevelOuter = bvNone
+        ClientHeight = 60
+        ClientWidth = 992
+        TabOrder = 0
+        object LblFindWhat: TLabel
+          Left = 8
+          Height = 15
+          Top = 8
+          Width = 30
+          Caption = 'Find'
+        end
+        object EditFindWhat: TEdit
+          Left = 56
+          Height = 23
+          Top = 4
+          Width = 300
+          Hint = 'What to look for. Plain text, not a pattern.'
+          OnKeyDown = EditFindWhatKeyDown
+          TabOrder = 0
+        end
+        object ChkFindCase: TCheckBox
+          Left = 368
+          Height = 19
+          Top = 6
+          Width = 90
+          Caption = 'Match case'
+          TabOrder = 1
+        end
+        object BtnFindGo: TButton
+          Left = 480
+          Height = 25
+          Top = 3
+          Width = 80
+          Caption = 'Search'
+          OnClick = BtnFindGoClick
+          TabOrder = 2
+        end
+        object BtnFindStop: TButton
+          Left = 568
+          Height = 25
+          Top = 3
+          Width = 80
+          Caption = 'Stop'
+          Enabled = False
+          OnClick = BtnFindStopClick
+          TabOrder = 3
+        end
+        object LblFindRoot: TLabel
+          Left = 8
+          Height = 15
+          Top = 36
+          Width = 30
+          Caption = 'In'
+        end
+        object EditFindRoot: TEdit
+          Left = 56
+          Height = 23
+          Top = 32
+          Width = 300
+          Hint = 'The directory to walk. Subdirectories are included; dot-directories are not.'
+          TabOrder = 4
+        end
+        object BtnFindBrowse: TButton
+          Left = 362
+          Height = 25
+          Top = 31
+          Width = 30
+          Caption = '...'
+          OnClick = BtnFindBrowseClick
+          TabOrder = 5
+        end
+        object LblFindMask: TLabel
+          Left = 404
+          Height = 15
+          Top = 36
+          Width = 30
+          Caption = 'Files'
+        end
+        object EditFindMask: TEdit
+          Left = 448
+          Height = 23
+          Top = 32
+          Width = 200
+          Hint = 'A semicolon-separated list like *.bas;*.txt. Empty searches every file.'
+          Text = '*.bas'
+          TabOrder = 6
+        end
+      end
+      object ListFind: TListBox
+        Left = 0
+        Height = 92
+        Top = 60
+        Width = 992
+        Align = alClient
+        ItemHeight = 0
+        OnDblClick = ListFindDblClick
+        ScrollWidth = 990
+        TabOrder = 1
+      end
+    end
     object TabStack: TTabSheet
       Caption = 'Call Stack'
       ClientHeight = 152
@@ -367,6 +477,9 @@ object FrmMain: TFrmMain
       end
       object SepE4: TMenuItem
         Caption = '-'
+      end
+      object MnuFindInFiles: TMenuItem
+        Action = ActFindInFiles
       end
       object MnuComplete: TMenuItem
         Action = ActComplete
@@ -533,6 +646,12 @@ object FrmMain: TFrmMain
       OnExecute = ActGotoLineExecute
       ShortCut = 16455
     end
+    object ActFindInFiles: TAction
+      Caption = 'Find in &Files...'
+      Hint = 'Search a directory tree; the results list opens below'
+      OnExecute = ActFindInFilesExecute
+      ShortCut = 24646
+    end
     object ActComplete: TAction
       Caption = 'Complete &Word'
       Hint = 'Every keyword and built-in this host knows, filtered by what you have typed'
@@ -639,6 +758,11 @@ object FrmMain: TFrmMain
   end
   object ImagesGutter: TImageList
     Left = 152
+    Top = 184
+  end
+  object SelectDirectoryDialog1: TSelectDirectoryDialog
+    Options = [ofPathMustExist, ofEnableSizing, ofViewDetail]
+    Left = 256
     Top = 184
   end
   object OpenDialog1: TOpenDialog

@@ -109,6 +109,14 @@ begin
         [FrmMain.ImagesToolbar.Count, IconSizes]));
       Report.Add(Format('gutter marks: %d images, %d resolutions',
         [FrmMain.ImagesGutter.Count, FrmMain.ImagesGutter.ResolutionCount]));
+      { THE SHORTCUT AND THE DEFAULT MASK, for the third time the same reason: a
+        TAction whose ShortCut streamed as 0 still draws its menu item, still
+        runs when clicked, and answers Ctrl+Shift+F with nothing at all -- and an
+        EditFindMask that arrived without its Text searches every file in the
+        tree instead of the .bas files. Neither is visible in a screenshot of a
+        pane that looks exactly right. 24646 is Ctrl+Shift+F. }
+      Report.Add(Format('find in files: shortcut %d, default mask %s',
+        [FrmMain.ActFindInFiles.ShortCut, FrmMain.EditFindMask.Text]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 255 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 291 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -779,6 +779,26 @@ TIER, and by nothing else.
 `phosphoridetest` pins every one without a window. The popup is
 `TSynCompletion` in `umainform`.
 
+**Searching a tree** is `src/core/ufindinfiles.pas`, and it is the fourth thing in
+this program built to the same shape as the other three: a worker fills a
+lock-guarded buffer, the caller drains it from its own timer, and no thread ever
+touches the LCL. `uphosphorrun` does it for a child's pipes, `udebugtransport`
+for a socket, and this for a directory walk -- because a walk over a network
+share waits exactly as long as a read from a pipe does, and the rule
+`umainform` exists to keep is that nothing here waits. The unit holds no timer of
+its own for the reason `udebugtransport` holds none: a `TTimer` needs a
+widgetset, and `phosphoridetest` links the LCL and deliberately never creates
+one.
+
+Two decisions in it are not obvious from the outside. A file is sniffed for a NUL
+byte over its first four kilobytes **before the rest of it is read**, so an
+executable dropped in a source tree costs four kilobytes rather than its whole
+size -- measured on 2026-09-16, that one ordering took a walk of `C:\Dev` from
+268 files to 702 in the same second and a half. And cancelling is an *ending*
+with an answer of its own (`stopped after 702 files, 0 matches`), because a
+results list that merely stopped growing does not say whether the search finished
+or was stopped, and those are different answers to "did you look everywhere".
+
 **Project files.** There is no `.phosphorproj`, no build configuration, no
 dependency graph. A Phosphor program is a file; the host takes a file; `pack`
 takes one `.pbc`. Inventing a project format here would invent a build model that
@@ -810,7 +830,7 @@ not at all.
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 255 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 291 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

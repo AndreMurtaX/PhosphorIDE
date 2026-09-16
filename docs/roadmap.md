@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 255 checks, exit code 0.
+- `bin\phosphoridetest` green: 291 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -667,6 +667,40 @@ which is a modal dialog rather than a failure.
 ---
 
 ## 14. A find-in-files pane
+
+**DONE 2026-09-16.** `Ctrl+Shift+F`, or **Edit > Find in Files**, and the results
+are the fifth tab of the output pane. `src/core/ufindinfiles.pas` is the search
+and has no LCL in it; 36 of the 291 checks are its.
+
+Four answers the item asked for:
+
+- **The jump is `GotoSource`, unchanged.** The row shows a leaf name and the
+  line, because a list box full of absolute paths is one nobody can read at a
+  glance; the full path rides beside it in a parallel `line|path` list, which is
+  exactly the shape the Problems pane already uses and for exactly the same
+  reason.
+- **A binary file produces no rows** -- and the sniff happens BEFORE the rest of
+  the file is read, which is the part that was not in the plan. Reading an
+  executable whole in order to discover from its first four kilobytes that it is
+  not text is megabytes per file skipped: on the Windows lane a walk of `C:\Dev`
+  reached 268 files in the second and a half before Stop was pressed, and 702 in
+  the same window once the order was fixed.
+- **Cancelling is an ending and it says so.** `stopped after 702 files, 0
+  matches`, in the status bar and in the list. A results list that merely stopped
+  growing does not say whether the search finished or was stopped, and those are
+  different answers to "did you look everywhere".
+- **Match case yes, whole word no**, decided here rather than inherited: both
+  dialogs are created with `frHideWholeWord`, so that box has never been shown,
+  and this pane is not going to be the one search in the program that can do
+  something the others cannot.
+
+Measured with `tools/lane/steps-find.txt`: the sibling checkout, 1006 files with
+no mask, walked to the end in under eight seconds with 387 matches and the editor
+usable throughout; `C:\Dev\PhosphorIDE` with no mask returning 7 rows from 150
+files for `LooksBinary`, a word that is also a symbol inside the compiled
+`.exe` and `.ppu` files beside them.
+
+**Was:**
 
 **What.** A pane beside Problems that searches a directory tree and lists `path:line:text`,
 with double-click to jump.

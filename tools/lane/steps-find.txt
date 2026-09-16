@@ -1,0 +1,87 @@
+# Find in Files. The whole of roadmap item 14 in one pass: the pane opens with a
+# root already filled in, a search reaches a subdirectory, a row says where the
+# match was, a double-click opens a file that was not open at the line it names,
+# and a walk over tens of thousands of files can be stopped while it runs.
+#
+# Ctrl+Shift+F, and the caret is in the search box: the action focuses it, so
+# nothing here has to click first.
+key ^+f
+wait 700
+shot 110-pane-opened
+type bottom
+key {ENTER}
+wait 1500
+shot 111-one-row
+
+# THE JUMP, which is the half that is not the search. deep.bas is not open --
+# lane345.bas is -- so this exercises GotoSource's open-it branch, and the
+# status bar's line:column is the proof that "4" in the row meant line 4.
+dblclick 200 643
+wait 1200
+shot 114-jumped-to-deep
+
+# A word in every fixture, to see more than one file at once.
+key ^+f
+wait 400
+key ^a
+type println
+key {ENTER}
+wait 1500
+shot 112-many-rows
+
+# And a word in none of them: an answer has to arrive where the question was
+# asked, so "0 matches" is a row and not only a status-bar panel.
+key ^+f
+wait 400
+key ^a
+type nosuchwordanywhere
+key {ENTER}
+wait 1500
+shot 113-no-matches
+
+# NO GARBAGE ROWS, and this is the case that proves it rather than asserting it:
+# `LooksBinary` is a symbol in ufindinfiles.pas AND a string inside the compiled
+# bin\phosphoridetest.exe and the .ppu files beside it. Emptying the mask puts
+# all of them in front of the sniff, and only the text ones may come back.
+at 216 616
+key ^a
+type C:\Dev\PhosphorIDE
+at 558 617
+key ^a
+key {DEL}
+at 216 588
+key ^a
+type LooksBinary
+key {ENTER}
+wait 4000
+shot 117-no-binary-rows
+
+# A THOUSAND FILES, FINISHED. The sibling checkout is 1004 files outside its
+# dot-directories, which is the size the roadmap names, and this one runs to the
+# end rather than being stopped: the count in the status bar is the evidence
+# that the walk covered them and the editor was usable throughout.
+at 216 616
+key ^a
+type C:\Dev\Phosphor
+at 216 588
+key ^a
+type BREAKPOINT
+key {ENTER}
+wait 8000
+shot 118-a-thousand-files
+
+# STOPPING A REAL WALK. C:\Dev with no mask is both checkouts -- about 57,000
+# files on this machine -- far more than anyone will wait for, which is what
+# Stop is for.
+at 216 616
+key ^a
+type C:\Dev
+at 216 588
+key ^a
+type println
+at 531 588
+wait 900
+shot 115-running
+at 620 588
+wait 900
+shot 116-stopped

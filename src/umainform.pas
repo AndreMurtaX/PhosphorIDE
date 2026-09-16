@@ -27,7 +27,7 @@ uses
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
   usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
-  uphosphorcomplete, SynCompletion;
+  uphosphorcomplete, ufindinfiles, SynCompletion;
 
 type
 
@@ -38,6 +38,22 @@ type
     ActCheck: TAction;
     ActClearBreakpoints: TAction;
     ActComplete: TAction;
+    ActFindInFiles: TAction;
+    BtnFindBrowse: TButton;
+    BtnFindGo: TButton;
+    BtnFindStop: TButton;
+    ChkFindCase: TCheckBox;
+    EditFindMask: TEdit;
+    EditFindRoot: TEdit;
+    EditFindWhat: TEdit;
+    LblFindMask: TLabel;
+    LblFindRoot: TLabel;
+    LblFindWhat: TLabel;
+    ListFind: TListBox;
+    MnuFindInFiles: TMenuItem;
+    PanelFind: TPanel;
+    SelectDirectoryDialog1: TSelectDirectoryDialog;
+    TabFind: TTabSheet;
     ActCloseTab: TAction;
     ActCompile: TAction;
     ActContinue: TAction;
@@ -158,6 +174,13 @@ type
     procedure ActCheckExecute(Sender: TObject);
     procedure ActClearBreakpointsExecute(Sender: TObject);
     procedure ActCompleteExecute(Sender: TObject);
+    procedure ActFindInFilesExecute(Sender: TObject);
+    procedure BtnFindBrowseClick(Sender: TObject);
+    procedure BtnFindGoClick(Sender: TObject);
+    procedure BtnFindStopClick(Sender: TObject);
+    procedure EditFindWhatKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure ListFindDblClick(Sender: TObject);
     procedure ActCloseTabExecute(Sender: TObject);
     procedure ActCompileExecute(Sender: TObject);
     procedure ActCopyExecute(Sender: TObject);
@@ -289,6 +312,15 @@ type
     FCompletionStart: Integer;
     FCompletionLine: Integer;
 
+    { The search, its cadence, and where each row points.
+
+      FFindRows is `line|path` per row, exactly the shape FProblemLines uses and
+      for the same reason: a list box holds the text a person reads, and the
+      thing a double-click needs is not in it. Parallel to ListFind by index. }
+    FFind: TFindSearch;
+    FFindTimer: TTimer;
+    FFindRows: TStringList;
+
     { The signature hint. A THintWindow rather than a second TSynCompletion:
       nothing is being chosen here, so a list that takes the keyboard would be
       in the way of the typing it is meant to help. It follows the caret and
@@ -354,6 +386,10 @@ type
       AX, AY: Integer; ASelected: Boolean; AIndex: Integer): Boolean;
     procedure RefreshSignatureHint;
     procedure HideSignatureHint;
+    procedure FindTimerTick(Sender: TObject);
+    procedure FindHits(Sender: TObject; const AHits: TFindHits);
+    procedure FindDone(Sender: TObject; AFilesSeen, AHitCount: Integer;
+      ACancelled: Boolean; const AError: String);
     function StartDebugSession: Boolean;
     procedure EndDebugSession(const AWhy: String);
     procedure DebugTimerTick(Sender: TObject);
@@ -480,6 +516,18 @@ begin
   FSigHint := THintWindow.Create(Self);
   FSigHint.AutoHide := False;
 
+  FFindRows := TStringList.Create;
+  FFind := TFindSearch.Create;
+  FFind.OnHits := @FindHits;
+  FFind.OnDone := @FindDone;
+  { The same 40 ms the runner and the debug session use. It is not a number with
+    a reason of its own -- it is the one cadence this program has, and a second
+    would be a second thing to explain. }
+  FFindTimer := TTimer.Create(Self);
+  FFindTimer.Enabled := False;
+  FFindTimer.Interval := 40;
+  FFindTimer.OnTimer := @FindTimerTick;
+
   FDocs := TList.Create;
   FProblemLines := TStringList.Create;
   FUntitledCounter := 0;
@@ -574,6 +622,14 @@ begin
     FDocs.Free;
   end;
   FProblemLines.Free;
+  { The search FIRST, because its destructor joins the walker thread and that
+    thread deposits into a buffer this object owns. Freeing the rows out from
+    under a thread that is still walking is the one ordering mistake available
+    here, and closing a window during a search is how it would be found. }
+  if FFindTimer <> nil then
+    FFindTimer.Enabled := False;
+  FFind.Free;
+  FFindRows.Free;
   FSettings.Free;
 end;
 
@@ -1616,6 +1672,170 @@ begin
   if not ASelected then
     ACanvas.Font.Color := clGray;
   ACanvas.TextOut(FCompletion.TheForm.ClientWidth - W - 8, AY, Badge);
+end;
+
+{ ------------------------------------------------------- find in files ----- }
+
+procedure TFrmMain.ActFindInFilesExecute(Sender: TObject);
+var
+  Doc: TEditorDoc;
+begin
+  PagesOutput.ActivePage := TabFind;
+
+  { A ROOT THAT IS ALREADY THE RIGHT ONE, nine times in ten: the directory of
+    the file being edited. Filled only when the box is empty, because a root the
+    user typed is a choice and this is a guess. }
+  if Trim(EditFindRoot.Text) = '' then
+  begin
+    Doc := ActiveDoc;
+    if (Doc <> nil) and (Doc.FileName <> '') then
+      EditFindRoot.Text := ExtractFileDir(Doc.FileName);
+  end;
+
+  { And the selection, for the same reason Find does it (ActFindExecute) -- but
+    only a selection that is one line, because a search for three lines of text
+    is a search that finds nothing and does not say why. }
+  Doc := ActiveDoc;
+  if (Doc <> nil) and Doc.Edit.SelAvail and
+     (Pos(LineEnding, Doc.Edit.SelText) = 0) then
+    EditFindWhat.Text := Doc.Edit.SelText;
+
+  EditFindWhat.SetFocus;
+  EditFindWhat.SelectAll;
+end;
+
+procedure TFrmMain.BtnFindBrowseClick(Sender: TObject);
+begin
+  if DirectoryExistsUTF8(EditFindRoot.Text) then
+    SelectDirectoryDialog1.InitialDir := EditFindRoot.Text;
+  if SelectDirectoryDialog1.Execute then
+    EditFindRoot.Text := SelectDirectoryDialog1.FileName;
+end;
+
+procedure TFrmMain.EditFindWhatKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  { Enter searches, because a box with a Search button beside it that ignores
+    Enter is a box people press Enter in twice. }
+  if (Key = VK_RETURN) and (Shift = []) then
+  begin
+    Key := 0;
+    BtnFindGoClick(nil);
+  end;
+end;
+
+procedure TFrmMain.BtnFindGoClick(Sender: TObject);
+begin
+  ListFind.Items.Clear;
+  FFindRows.Clear;
+
+  if not FFind.Start(EditFindWhat.Text, EditFindRoot.Text,
+                     EditFindMask.Text, ChkFindCase.Checked) then
+  begin
+    { Start answers False for the two things a person can type wrongly, and says
+      which rather than opening a dialog over a pane they are looking at. }
+    if Trim(EditFindWhat.Text) = '' then
+      ListFind.Items.Add('Nothing to look for.')
+    else
+      ListFind.Items.Add(Format('%s is not a directory.', [EditFindRoot.Text]));
+    Exit;
+  end;
+
+  FFindTimer.Enabled := True;
+  BtnFindGo.Enabled := False;
+  BtnFindStop.Enabled := True;
+  StatusBar1.Panels[3].Text := 'searching...';
+end;
+
+procedure TFrmMain.BtnFindStopClick(Sender: TObject);
+begin
+  { Stop joins the walker and then Poll delivers the ending, so the button does
+    not have to know what a cancellation looks like. }
+  FFind.Stop;
+  FFind.Poll;
+end;
+
+procedure TFrmMain.FindTimerTick(Sender: TObject);
+begin
+  FFind.Poll;
+end;
+
+procedure TFrmMain.FindHits(Sender: TObject; const AHits: TFindHits);
+var
+  I: Integer;
+begin
+  ListFind.Items.BeginUpdate;
+  try
+    for I := 0 to High(AHits) do
+    begin
+      { WHAT THE EYE READS AND WHAT THE DOUBLE-CLICK NEEDS ARE DIFFERENT THINGS.
+        The row shows a leaf name and the line; the full path rides in
+        FFindRows, because a list box full of absolute paths is a list box
+        nobody can read at a glance. }
+      ListFind.Items.Add(Format('%s:%d: %s',
+        [ExtractFileName(AHits[I].Path), AHits[I].Line, AHits[I].Text]));
+      FFindRows.Add(Format('%d|%s', [AHits[I].Line, AHits[I].Path]));
+    end;
+  finally
+    ListFind.Items.EndUpdate;
+  end;
+end;
+
+procedure TFrmMain.FindDone(Sender: TObject; AFilesSeen, AHitCount: Integer;
+  ACancelled: Boolean; const AError: String);
+var
+  What: String;
+
+  { "1 matches in 1 files" is how a program announces that nobody read its
+    output. Four lines, once, rather than a Format per sentence. }
+  function Countable(ACount: Integer; const ASingular, APlural: String): String;
+  begin
+    if ACount = 1 then
+      Result := Format('%d %s', [ACount, ASingular])
+    else
+      Result := Format('%d %s', [ACount, APlural]);
+  end;
+
+begin
+  FFindTimer.Enabled := False;
+  BtnFindGo.Enabled := True;
+  BtnFindStop.Enabled := False;
+
+  if AError <> '' then
+    What := 'the search failed: ' + AError
+  else if ACancelled then
+    What := Format('stopped after %s, %s', [Countable(AFilesSeen, 'file', 'files'),
+                                            Countable(AHitCount, 'match', 'matches')])
+  else
+    What := Format('%s in %s', [Countable(AHitCount, 'match', 'matches'),
+                                Countable(AFilesSeen, 'file', 'files')]);
+  StatusBar1.Panels[3].Text := What;
+  { AND IN THE LIST TOO, because the status bar is at the other end of the
+    window from the pane being read, and "no matches" is an answer that has to
+    arrive somewhere the question was asked. }
+  if (AHitCount = 0) or (AError <> '') or ACancelled then
+    ListFind.Items.Add('-- ' + What);
+end;
+
+procedure TFrmMain.ListFindDblClick(Sender: TObject);
+var
+  Idx, Sep, Line, Code: Integer;
+  Entry: String;
+begin
+  { THE SAME NAVIGATOR AS THE PROBLEMS PANE, deliberately: GotoSource is the one
+    place that opens a file that is not open, finds the tab for one that is, and
+    clamps a line past the end. A second one would be a second set of those. }
+  Idx := ListFind.ItemIndex;
+  if (Idx < 0) or (Idx >= FFindRows.Count) then
+    Exit;
+  Entry := FFindRows[Idx];
+  Sep := Pos('|', Entry);
+  if Sep < 1 then
+    Exit;
+  Val(Copy(Entry, 1, Sep - 1), Line, Code);
+  if (Code <> 0) or (Line <= 0) then
+    Exit;
+  GotoSource(Copy(Entry, Sep + 1, MaxInt), Line);
 end;
 
 procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);

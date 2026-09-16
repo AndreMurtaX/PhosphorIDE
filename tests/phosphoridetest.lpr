@@ -42,7 +42,11 @@ uses
   { The transport is exercised against a socket this program opens itself:
     no host is started, nothing is spawned, and the test runs the same on a
     headless machine as on a desktop. Sockets and ExtCtrls come with it. }
-  udebugtransport, udebugsession, Sockets;
+  udebugtransport, udebugsession, Sockets,
+  { The search runs against a tree this program writes into a temporary
+    directory: no fixture in the repository, nothing to keep in step, and the
+    same answers on a machine that has never seen this project. }
+  ufindinfiles, FileUtil;
 
 var
   Checks: Integer = 0;
@@ -565,6 +569,220 @@ begin
           CompletionInsertion('', 'println'));
 end;
 
+{ Collects what a search reports, so the checks can ask about it afterwards
+  rather than inside a callback. }
+type
+  THitSink = class
+  public
+    Rows: TFindHits;
+    Done: Boolean;
+    Cancelled: Boolean;
+    Error: String;
+    Files: Integer;
+    Count: Integer;
+    procedure GotHits(Sender: TObject; const AHits: TFindHits);
+    procedure GotDone(Sender: TObject; AFilesSeen, AHitCount: Integer;
+      ACancelled: Boolean; const AError: String);
+    procedure Reset;
+    function Has(const ALeaf: String): Boolean;
+    function LineOf(const ALeaf: String): Integer;
+    function TextOf(const ALeaf: String): String;
+  end;
+
+procedure THitSink.GotHits(Sender: TObject; const AHits: TFindHits);
+var
+  I, N: Integer;
+begin
+  N := Length(Rows);
+  SetLength(Rows, N + Length(AHits));
+  for I := 0 to High(AHits) do
+    Rows[N + I] := AHits[I];
+end;
+
+procedure THitSink.GotDone(Sender: TObject; AFilesSeen, AHitCount: Integer;
+  ACancelled: Boolean; const AError: String);
+begin
+  Done := True;
+  Cancelled := ACancelled;
+  Error := AError;
+  Files := AFilesSeen;
+  Count := AHitCount;
+end;
+
+procedure THitSink.Reset;
+begin
+  SetLength(Rows, 0);
+  Done := False;
+  Cancelled := False;
+  Error := '';
+  Files := 0;
+  Count := 0;
+end;
+
+function THitSink.Has(const ALeaf: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(Rows) do
+    if ExtractFileName(Rows[I].Path) = ALeaf then
+      Exit(True);
+end;
+
+function THitSink.LineOf(const ALeaf: String): Integer;
+var
+  I: Integer;
+begin
+  Result := -1;
+  for I := 0 to High(Rows) do
+    if ExtractFileName(Rows[I].Path) = ALeaf then
+      Exit(Rows[I].Line);
+end;
+
+function THitSink.TextOf(const ALeaf: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(Rows) do
+    if ExtractFileName(Rows[I].Path) = ALeaf then
+      Exit(Rows[I].Text);
+end;
+
+{ --------------------------------------------------------- find in files --- }
+
+procedure TestFindInFiles;
+var
+  Root: String;
+  Search: TFindSearch;
+  Sink: THitSink;
+  Spins: Integer;
+
+  procedure Put(const ARel, AContent: String);
+  var
+    F: TFileStream;
+    Full, Dir: String;
+  begin
+    Full := Root + PathDelim + ARel;
+    Dir := ExtractFilePath(Full);
+    if not DirectoryExists(Dir) then
+      ForceDirectories(Dir);
+    F := TFileStream.Create(Full, fmCreate);
+    try
+      if AContent <> '' then
+        F.Write(AContent[1], Length(AContent));
+    finally
+      F.Free;
+    end;
+  end;
+
+  { Drive the search the way a timer would, and give up rather than hang: a
+    walker that never finishes must fail this test, not wedge the suite. }
+  function RunToEnd: Boolean;
+  begin
+    Spins := 0;
+    while (not Sink.Done) and (Spins < 2000) do
+    begin
+      Search.Poll;
+      Inc(Spins);
+      Sleep(1);
+    end;
+    Result := Sink.Done;
+  end;
+
+begin
+  Group('ufindinfiles: what matches, and what is not a line of text');
+
+  { --- the pure part ------------------------------------------------------- }
+  CheckEqInt('a match reports its column', 5, FindInLine('abc def', 'def', True));
+  CheckEqInt('no match is zero', 0, FindInLine('abc', 'zzz', True));
+  CheckEqInt('an empty pattern matches nothing', 0, FindInLine('abc', '', False));
+  CheckEqInt('a pattern longer than the line matches nothing', 0,
+             FindInLine('ab', 'abc', False));
+  CheckEqInt('case-insensitive by default', 1, FindInLine('ABC', 'abc', False));
+  CheckEqInt('and exact when asked', 0, FindInLine('ABC', 'abc', True));
+  { The fold is UTF-8 aware, because a byte-wise one turns a two-byte letter
+    into two folded bytes that match nothing. }
+  CheckEqInt('a two-byte letter folds as one', 1,
+             FindInLine('ÁRVORE', 'árvore', False));
+
+  Check('a NUL says binary', LooksBinary('ab' + #0 + 'cd'));
+  Check('text does not', not LooksBinary('println "hello"' + #10));
+
+  Check('an empty mask matches everything', MatchesFileMask('x.pbc', ''));
+  Check('a mask matches its own kind', MatchesFileMask('x.bas', '*.bas'));
+  Check('and not another', not MatchesFileMask('x.pbc', '*.bas'));
+  Check('a list matches any of them', MatchesFileMask('x.txt', '*.bas;*.txt'));
+  Check('masks ignore case, because Windows does',
+        MatchesFileMask('X.BAS', '*.bas'));
+
+  { --- the walk ------------------------------------------------------------ }
+  Root := GetTempDir(False) + 'phosphoride-find-' + IntToStr(Random(1000000));
+  ForceDirectories(Root);
+  Sink := THitSink.Create;
+  Search := TFindSearch.Create;
+  try
+    Put('a.bas', 'println "needle"' + #10 + 'x = 1' + #10);
+    Put('b.bas', 'rem nothing here' + #10);
+    Put('deep' + PathDelim + 'c.bas', 'y = 2' + #10 + 'println "NEEDLE"' + #10);
+    { A binary that contains the word, which is the case the sniff exists for. }
+    Put('blob.dat', 'needle' + #0 + 'needle');
+    { And a directory nobody asked to search. }
+    Put('.git' + PathDelim + 'd.bas', 'println "needle"' + #10);
+
+    Search.OnHits := @Sink.GotHits;
+    Search.OnDone := @Sink.GotDone;
+
+    Check('an empty pattern is refused', not Search.Start('', Root, '', False));
+    Check('a root that is not there is refused',
+          not Search.Start('needle', Root + PathDelim + 'nope', '', False));
+
+    Check('a real search starts', Search.Start('needle', Root, '*.bas', False));
+    Check('and finishes', RunToEnd);
+    CheckEqInt('two files matched', 2, Sink.Count);
+    Check('the subdirectory was searched', Sink.Has('c.bas'));
+    Check('a dot-directory was not', not Sink.Has('d.bas'));
+    Check('the line number is the matching line',
+          Sink.LineOf('c.bas') = 2);
+    Check('the row carries the text', Sink.TextOf('a.bas') = 'println "needle"');
+    Check('it was not cancelled', not Sink.Cancelled);
+    Check('and nothing went wrong', Sink.Error = '');
+
+    { THE BINARY IS WHAT THE MASK WAS HIDING. Searched without one, blob.dat is
+      read, contains the word twice, and must still produce no row. }
+    Sink.Reset;
+    Check('a maskless search starts', Search.Start('needle', Root, '', False));
+    Check('and finishes', RunToEnd);
+    Check('the binary produced no rows', not Sink.Has('blob.dat'));
+
+    { Match case is a cut, not a highlight. }
+    Sink.Reset;
+    Check('an exact search starts',
+          Search.Start('NEEDLE', Root, '*.bas', True));
+    Check('and finishes', RunToEnd);
+    CheckEqInt('only the shouted one matched', 1, Sink.Count);
+    Check('which is the one in the subdirectory', Sink.Has('c.bas'));
+
+    { Stopping is an ending, and it says so. A search of a tree with nothing in
+      it still runs the walk, so this is about the ANSWER rather than the timing:
+      Stop before any Poll, then Poll once. }
+    Sink.Reset;
+    Check('a search to cancel starts', Search.Start('needle', Root, '', False));
+    Search.Stop;
+    Search.Poll;
+    Check('cancelling ends it', Sink.Done);
+    Check('and says it was cancelled', Sink.Cancelled);
+    Check('and the search is no longer running', not Search.Running);
+  finally
+    Search.Free;
+    Sink.Free;
+    { FileUtil's, and named with its unit because SysUtils has no such thing and
+      a bare call read as a missing identifier. Best effort: a temporary tree
+      left behind by a failed run is untidy, not a failure. }
+    FileUtil.DeleteDirectory(Root, False);
+  end;
+end;
+
 { ------------------------------------------------------------ breakpoints --- }
 
 procedure TestBreakpoints;
@@ -998,6 +1216,7 @@ begin
   TestHighlighter;
   TestBreakpoints;
   TestCompletion;
+  TestFindInFiles;
   TestProtocol;
   TestTransport;
   TestSession;
