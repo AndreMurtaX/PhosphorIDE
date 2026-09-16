@@ -1,0 +1,92 @@
+# The outline pane and F12 under gtk2. Same case as steps-outline.txt, with the
+# keys spelled the X way and the clicks measured UP FROM THE BOTTOM EDGE --
+# mutter hands this window a different height on different runs (700 here, 775
+# an hour earlier), and the output panel is the thing anchored to the bottom.
+raise
+key ctrl+shift+o
+wait 1000
+shot 130-ten-definitions
+
+# Row 6 is `22: sixth%()`, the SECOND of the two definitions on line 22, so the
+# column in the status bar is the proof that the jump used the name's column.
+bot 100 43
+wait 900
+shot 131-a-click-moves-the-caret
+
+# And the arrow key still belongs to the list.
+key Down
+wait 900
+shot 132-arrowing-walks-the-file
+
+# A double-click on row 1 hands the keyboard back to the text.
+bot2 100 158
+wait 1000
+shot 133-a-double-click-hands-over-the-keyboard
+
+# F12 on a call. Line 41 is `println second(2, 3)`; nine rights from its start
+# put the caret inside `second`, which is defined on line 10 after a `:`.
+key ctrl+g
+wait 800
+key ctrl+a
+type 41
+key Return
+wait 900
+key Home
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+wait 400
+key F12
+wait 1000
+shot 134-f12-jumped-to-the-definition
+
+# The caret is now ON that definition's name, which is its own answer.
+key F12
+wait 1000
+shot 135-f12-on-the-definition-itself
+
+# F12 on a real built-in OFFERS the reference. The dialog is a top-level window
+# of its own, so it needs popshot rather than shot -- the same fact the
+# completion popup taught this lane.
+key ctrl+g
+wait 800
+key ctrl+a
+type 49
+key Return
+wait 900
+key Home
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+wait 400
+key F12
+wait 1400
+popshot 138-f12-on-a-builtin-offers-the-reference
+key Escape
+wait 900
+shot 139-and-the-offer-can-be-declined
+
+# And a name nothing defines is one line in the status bar, not a dialog.
+key ctrl+g
+wait 800
+key ctrl+a
+type 10
+key Return
+wait 900
+key Home
+wait 400
+key F12
+wait 1000
+shot 137-f12-finds-nothing-and-says-so

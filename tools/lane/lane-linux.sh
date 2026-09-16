@@ -70,18 +70,32 @@ BASE_WINDOWS="$(own_windows)"
 # is. The whole root is the only way to see one. Paid for on 2026-09-16 by
 # concluding twice that a menu had not opened when it had.
 # A popup: the process's top-level window that was not there at startup.
+# EVERY NEW WINDOW, NOT THE FIRST ONE. A completion list and a hint are
+# override-redirect and arrive alone, so `head -1` was right for them. A MODAL
+# DIALOG is an ordinary top-level, so mutter gives it a FRAME -- and the frame is
+# also new, also carries the process's WM_CLASS, and comes first in the tree.
+# XGetImage on a frame is BadMatch, which is the same trap the main window
+# taught this lane at the top of this file, met a second time from the other
+# side. Measured 2026-09-16, on the Go to Definition dialog: popshot answered
+# `BadMatch (invalid parameter attributes)` and photographed nothing.
+#
+# So: try them in order and keep the first that actually yields an image.
 popshot() {
-    local new
-    new=$(comm -13 <(printf '%s\n' "$BASE_WINDOWS") <(own_windows) | head -1)
+    local new win
+    new=$(comm -13 <(printf '%s\n' "$BASE_WINDOWS") <(own_windows))
     if [ -z "$new" ]; then
         echo "  NO POPUP FOUND for $1" >&2
         return
     fi
-    if xwd -id "$new" -out "$OUT/$1.xwd" 2>"$OUT/$1.err"; then
-        python3 "$HERE/shot.py" "$OUT/$1.xwd" "$OUT/$1.png" && rm -f "$OUT/$1.xwd" "$OUT/$1.err"
-    else
-        echo "  POPSHOT FAILED $1: $(head -1 "$OUT/$1.err")" >&2
-    fi
+    for win in $new; do
+        if xwd -id "$win" -out "$OUT/$1.xwd" 2>"$OUT/$1.err"; then
+            if python3 "$HERE/shot.py" "$OUT/$1.xwd" "$OUT/$1.png"; then
+                rm -f "$OUT/$1.xwd" "$OUT/$1.err"
+                return
+            fi
+        fi
+    done
+    echo "  POPSHOT FAILED $1: $(head -1 "$OUT/$1.err")" >&2
 }
 
 rootshot() {

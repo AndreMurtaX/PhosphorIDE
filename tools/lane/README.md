@@ -26,6 +26,7 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
 | `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
 | `steps-signature.txt`, `steps-signature-linux.txt` | every arity of `mid$`, the argument marked as it moves, the hint gone when the call closes, and nothing at all for `callfunc` |
+| `steps-outline-linux.txt` | the same under gtk2, including the Go to Definition dialog through `popshot` |
 | `steps-outline.txt` + `outline.bas` | the outline pane and F12: ten definitions including two on one line, a click that keeps the keyboard, a jump, and the three answers F12 gives when there is nothing to jump to |
 | `steps-accent.txt` + `acentos.bas` | the byte column: the same statement with and without accents, and the popup filtered on both |
 | `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |
@@ -83,7 +84,12 @@ two columns past the end of a UTF-8 line.
 **A GTK popup needs `popshot`, not `shot`.** The completion list, a menu and the
 signature hint are each an override-redirect window of their own, so
 `xwd -id <win>` shows the editor with nothing over it. `popshot` photographs the
-window that was not there at startup. Where a popup's EFFECT is the thing under
+window that was not there at startup -- and it tries EVERY window that was not
+there, in order, rather than the first. A MODAL DIALOG is an ordinary top-level,
+so mutter gives it a frame; the frame is new too, carries the same WM_CLASS, and
+comes first in the tree, and `XGetImage` on a frame is `BadMatch`. That is the
+trap at the top of this file met a second time from the other side, and it cost
+one run of the Go to Definition case on 2026-09-16. Where a popup's EFFECT is the thing under
 test — what the line says after Return — asserting that is still better than a
 picture of it.
 
