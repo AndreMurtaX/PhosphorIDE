@@ -56,6 +56,19 @@ unit udebugtransport;
   otherwise grow a String until the editor died. The host caps its own side the
   same way and at the same size.
 
+  NO SOCKET OF OURS TRAVELS INTO A CHILD. The editor calls Listen and THEN spawns
+  the debuggee, and a descriptor that is open at the moment of the spawn is
+  inherited by it unless it is marked otherwise. Measured on 2026-09-16 with
+  `ss -ltnp` on Linux, with a session live:
+
+    LISTEN 127.0.0.1:35685  users:(("phosphor",pid=5381,fd=18),
+                                   ("phosphoride",pid=5343,fd=18))
+
+  -- the debuggee holding, on the same descriptor number, the listener it was
+  only ever meant to CONNECT to. It could have accepted on it. Every socket this
+  unit opens is therefore taken out of the inherit set as soon as it exists; see
+  MakeSocketPrivate.
+
   MIT License. Copyright (c) 2026 Andre Murta.
 }
 
@@ -64,6 +77,12 @@ unit udebugtransport;
 interface
 
 uses
+  {$IFDEF WINDOWS}
+  Windows,      // SetHandleInformation; see MakeSocketPrivate
+  {$ENDIF}
+  {$IFDEF UNIX}
+  BaseUnix,     // FpFcntl and F_SetFd, same reason
+  {$ENDIF}
   Classes, SysUtils, Sockets, syncobjs;
 
 const
@@ -140,6 +159,12 @@ type
       timer's only purpose is to arrive on the main thread; a caller that IS the
       main thread -- a headless test, a host with its own loop -- can say so. }
     procedure Poll;
+    { True when every socket this transport currently owns is out of the set a
+      child process would inherit. It is a question rather than an accessor
+      because the answer is the invariant and the handle is nobody's business.
+      Pinned in phosphoridetest: without it, deleting one call in Listen would
+      be a silent regression with a symptom only `ss` can see. }
+    function HandlesArePrivate: Boolean;
     property Port: Word read FPort;
     property OnFrame: TDebugFrameEvent read FOnFrame write FOnFrame;
     property OnConnect: TDebugLinkEvent read FOnConnect write FOnConnect;
@@ -158,6 +183,77 @@ begin
   FOwner := AOwner;
   FreeOnTerminate := False;
   inherited Create(False);
+end;
+
+{ ------------------------------------------------------- close-on-exec ------ }
+
+{$IFDEF UNIX}
+const
+  { FPC's linux/ostypes.inc defines F_SetFd (:378) and does NOT define
+    FD_CLOEXEC; only bsd/ostypes.inc does (:365). Spelled differently here so
+    that on a BSD, where the RTL's own constant IS in scope, this declaration
+    shadows nothing. }
+  CloseOnExecFlag = 1;
+{$ENDIF}
+
+{ Take one socket out of the set a child process inherits.
+
+  On Unix that is FD_CLOEXEC, and there is no race to worry about here: the only
+  spawn in this program happens on the main thread, after Listen has returned to
+  it, so nothing can fork between fpSocket and this call.
+
+  WINDOWS HAS THE SAME HOLE AND DOES NOT SHOW IT. netstat reports one owning PID
+  per socket, so the doubled ownership that `ss` printed on Linux is simply
+  invisible there -- but TProcess sets InheritHandles := True
+  (fcl-process processbody.inc:258) and hands it to CreateProcessW as
+  bInheritHandles (win/process.inc:283), and a Winsock socket is an inheritable
+  handle by default. SetHandleInformation with HANDLE_FLAG_INHERIT cleared
+  (wininc/func.inc:191, defines.inc:1711) is the same fix under another name.
+
+  BEST EFFORT, and the result is returned rather than raised on. A socket that
+  could not be marked still works; it is only untidy, and failing a debug session
+  over a hygiene measure would trade a feature the user asked for against one
+  they did not. }
+function MakeSocketPrivate(ASock: LongInt): Boolean;
+begin
+  Result := False;
+  if ASock < 0 then
+    Exit;
+  {$IFDEF WINDOWS}
+  Result := SetHandleInformation(THandle(ASock), HANDLE_FLAG_INHERIT, 0);
+  {$ENDIF}
+  {$IFDEF UNIX}
+  Result := FpFcntl(ASock, F_SetFd, CloseOnExecFlag) = 0;
+  {$ENDIF}
+end;
+
+{ Read the flag back. Only the test asks; it is here rather than there so that
+  the two platforms' answers are written next to the two platforms' questions. }
+function SocketIsPrivate(ASock: LongInt): Boolean;
+{$IFDEF WINDOWS}
+var
+  flags: DWord;
+{$ENDIF}
+{$IFDEF UNIX}
+var
+  flags: LongInt;
+{$ENDIF}
+begin
+  Result := False;
+  if ASock < 0 then
+    Exit;
+  {$IFDEF WINDOWS}
+  flags := 0;
+  if not GetHandleInformation(THandle(ASock), @flags) then
+    Exit;
+  Result := (flags and HANDLE_FLAG_INHERIT) = 0;
+  {$ENDIF}
+  {$IFDEF UNIX}
+  flags := FpFcntl(ASock, F_GetFd);
+  if flags < 0 then
+    Exit;
+  Result := (flags and CloseOnExecFlag) <> 0;
+  {$ENDIF}
 end;
 
 procedure TDebugAcceptThread.Execute;
@@ -181,6 +277,12 @@ begin
     FOwner.NoteEnd();   // the listener was closed, or the accept failed outright
     Exit;
   end;
+  { An accepted socket does NOT inherit the listener's flag -- POSIX says so and
+    Windows agrees -- so it is marked in its own right. It is created after the
+    debuggee was spawned, so that child never had it; the one that would is the
+    next process this editor starts, and Tools > Preferences probing a host is
+    exactly that. }
+  MakeSocketPrivate(h);
   FOwner.NotePeer(h);
 end;
 
@@ -236,6 +338,8 @@ begin
   Result := 0;
   FListenSock := fpSocket(AF_INET, SOCK_STREAM, 0);
   if FListenSock < 0 then Exit;
+  { BEFORE the bind, and long before the caller spawns anything. }
+  MakeSocketPrivate(FListenSock);
 
   FillChar(addr{%H-}, SizeOf(addr), 0);
   addr.sin_family := AF_INET;
@@ -266,6 +370,24 @@ begin
 
   FAccepter := TDebugAcceptThread.Create(Self);
   Result := FPort;
+end;
+
+function TDebugTransport.HandlesArePrivate: Boolean;
+var
+  lsock, psock: LongInt;
+begin
+  FLock.Acquire();
+  try
+    lsock := FListenSock;
+    psock := FPeerSock;
+  finally
+    FLock.Release();
+  end;
+  { A socket this transport does not have cannot be leaked, so -1 is not a
+    failure. Vacuously true before Listen and after Stop, which is the honest
+    answer to "is anything of ours reachable from a child". }
+  Result := ((lsock < 0) or SocketIsPrivate(lsock))
+        and ((psock < 0) or SocketIsPrivate(psock));
 end;
 
 procedure TDebugTransport.NotePeer(ASock: LongInt);

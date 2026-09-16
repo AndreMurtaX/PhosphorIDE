@@ -34,7 +34,7 @@ repository (`tests/debug_protocol_test.py`):
 ## What is built on this side
 
 Both are tested headless — no widgetset, no display, no `phosphor` binary — and both
-are in the 183 checks `bin/phosphoridetest` runs.
+are in the 185 checks `bin/phosphoridetest` runs.
 
 **`src/core/udebugtransport.pas`** — the loopback listener. Binds `127.0.0.1:0`, reads
 the ephemeral port back, accepts one connection on its own thread, reads on another,
@@ -140,7 +140,7 @@ editor involved:
 ### Linux, measured the same day
 
 Ubuntu 24 under VirtualBox, Lazarus 4.8 with FPC 3.2.2, **gtk2 on a real Xwayland
-session**. All five gates green there -- `lazbuild -B` clean at `-vewn`, 183 checks,
+session**. All five gates green there -- `lazbuild -B` clean at `-vewn`, 185 checks,
 `--selftest` 0 under a timeout with every form constructed under gtk2, generated
 tables current -- and then the same lane driven with `tools/lane/`:
 
@@ -166,13 +166,24 @@ Two differences from Windows, both honest rather than defects:
   teardown is reached from the process side, and the transcript ends
   `type something: ` / `> killed` with nothing left listening.
 
-One thing worth a look later, seen only here because `ss` shows it and `netstat` does
-not: while a session is live the **debuggee holds the editor's listening socket too**
-(`users:(("phosphor",pid=...,fd=18),("phosphoride",pid=...,fd=18))`). `TProcess` does
-not set close-on-exec on it, so the child inherits the listener it was supposed to
-connect to. It costs nothing today -- the child dies with the session and a Phosphor
-program cannot reach a file descriptor -- but a listener the debuggee could `accept`
-on is not the design.
+One thing found here and fixed the same day, seen only because `ss` shows it and
+`netstat` does not: while a session was live the **debuggee held the editor's
+listening socket too**.
+
+```
+before:  users:(("phosphor",pid=5381,fd=18),("phosphoride",pid=5343,fd=18))
+after:   users:(("phosphoride",pid=10350,fd=18))
+```
+
+The editor listens and then spawns, and `TProcess` passes on every descriptor that
+is open at that moment, so the debuggee was handed a listener it was only ever meant
+to connect to. `MakeSocketPrivate` in `udebugtransport.pas` now clears it on the
+listener and on the accepted peer, `TDebugTransport.HandlesArePrivate` is the
+invariant as a boolean, and `phosphoridetest` pins it on both platforms -- 185
+checks now. Windows has the same hole and cannot show it: `netstat` reports one
+owning PID per socket, so the fix there rests on `TProcess` setting
+`InheritHandles := True` and on the flag reading back cleared, not on a picture of
+the leak.
 
 ---
 

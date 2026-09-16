@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 183 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 185 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -172,6 +172,19 @@ the bar.
   no symptom, found on 2026-09-10 by grepping for callers of a method that had none.
   The set lives in its own LCL-free unit precisely so that `phosphoridetest.lpr` can
   pin every boundary case without a window.
+- **No socket of ours travels into a child.** The editor opens the debug
+  listener and THEN spawns the debuggee, so a descriptor that is merely open at
+  that moment is inherited by the very program being debugged. Measured on
+  2026-09-16 with `ss -ltnp`, session live:
+  `users:(("phosphor",pid=5381,fd=18),("phosphoride",pid=5343,fd=18))` -- the
+  debuggee holding a listener it was only meant to connect to, and could have
+  accepted on. `MakeSocketPrivate` (`core/udebugtransport.pas`) clears it on the
+  listener and on the accepted peer: `FD_CLOEXEC` on Unix,
+  `SetHandleInformation` on Windows, where `TProcess` sets `InheritHandles :=
+  True` (`processbody.inc:258`) and `netstat` cannot show the problem because it
+  reports one owning PID. `TDebugTransport.HandlesArePrivate` is the invariant
+  as a boolean, and `phosphoridetest` pins it -- because deleting one line in
+  `Listen` is otherwise a silent regression with a symptom only `ss` can see.
 - **Every path comparison goes through `CompareFilenames`** (`LazFileUtils`). It
   already knows that Windows is case-insensitive and Linux is not, which is one fewer
   platform rule spelled out by hand. Three sites depend on it:

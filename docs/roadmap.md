@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 183 checks, exit code 0.
+- `bin\phosphoridetest` green: 185 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -456,11 +456,11 @@ other repository any more. Two things found on 2026-09-16 belong with it:
   `setBreakpoints lines:[1]` on any file answers `lines:[1]`.
 - **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
   because a mark needs the `TImageList` of item 13.
-- **The debuggee inherits the editor's listening socket.** `ss` on Linux shows both
-  processes holding it while a session is live, because `TProcess` does not set
-  close-on-exec. Harmless today -- the child dies with the session and a Phosphor
-  program cannot reach a file descriptor -- but a listener the debuggee could
-  `accept` on is not the design. One FD_CLOEXEC in `udebugtransport.pas`.
+- ~~The debuggee inherits the editor's listening socket.~~ **Fixed 2026-09-16**,
+  the day it was found, and measured on both sides of the change with `ss -ltnp`.
+  Left struck rather than deleted because the reason it was invisible for so long
+  is worth keeping: `netstat` reports one owning PID per socket, so on Windows
+  there was nothing to see.
 
 
 **What.** A list of frames. The decoding is already written and tested: `TPdbpFrames`

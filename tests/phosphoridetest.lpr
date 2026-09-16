@@ -597,6 +597,15 @@ begin
       exactly what has to go on the child's command line. }
     Check('a listener binds an ephemeral port and can say which', port <> 0);
 
+    { NOT COSMETIC, AND NOT VISIBLE ANY OTHER WAY. The editor spawns the debuggee
+      AFTER this, so a listener still in the inherit set is handed to the very
+      program being debugged -- `ss -ltnp` showed exactly that on 2026-09-16,
+      both processes on the same descriptor, and netstat on Windows cannot show
+      it at all because it reports one owning PID. A boolean is asked for here
+      rather than a handle: the invariant is the point. }
+    Check('the listener is out of the set a child would inherit',
+          T.HandlesArePrivate);
+
     peer := fpSocket(AF_INET, SOCK_STREAM, 0);
     Check('the debuggee side opens a socket', peer >= 0);
     FillChar(addr{%H-}, SizeOf(addr), 0);
@@ -608,6 +617,10 @@ begin
 
     Pump(T, sink, 4);
     Check('the connection is reported on the main thread', sink.Linked);
+    { And the accepted socket in its own right: POSIX does not pass the flag
+      across accept, and the next process this editor starts -- a --version probe
+      from Preferences, say -- would otherwise carry the live debug connection. }
+    Check('and so is the accepted connection', T.HandlesArePrivate);
 
     { (a) two whole frames in one write }
     s := '{"a":1}' + #10 + '{"b":2}' + #10;
