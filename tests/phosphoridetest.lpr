@@ -50,7 +50,12 @@ uses
   { The outline scans a buffer that is a string literal in this file: ten
     definitions and every legal spelling that breaks the obvious scanner, with
     no fixture on disk to keep in step with it. }
-  uphosphoroutline;
+  uphosphoroutline,
+  { Only for the two free functions that mark a handle close-on-exec. A
+    TPhosphorRunner cannot be constructed here -- Create builds a TTimer and this
+    program deliberately never makes a widgetset -- and it does not need to be:
+    a pipe this program opens itself asks the same question. }
+  uphosphorrun, Pipes;
 
 var
   Checks: Integer = 0;
@@ -1097,6 +1102,64 @@ begin
             Word('println', I));
 end;
 
+{ ------------------------------------------ handles a later child inherits -- }
+
+procedure TestHandlePrivacy;
+var
+  HRead, HWrite: THandle;
+begin
+  Group('uphosphorrun: a handle the NEXT child must not inherit');
+
+  { WHY THIS IS A CHECK AND NOT A COMMENT. With one child already running, the
+    next one this editor spawns inherits the first one's stdin WRITE end on
+    Unix, because FPC creates a pipe with a bare AssignPipe -- `pipe()`, no
+    CLOEXEC (fcl-process unix/pipes.inc:20-24) -- and TProcess forks with
+    InheritHandles True (processbody.inc:258). After that, closing this
+    process's copy delivers NO end-of-input, for as long as that second child
+    lives. The symptom is a REPL that will not end and a phosphor left behind;
+    there is no error anywhere. Deleting the three lines in Start that prevent
+    it would otherwise be a silent regression.
+
+    It is the same defect udebugtransport's MakeSocketPrivate exists for, met a
+    second time on a different kind of descriptor. }
+  if not CreatePipeHandles(HRead, HWrite) then
+  begin
+    Check('a pipe could be opened for the handle checks', False);
+    Exit;
+  end;
+  try
+    {$IFDEF UNIX}
+    { THE DEFECT, stated as a check: this is what FPC hands the program. }
+    Check('on Unix a fresh pipe end is NOT private', not HandleIsPrivate(HRead));
+    {$ENDIF}
+    {$IFDEF WINDOWS}
+    { And what it hands it on Windows, where CreatePipe is called with
+      piNonInheritablePipe (fcl-process win/pipes.inc:19-35). Nothing to repair,
+      and the call still happens in Start so that the two platforms answer the
+      same question the same way. }
+    Check('on Windows a fresh pipe end is already private', HandleIsPrivate(HRead));
+    {$ENDIF}
+
+    Check('marking one succeeds', MakeHandlePrivate(HRead));
+    Check('and it reads back private', HandleIsPrivate(HRead));
+    Check('marking it twice is still fine', MakeHandlePrivate(HRead));
+    Check('the other end is untouched by that',
+          HandleIsPrivate(HWrite) = HandleIsPrivate(HWrite));
+    Check('and marking it works too', MakeHandlePrivate(HWrite));
+    Check('so both ends are private now',
+          HandleIsPrivate(HRead) and HandleIsPrivate(HWrite));
+  finally
+    FileClose(HRead);
+    FileClose(HWrite);
+  end;
+
+  { A handle nobody opened is refused rather than acted on. 0 is the value a
+    TProcess stream has before Execute, which is exactly when a careless caller
+    would ask. }
+  Check('handle 0 cannot be marked', not MakeHandlePrivate(0));
+  Check('and is not private either', not HandleIsPrivate(0));
+end;
+
 { ------------------------------------------------------------ breakpoints --- }
 
 procedure TestBreakpoints;
@@ -1532,6 +1595,7 @@ begin
   TestCompletion;
   TestOutline;
   TestFindInFiles;
+  TestHandlePrivacy;
   TestProtocol;
   TestTransport;
   TestSession;

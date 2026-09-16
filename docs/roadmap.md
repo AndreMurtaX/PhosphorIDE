@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 400 checks, exit code 0.
+- `bin\phosphoridetest` green: 409 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -845,10 +845,10 @@ visibly partial list into one that reads as complete and is not.
 **What.** A pane that runs `phosphor` with no arguments and feeds it a line at a time. A bare
 `phosphor` is a REPL whose variables and functions persist across lines, which is the one
 thing Run cannot offer: Run hands the host a **file**
-(`EnsureSavedForRun`, `src/umainform.pas:715`) and every run starts from nothing.
+(`EnsureSavedForRun`, `src/umainform.pas:1141`) and every run starts from nothing.
 
 **Most of it exists.** `TPhosphorRunner` already spawns, reads both pipes on their own
-threads, and writes to the child's stdin (`SendInput`, `src/core/uphosphorrun.pas:418`); the
+threads, and writes to the child's stdin (`SendInput`, `src/core/uphosphorrun.pas:773`); the
 input box beside the output pane already feeds `INPUT` and `LINE INPUT`; and `uphosphormsg`
 already recognises the REPL's own diagnostic shape -- `error: <msg>`, no prefix, no path, no
 line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
@@ -856,11 +856,11 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
 **Two things will bite, and both are known now rather than after the fact.**
 
 - **The prompt arrives, but it is not a line, and the pane must know that.** The REPL
-  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:1143`), and the
+  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:3017`), and the
   runner already handles that case: `DrainTimer` counts drains in which a stream produced
   nothing and `FlushPrompt` emits the unterminated tail after two of them
-  (`src/core/uphosphorrun.pas:354-365`), marked `ACompleteLine=False`; `RunnerOutput`
-  (`src/umainform.pas:906`) already appends such a fragment to the pane and already
+  (`src/core/uphosphorrun.pas:667-681`), marked `ACompleteLine=False`; `RunnerOutput`
+  (`src/umainform.pas:1345`) already appends such a fragment to the pane and already
   refuses to hand it to `uphosphormsg`, because a parser fed half of
   `phosphor: x.bas:2: unexpected token` finds no error at all. So the prompt will arrive,
   about 80 ms late, which is invisible. What is untested is the whole path: no check and
@@ -870,8 +870,26 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
   executable. That is a recorded trap in the Phosphor repository, and it weighs more here
   because the editor starts the process on the user's behalf. The pane must `CloseInput` and
   then terminate the child when the pane closes, when the editor closes, and when the host
-  path changes -- and `FormCloseQuery` (`src/umainform.pas:359`) must count a REPL child the
+  path changes -- and `FormCloseQuery` (`src/umainform.pas:693`) must count a REPL child the
   way it already counts a run.
+
+  **AND `CloseInput` DID NOT CLOSE ANYTHING.** Found on 2026-09-16 while reading for this
+  item: it called `TPipeWriterThread.RequestClose`, which ends that thread's LOOP and
+  nothing else -- the child's stdin handle stayed open for the life of the runner. So the
+  one way a REPL is meant to end did not work, and nothing noticed because no feature had
+  ever asked for end-of-input. Repaired in the same increment, and the repair has to wait a
+  tick: the writer thread blocks inside `WriteBuffer` and does not look at its flag again
+  until that write returns, so the handle is closed from `DrainTimer` once the thread is
+  `Finished` -- the same question that method already asks of the two readers.
+
+  **AND THE PIPES WERE INHERITED BY THE NEXT CHILD.** The second hazard this item created
+  rather than found: with a REPL live, every Run, Check, Compile, Pack and debuggee forked
+  afterwards inherited the REPL's stdin WRITE end on Unix, because FPC opens a pipe with a
+  bare `AssignPipe` -- `pipe()`, no `FD_CLOEXEC` (`fcl-process unix/pipes.inc:20-24`) --
+  and `TProcess` forks with `InheritHandles` True (`processbody.inc:258`). Closing this
+  process's copy then delivers no end-of-input at all, for as long as that child lives.
+  `MakeHandlePrivate` is the repair and it is `MakeSocketPrivate` under another name, on a
+  different kind of descriptor.
 
 **Done when.** `println 6*7` shows 42; `x = 1` then `println x` shows 1, which is the
 persistence that justifies the pane; a multi-line block shows the `     ...> ` continuation

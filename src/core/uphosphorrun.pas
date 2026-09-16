@@ -48,6 +48,12 @@ unit uphosphorrun;
 interface
 
 uses
+  {$IFDEF WINDOWS}
+  Windows,      // SetHandleInformation; see MakeHandlePrivate
+  {$ENDIF}
+  {$IFDEF UNIX}
+  BaseUnix,     // FpFcntl and F_SetFd, same reason
+  {$ENDIF}
   Classes, SysUtils, ExtCtrls, Process, UTF8Process, syncobjs;
 
 type
@@ -129,6 +135,11 @@ type
       whose first line is a LINE INPUT. }
     FIdleOut: Integer;
     FIdleErr: Integer;
+    { CloseInput was asked for and the writer thread has not finished yet; and
+      the handle has since been closed. Two flags rather than one because
+      "asked" and "done" are different answers to the caller. }
+    FCloseInputPending: Boolean;
+    FInputClosed: Boolean;
 
     FKilled: Boolean;
     FExitCode: Integer;
@@ -146,6 +157,8 @@ type
       const AChunk: String; AFlush: Boolean);
     procedure Cleanup;
     function GetRunning: Boolean;
+    function GetInputOpen: Boolean;
+    function GetHandlesArePrivate: Boolean;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -176,12 +189,28 @@ type
 
     { Close the child's standard input. A program blocked in INPUT sees end of
       input; INPUT reads as empty from then on. }
+    { Ask the child to see end-of-input. It does NOT close the handle here: the
+      writer thread may be parked inside a blocking WriteBuffer, and closing the
+      stream under it is a free while a worker is using it. The close happens on
+      the next drain tick, once that thread has actually finished -- so this is a
+      REQUEST, and InputOpen is how a caller knows it has been granted. }
     procedure CloseInput;
 
     { Kill the child. On Windows this is TerminateProcess, which does not walk a
       process tree -- the phosphor host spawns nothing, so there is no tree, but a
       packed executable that shells out would leave its own children behind. }
     procedure Kill;
+
+    { False once the child's stdin has actually been closed. A caller that offers
+      "end the session" twice uses this to tell the first press from the second:
+      the first asks, and if nothing happens the second may insist. }
+    property InputOpen: Boolean read GetInputOpen;
+
+    { Were this run's three pipe handles taken out of the set a LATER child
+      inherits? Only the test asks. It is a property and not a hidden detail
+      because deleting the one line in Start that does it is otherwise a silent
+      regression whose only symptom is a REPL that will not end. }
+    property HandlesArePrivate: Boolean read GetHandlesArePrivate;
 
     property Running: Boolean read GetRunning;
     property ExitCode: Integer read FExitCode;
@@ -191,6 +220,16 @@ type
     property OnFinished: TRunFinishedEvent read FOnFinished write FOnFinished;
     property OnStartFailed: TRunFailedEvent read FOnStartFailed write FOnStartFailed;
   end;
+
+{ Take one handle out of the set a LATER child process inherits, and read the
+  flag back.
+
+  Free functions rather than methods because `tests/phosphoridetest.lpr` has to
+  be able to call them, and it cannot construct a TPhosphorRunner: Create builds
+  a TTimer, and that program links the LCL without ever creating a widgetset.
+  A pipe it opens itself is all they need. }
+function MakeHandlePrivate(AHandle: THandle): Boolean;
+function HandleIsPrivate(AHandle: THandle): Boolean;
 
 implementation
 
@@ -339,6 +378,89 @@ begin
   end;
 end;
 
+{ ------------------------------------------------------- close-on-exec ------ }
+
+{$IFDEF UNIX}
+const
+  { The same constant udebugtransport declares, for the same reason: FPC's
+    linux/ostypes.inc defines F_SetFd and does NOT define FD_CLOEXEC. Spelled
+    this way so that on a BSD, where the RTL's own constant IS in scope, this
+    declaration shadows nothing. }
+  CloseOnExecFlag = 1;
+{$ENDIF}
+
+{ Take one handle out of the set a LATER child inherits.
+
+  THIS IS THE SECOND PLACE THIS REPOSITORY HAS NEEDED IT, and the first was a
+  socket (udebugtransport's MakeSocketPrivate): the editor's own descriptors
+  travelling into a program the editor started. Here they are the three pipe
+  ends of a child that is still running when the next one is spawned.
+
+  On Unix it is the repair and not a tidiness measure. FPC creates a pipe with
+  a bare `AssignPipe`, which is `pipe()` with no CLOEXEC
+  (fcl-process unix/pipes.inc:20-24), and TProcess forks with InheritHandles
+  True (processbody.inc:258). So with one child already live, the NEXT child
+  inherits the first one's stdin WRITE end -- and after that, closing this
+  process's copy delivers no end-of-input at all, for as long as that second
+  child lives. A REPL that is ended while a program is running would simply not
+  end, silently, and the editor would leave it behind.
+
+  On Windows there is nothing to repair and the call still happens: FPC creates
+  the pair with `piNonInheritablePipe` (win/pipes.inc:19-35) and makes only the
+  child's own end inheritable, so this is an assertion of what is already true
+  rather than a change -- and an assertion is what keeps the two platforms'
+  answers to HandlesArePrivate the same.
+
+  BEST EFFORT, and the result is returned rather than raised on, exactly as
+  MakeSocketPrivate does: a handle that could not be marked still works, and
+  failing a run over a hygiene measure would trade a feature the user asked for
+  against one they did not. }
+function MakeHandlePrivate(AHandle: THandle): Boolean;
+begin
+  Result := False;
+  if AHandle = 0 then
+    Exit;
+  {$IFDEF WINDOWS}
+  Result := SetHandleInformation(AHandle, HANDLE_FLAG_INHERIT, 0);
+  {$ENDIF}
+  {$IFDEF UNIX}
+  if LongInt(AHandle) < 0 then
+    Exit;
+  Result := FpFcntl(LongInt(AHandle), F_SetFd, CloseOnExecFlag) = 0;
+  {$ENDIF}
+end;
+
+{ Read the flag back. Only the test asks; it is here rather than there so that
+  the two platforms' answers sit next to the two platforms' questions. }
+function HandleIsPrivate(AHandle: THandle): Boolean;
+{$IFDEF WINDOWS}
+var
+  flags: DWord;
+{$ENDIF}
+{$IFDEF UNIX}
+var
+  flags: LongInt;
+{$ENDIF}
+begin
+  Result := False;
+  if AHandle = 0 then
+    Exit;
+  {$IFDEF WINDOWS}
+  flags := 0;
+  if not GetHandleInformation(AHandle, @flags) then
+    Exit;
+  Result := (flags and HANDLE_FLAG_INHERIT) = 0;
+  {$ENDIF}
+  {$IFDEF UNIX}
+  if LongInt(AHandle) < 0 then
+    Exit;
+  flags := FpFcntl(LongInt(AHandle), F_GetFd);
+  if flags < 0 then
+    Exit;
+  Result := (flags and CloseOnExecFlag) <> 0;
+  {$ENDIF}
+end;
+
 { ---------------------------------------------------------------- the runner - }
 
 constructor TPhosphorRunner.Create(AOwner: TComponent);
@@ -377,6 +499,19 @@ begin
   inherited Destroy;
 end;
 
+function TPhosphorRunner.GetInputOpen: Boolean;
+begin
+  Result := (FProcess <> nil) and (not FInputClosed);
+end;
+
+function TPhosphorRunner.GetHandlesArePrivate: Boolean;
+begin
+  Result := (FProcess <> nil) and
+            HandleIsPrivate(FProcess.Input.Handle) and
+            HandleIsPrivate(FProcess.Output.Handle) and
+            HandleIsPrivate(FProcess.Stderr.Handle);
+end;
+
 function TPhosphorRunner.GetRunning: Boolean;
 begin
   { The drain timer counts. A child can exit up to one tick before DrainTimer
@@ -412,6 +547,8 @@ begin
   FPendingErr := '';
   FIdleOut := 0;
   FIdleErr := 0;
+  FCloseInputPending := False;
+  FInputClosed := False;
 
   FCommandLine := AExe;
   for I := Low(AArgs) to High(AArgs) do
@@ -454,6 +591,14 @@ begin
       Exit;
     end;
   end;
+
+  { BEFORE THE THREADS, and before anything else can be spawned. Three handles
+    this process now holds that the NEXT child must not inherit -- see
+    MakeHandlePrivate for what happens on Unix when it does. The results are
+    ignored at the call site for the reason stated there. }
+  MakeHandlePrivate(FProcess.Input.Handle);
+  MakeHandlePrivate(FProcess.Output.Handle);
+  MakeHandlePrivate(FProcess.Stderr.Handle);
 
   FOut := TPipeReaderThread.Create(Self, FProcess.Output, rsStdOut);
   FErr := TPipeReaderThread.Create(Self, FProcess.Stderr, rsStdErr);
@@ -547,6 +692,26 @@ begin
   ReadersDone := ((FOut = nil) or FOut.Finished) and ((FErr = nil) or FErr.Finished);
   ProcDone := (FProcess = nil) or (not FProcess.Running);
 
+  { THE GRANT OF A CloseInput, and the gate is TThread.Finished rather than
+    Terminated: the RTL sets Finished after Execute has RETURNED
+    (classes.inc, ThreadProc), so no WriteBuffer can still be in flight on the
+    stream about to be freed. It is the same question DrainTimer already asks of
+    the two readers one line above, asked of the writer. }
+  if FCloseInputPending and (FIn <> nil) and FIn.Finished then
+  begin
+    FCloseInputPending := False;
+    FInputClosed := True;
+    if FProcess <> nil then
+      try
+        FProcess.CloseInput;
+      except
+        { Already closed, or the child is gone. Either way the child will not be
+          waiting on it. }
+        on E: Exception do
+          ;
+      end;
+  end;
+
   FLock.Acquire;
   try
     ChunkOut := FPendingOut;
@@ -617,10 +782,23 @@ end;
 
 procedure TPhosphorRunner.CloseInput;
 begin
-  { Drains what is queued first, then closes. Closing underneath a queued line
-    would lose the answer the user has already typed. }
-  if FIn <> nil then
-    FIn.RequestClose;
+  { ASKS. Does not close.
+
+    Drains what is queued first, because closing underneath a queued line would
+    lose the answer the user has already typed -- and then waits for the writer
+    thread to be FINISHED before touching the handle, because that thread blocks
+    inside WriteBuffer and does not look at its Closing flag again until the
+    write returns. Closing the stream from here would free it under a worker.
+
+    The grant is in DrainTimer, one tick later at most, and InputOpen says
+    whether it has happened. Before 2026-09-16 this method closed nothing at
+    all: RequestClose only ends the thread's LOOP, and the child's stdin handle
+    stayed open for the life of the runner -- so a child waiting on end-of-input
+    waited forever, which is the whole of how a REPL is supposed to end. }
+  if (FIn = nil) or (FProcess = nil) or FInputClosed or FCloseInputPending then
+    Exit;
+  FCloseInputPending := True;
+  FIn.RequestClose;
 end;
 
 procedure TPhosphorRunner.Kill;
