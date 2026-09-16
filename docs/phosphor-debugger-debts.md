@@ -11,7 +11,16 @@ PDBP to the host with no editor involved** (`tools/lane/pdbp-probe.py`), and the
 mechanism of each was then read in the Phosphor sources rather than guessed. Neither
 changes the wire format: PDBP is unchanged and both ends stay conformant.
 
-Nothing here has been applied.
+**BOTH FIXED on 2026-09-16, in Phosphor `fce3db1`**, the same day they were written
+up, and measured from this side afterwards: a breakpoint on the first executed
+statement fires once, and a three-deep recursion reports `4, 7, 7, 7, 11` where it
+used to report `4, 0, 0, 0, 0`. The editor needed no change for either.
+
+The document is kept because the MECHANISM of each is worth more than the fact that
+they are gone, and because two of the three things it got right are the kind that
+recur: a mechanism manufactured for internal bookkeeping quietly consuming something
+user-visible, and a limitation recorded in prose outliving the reason for it by a
+year. The ask below is unedited.
 
 ---
 

@@ -86,6 +86,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 
   documented, and it fails by returning `""`, so a full Output pane reads as
   blank. `gettext.ps1` sends `WM_GETTEXT` explicitly.
 
+**`-KeepOpen` leaves a binary locked, and the next build says something else.**
+A phosphoride left running holds `bin\phosphoride.exe` open, and lazbuild then fails
+with `Error: (9003) Can't create object file ... (error code: 5)` and
+`Fatal: Can't create executable` -- which reads as a compiler problem and is an
+access-denied on a file somebody is still using. Paid for on 2026-09-16, one probe
+run earlier. If a build fails that way, look for a process before looking at the code.
+
 Both drivers close the editor **and its `phosphor` child** when they finish.
 Killing the editor does not kill the program it was debugging -- one stopped at a
 breakpoint simply loses the only thing that was going to tell it to continue -- and

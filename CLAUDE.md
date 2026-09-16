@@ -309,19 +309,30 @@ is what made the pane a selection rather than a rewrite; and both panes are **em
 whenever the state is not `dsStopped`**, because a stack and a set of locals describe a
 program standing still, and the host refuses to answer about either while one runs.
 
-Three engine-side facts that the editor cannot paper over, all measured on 2026-09-16
-by speaking PDBP to the host directly:
+Two debts this repository found by DRIVING the host, reported with their mechanism
+in [`docs/phosphor-debugger-debts.md`](docs/phosphor-debugger-debts.md), and **both
+fixed in Phosphor on 2026-09-16** (`fce3db1`):
 
-- **A breakpoint on the first statement is reported installed and never fires.**
-  `setBreakpoints` with `lines:[1]` answers `lines:[1]`; the program then runs to
-  completion. The editor believes the host, because the installed set is the only
-  verified/unverified marker the protocol has -- so line 1 is drawn armed and behaves
-  dead. This belongs in Phosphor.
-- **Only the innermost frame carries a line.** `stackTrace` answers every caller with
-  `line: 0`, because the engine does not record a call site per frame. The pane leaves
-  those cells empty rather than printing `0` -- which would read as a location -- and a
-  double-click on such a row does nothing. Finding the function's header by searching
-  the text for its name is exactly the invented location `GotoSource` warns about.
+- ~~A breakpoint on the first statement is reported installed and never fires.~~ It
+  was never "line 1" -- it was the first EXECUTED statement, and a file opening with a
+  `rem` lost line 2 instead, which is why it survived a year: every fixture anyone
+  writes has a comment at the top. Three sites each right alone composed into it.
+- ~~Only the innermost frame carries a line.~~ The data was already recorded --
+  `TCallFrame.CallerStmtPC` -- and the repair was one accessor plus an off-by-one.
+
+Both are left struck rather than deleted, because **the editor needed no change for
+either fix**: the Line cells filled themselves and the once-per-session note about
+callers having no line simply stopped appearing. That is the test of whether a
+two-repository contract was drawn in the right place, and it is worth being able to
+point at.
+
+The code that handled the absent answers **stays**. A frame reporting `line: 0` is
+still a legal answer from a conformant host, and `BreakpointIsArmed` still believes
+the installed set. Neither is dead code; both are the editor being right about a
+protocol rather than about one implementation of it.
+
+One engine-side fact that remains, measured the same way:
+
 - **An exception stop does not linger.** The host emits
   `{"event":"stopped","reason":"exception","line":4,"text":"division by zero"}` and
   closes the socket in the same breath, so the read-only gating around a terminal stop

@@ -1863,11 +1863,16 @@ begin
         Item := ListStack.Items.Add;
         Item.Caption := IntToStr(AFrames[I].Index);
         Item.SubItems.Add(AFrames[I].Name);
-        { A LINE OF 0 IS NOT LINE ZERO, IT IS NO LINE. Measured against the real
-          host on 2026-09-16: only the innermost frame carries one, and every
-          caller comes back with line 0 because the engine does not record a
-          return site per frame. Printing `0` would read as a location; an empty
-          cell reads as what it is. }
+        { A LINE OF 0 IS NOT LINE ZERO, IT IS NO LINE. Printing `0` would read as
+          a location; an empty cell reads as what it is.
+
+          This was written because the host answered 0 for every caller -- it
+          recorded no call site per frame -- and it is KEPT although Phosphor
+          fixed that the same afternoon (`fce3db1`). A frame with no line is
+          still a legal answer from a conformant host, and this editor is right
+          about the protocol rather than about one implementation of it. The
+          whole of what the fix changed on this side is that the cells now have
+          something to put in them. }
         if AFrames[I].Line > 0 then
           Item.SubItems.Add(IntToStr(AFrames[I].Line))
         else

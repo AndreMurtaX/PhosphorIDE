@@ -130,7 +130,7 @@ Roadmap item 10, driven on both platforms against a three-deep recursion
 | | |
 | --- | --- |
 | the frames | five rows -- `down` four times and `(main)` -- captioned `Call Stack (5)` |
-| the line | shown for frame 0 only; the callers' cells are empty, because the host answers `line: 0` for every one of them |
+| the line | shown for frame 0 only at the time, because the host answered `line: 0` for every caller; **since Phosphor `fce3db1`, later the same day, every frame carries its own call site** and the cells fill themselves |
 | selection | picking frame 3 asks the host for THAT frame's variables: `n = 3`, and the tab reads `Variables (3) in down #3` |
 | double-click | frame 0 moves the caret back from line 12 to line 4; a frame with no line does nothing, deliberately |
 | resuming | both panes empty the moment the state leaves `dsStopped`, verified on a program blocked in `line input` with the session still live |
@@ -145,16 +145,28 @@ itself when the program is not stopped.** Same defect as the current-line stripe
 that outlived its stop, one layer out, and it would have been just as invisible --
 the values would simply have been from a moment that had passed.
 
-### What the host still owes
+### What the host owed, and paid the same day
 
 Measured on 2026-09-16 by speaking PDBP to `phosphor debug --port` directly, with no
-editor involved. Both are written up with their mechanism, read in the Phosphor sources
-rather than guessed, in [`phosphor-debugger-debts.md`](phosphor-debugger-debts.md):
+editor involved, written up with their mechanism in
+[`phosphor-debugger-debts.md`](phosphor-debugger-debts.md), and **both fixed in
+Phosphor `fce3db1` that afternoon**:
 
-- **A breakpoint on the first statement is reported installed and never fires.**
-  `setBreakpoints lines:[1]` answers `lines:[1]`; the program runs to completion. This
-  undercuts step 3 in the one case the editor cannot detect — the installed set is the
-  only marker the protocol has, so line 1 is drawn armed and behaves dead.
+- ~~A breakpoint on the first statement is reported installed and never fires.~~ It
+  was never line 1: it was the first EXECUTED statement, and this repository's own
+  fixture opens with a `rem`, so it was line 2 that could not be stopped on. Every
+  fixture anyone writes has a comment at the top, on both sides of the protocol, which
+  is how it survived a year and 52 assertions.
+- ~~`stackTrace` gives a line only to the innermost frame.~~ The data was already on
+  the frame; the repair was one accessor and an off-by-one.
+
+**Neither fix needed a line of change here.** The Line cells filled themselves, the
+once-per-session note about callers having no line stopped appearing, and a caller can
+now be double-clicked. That is what a contract drawn in the right place looks like,
+and it is the strongest evidence in this file that writing the wire format first — before either end existed to argue with — was worth what it cost.
+
+One that stands:
+
 - **An exception stop does not linger.** The `stopped/exception` event and the socket
   close arrive together, so the editor's read-only gating around a terminal stop is
   correct and unobservable. It was also, before this commit, being thrown away:

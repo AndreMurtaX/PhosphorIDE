@@ -1,0 +1,20 @@
+# The caller jump under gtk2. Bottom-relative, for the reason
+# steps-stack-linux.txt gives: mutter gives this window a different height on
+# different runs. Row 4 -- (main) -- is 43 up from the bottom edge.
+raise
+key ctrl+g
+wait 700
+key ctrl+a
+type 4
+key Return
+wait 500
+key F5
+wait 600
+key shift+F9
+wait 5000
+bot 191 184
+wait 700
+shot 31-call-stack-with-lines
+bot2 100 43
+wait 900
+shot 32-jumped-to-main

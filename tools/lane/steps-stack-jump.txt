@@ -1,0 +1,17 @@
+# Now that every frame carries a line, a CALLER can be jumped to -- which is what
+# a call-stack pane is mostly for, and what the host owed until 2026-09-16.
+# Double-click (main) and the caret must land on line 11, the outermost call.
+key ^g
+wait 700
+type 4{ENTER}
+wait 500
+key {F5}
+wait 500
+key +{F9}
+wait 5000
+at 161 561
+wait 600
+dblclick 100 667
+wait 900
+shot 31-jumped-to-main
+memo

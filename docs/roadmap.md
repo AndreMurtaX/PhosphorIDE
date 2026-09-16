@@ -449,31 +449,25 @@ stopped; no code path in the pane formats a number.
 **DONE 2026-09-16**, driven on both platforms and recorded in
 `docs/debugger-lane.md`. Three-deep recursion shows five rows including `(main)`,
 double-click moves the caret, selecting a frame drives the variables pane by index,
-and both panes empty when the program resumes. One thing the item asked for cannot
-be done and is now a Phosphor debt: **only the innermost frame carries a line**, so
-the callers cannot be jumped to.
+and both panes empty when the program resumes. The one thing the item asked for that
+the host could not do -- a line on every frame, so a caller can be jumped to -- was
+reported to Phosphor and fixed there the same day, and needed no change here.
 
 **Was: next, and reachable today** — items 3 to 9 are done, so nothing is waiting on the
 other repository any more. Two things found on 2026-09-16 belong with it:
 
-- **Phosphor owes a fix**: a breakpoint on the **first statement** is answered as
-  installed by `setBreakpoints` and then never fires. The editor cannot detect this —
-  the installed set is the protocol's only verified/unverified marker — so the gutter
-  draws line 1 armed and the program runs past it. Reproduce by speaking PDBP directly:
-  `setBreakpoints lines:[1]` on any file answers `lines:[1]`.
+- ~~Phosphor owes a fix: a breakpoint on the first statement is answered as installed
+  and never fires.~~ **Fixed 2026-09-16** in Phosphor `fce3db1`. It was the first
+  EXECUTED statement rather than line 1, which is why it survived a year: every
+  fixture anyone writes opens with a comment. Reproduce the before-state with
+  `tools/lane/first-statement-probe.py`.
 - **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
   because a mark needs the `TImageList` of item 13.
-- **Phosphor owes a second fix** (both are written up with their mechanism, their
-  reproduction and the proposed patch sites in
-  [`phosphor-debugger-debts.md`](phosphor-debugger-debts.md)): `stackTrace` answers
-  every frame but the innermost with `line: 0`. The engine does not record a call site per frame, so a call-stack
-  pane can list the callers and cannot take you to them. Reproduce with
-  `tools/lane/pdbp-probe.py` against a recursive program.
-- ~~The debuggee inherits the editor's listening socket.~~ **Fixed 2026-09-16**,
-  the day it was found, and measured on both sides of the change with `ss -ltnp`.
-  Left struck rather than deleted because the reason it was invisible for so long
-  is worth keeping: `netstat` reports one owning PID per socket, so on Windows
-  there was nothing to see.
+- ~~Phosphor owes a second fix: `stackTrace` answers every frame but the innermost
+  with `line: 0`.~~ **Fixed 2026-09-16** in the same commit. The data was already on
+  the frame; the repair was one accessor and an off-by-one. Both are written up in
+  [`phosphor-debugger-debts.md`](phosphor-debugger-debts.md), which is kept because
+  the mechanism of each is worth more than the fact that they are gone.
 
 
 **What.** A list of frames. The decoding is already written and tested: `TPdbpFrames`

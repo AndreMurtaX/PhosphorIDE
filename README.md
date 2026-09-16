@@ -260,10 +260,11 @@ Double-click a frame to go to it. Both panes empty themselves the moment the pro
 resumes: they describe a program standing still, and a photograph presented as a live
 view is the same defect as a current-line marker that outlives its stop.
 
-One limitation that is the host's and not the editor's: **only the innermost frame
-carries a line**, because the engine does not record a call site per frame. The callers
-are listed without one and cannot be jumped to, which the pane says rather than
-guessing at a location.
+Until 2026-09-16 only the innermost frame carried a line, because the engine recorded
+no call site per frame; the callers were listed without one and could not be jumped to.
+That was fixed in Phosphor the day it was reported, and **this editor needed no change
+for it** -- the Line cells filled themselves. The handling for a frame that reports no
+line is still here, because a conformant host is allowed to answer that way.
 
 What is **not** built: no watches and no evaluate -- `capabilities.evaluate` is false on
 every host, and an expression evaluator in here would be an interpreter in here.
