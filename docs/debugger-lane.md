@@ -122,6 +122,29 @@ Two more were found by driving rather than by reading, and are recorded as traps
 menu bar (**Alt+T killed the running program** instead of opening Tools), and
 `Process.MainWindowHandle` is not the form.
 
+### After the lane: the call stack pane, 2026-09-16
+
+Roadmap item 10, driven on both platforms against a three-deep recursion
+(`tools/lane/deep.bas`, stopping at the bottom of `down`):
+
+| | |
+| --- | --- |
+| the frames | five rows -- `down` four times and `(main)` -- captioned `Call Stack (5)` |
+| the line | shown for frame 0 only; the callers' cells are empty, because the host answers `line: 0` for every one of them |
+| selection | picking frame 3 asks the host for THAT frame's variables: `n = 3`, and the tab reads `Variables (3) in down #3` |
+| double-click | frame 0 moves the caret back from line 12 to line 4; a frame with no line does nothing, deliberately |
+| resuming | both panes empty the moment the state leaves `dsStopped`, verified on a program blocked in `line input` with the session still live |
+
+The rule that made this cheap was written four weeks of work earlier, in the
+variables pane: **ask by frame index even when there is only frame 0.** The answer
+already carries the frame it belongs to, so the pane needed no rewriting when a
+second frame became selectable -- only a selection to drive it.
+
+The rule that came out of it: **a pane that describes a stopped program must empty
+itself when the program is not stopped.** Same defect as the current-line stripe
+that outlived its stop, one layer out, and it would have been just as invisible --
+the values would simply have been from a moment that had passed.
+
 ### What the host still owes
 
 Measured on 2026-09-16 by speaking PDBP to `phosphor debug --port` directly, with no

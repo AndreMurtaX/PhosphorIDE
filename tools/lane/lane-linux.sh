@@ -102,10 +102,26 @@ flush() {
 # script can name a menu title or a menu row without knowing where mutter put the
 # window this time.
 at() {
-    local x y
+    local x y verb
+    verb="${3:-click}"
     x=$(xwininfo -id "$WIN" | awk '/Absolute upper-left X/{print $4}')
     y=$(xwininfo -id "$WIN" | awk '/Absolute upper-left Y/{print $4}')
-    printf 'click %d %d\n' $((x + $1)) $((y + $2)) | "$HERE/xdrive" "$WIN" nofocus >/dev/null
+    printf '%s %d %d\n' "$verb" $((x + $1)) $((y + $2)) | "$HERE/xdrive" "$WIN" nofocus >/dev/null
+}
+
+# `bot DX DYUP` -- the same click, measured UP FROM THE BOTTOM EDGE.
+#
+# Not a convenience: mutter gives this window a different height on different
+# runs (700, 725 and 750 all seen on 2026-09-16), so anything below the editor
+# moves between runs and an offset from the top clicks into the wrong pane. The
+# output panel is bottom-anchored, so from the bottom every row is where it was.
+bot() {
+    local x y h verb
+    verb="${3:-click}"
+    x=$(xwininfo -id "$WIN" | awk '/Absolute upper-left X/{print $4}')
+    y=$(xwininfo -id "$WIN" | awk '/Absolute upper-left Y/{print $4}')
+    h=$(xwininfo -id "$WIN" | awk '/^  Height:/{print $2}')
+    printf '%s %d %d\n' "$verb" $((x + $1)) $((y + h - $2)) | "$HERE/xdrive" "$WIN" nofocus >/dev/null
 }
 
 while IFS= read -r line; do
@@ -113,6 +129,9 @@ while IFS= read -r line; do
         shot\ *) flush; shot "${line#shot }" ;;
         rootshot\ *) flush; rootshot "${line#rootshot }" ;;
         at\ *) flush; at ${line#at } ;;
+        at2\ *) flush; at ${line#at2 } dblclick ;;
+        bot\ *) flush; bot ${line#bot } ;;
+        bot2\ *) flush; bot ${line#bot2 } dblclick ;;
         outtab)  flush; outtab ;;
         ''|'#'*) : ;;
         *) buf="$buf$line
@@ -129,4 +148,17 @@ echo "--- the child's own stdio ---"
 cat "$OUT/ide.log"
 
 echo "$IDE_PID" > "$OUT/pid.txt"
-echo "done; pid $IDE_PID still up"
+
+# CLOSE BOTH, unless the caller says otherwise. Killing the editor does not kill
+# the program it was debugging -- a phosphor stopped at a breakpoint simply loses
+# the only thing that was going to tell it to continue -- so the child goes too.
+# LANE_KEEP=1 leaves everything up for a look.
+if [ "${LANE_KEEP:-0}" = "1" ]; then
+    echo "done; pid $IDE_PID left running"
+else
+    kill "$IDE_PID" 2>/dev/null
+    sleep 1
+    pkill -x phosphoride 2>/dev/null
+    pkill -x phosphor 2>/dev/null
+    echo "done; closed"
+fi

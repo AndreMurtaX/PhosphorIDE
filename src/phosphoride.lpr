@@ -83,6 +83,8 @@ begin
         in it yet. }
       Report.Add(Format('variables pane: %d columns, %d output tabs',
         [FrmMain.ListVariables.Columns.Count, FrmMain.PagesOutput.PageCount]));
+      Report.Add(Format('call stack pane: %d columns',
+        [FrmMain.ListStack.Columns.Count]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

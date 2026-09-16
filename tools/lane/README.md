@@ -15,13 +15,16 @@ item 2a is the contract test that would turn part of it into a gate.
 
 | | |
 | --- | --- |
-| `lane345.bas`, `blocked.bas`, `boom.bas` | the fixtures: a function to step into, a program that blocks on `line input`, a division by zero |
+| `lane345.bas`, `blocked.bas`, `boom.bas`, `deep.bas` | the fixtures: a function to step into, a program that blocks on `line input`, a division by zero, and a three-deep recursion |
 | `steps-lane.txt` | breakpoints, start, step over ×2, step into, step out, continue |
 | `steps-blocked.txt` | stop, continue into a blocking read, Preferences during a live session |
 | `steps-stop.txt` | end a running session from the process side |
 | `steps-exception.txt` | a breakpoint on line 1, then the exception stop |
+| `steps-stack.txt`, `steps-stack-linux.txt` | the call stack pane: the frames, a selection driving the variables pane, a double-click, and both panes emptying on resume |
+| `steps-stack-running.txt` | the same panes, empty, while a program runs |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
-| `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the Windows half |
+| `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, same commands as the Linux one |
+| `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the earlier, single-purpose Windows drivers |
 | `pdbp-probe.py` | speaks PDBP to the host with no editor involved, which is how the host's own defects were separated from the editor's |
 
 ## Linux
@@ -53,6 +56,14 @@ Four things cost real time on 2026-09-16 and are worth not rediscovering:
 - **A background GUI holding ssh's stdout keeps ssh from returning** even after
   the script ends. `setsid` plus a redirect.
 
+**Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
+not down from the top. mutter gives this window a different height on different
+runs -- 700, 725 and 750 all seen on one afternoon -- so everything below the editor
+moves between runs, and an offset from the top lands in a different pane each time.
+Two attempts at the call-stack pane clicked into the variables list instead, and both
+read as a pane that did not work. The output panel is bottom-anchored; from the bottom
+every row keeps its place.
+
 Still not driveable here: the gtk2 **menu bar**, from a synthetic click or from
 F10 navigation. `Debug > Stop Debugging` is therefore driven on Windows, and on
 Linux the same teardown is reached from the process side by `steps-stop.txt`.
@@ -60,7 +71,8 @@ Linux the same teardown is reached from the process side by `steps-stop.txt`.
 ## Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows-steps.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 `
+           -Fixture tools\lane\deep.bas -Steps tools\lane\steps-stack.txt
 ```
 
 `SendKeys` is enough for the keyboard. The two facts that are not obvious:
@@ -72,6 +84,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows-step
 - **`GetWindowText` does not cross a process boundary for a control.** It is
   documented, and it fails by returning `""`, so a full Output pane reads as
   blank. `gettext.ps1` sends `WM_GETTEXT` explicitly.
+
+Both drivers close the editor **and its `phosphor` child** when they finish.
+Killing the editor does not kill the program it was debugging -- one stopped at a
+breakpoint simply loses the only thing that was going to tell it to continue -- and
+leaving one of those on someone's desktop is how this project learned to check.
 
 Read the transcript as TEXT and the colours from a screenshot. The claims about
 ORDER are better served by the first and the claims about the current-line

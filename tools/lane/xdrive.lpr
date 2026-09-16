@@ -162,13 +162,22 @@ end;
 { Absolute screen coordinates, because that is what xwininfo reports and what a
   screenshot is measured in. `click 25 771` is the same arithmetic on both
   platforms. }
-procedure ClickAt(AX, AY: Integer);
+procedure ClickAt(AX, AY: Integer; ATwice: Boolean);
 begin
   XTestFakeMotionEvent(Dpy, -1, AX, AY, 0);
   XFlush(Dpy);
   Sleep(120);
   XTestFakeButtonEvent(Dpy, 1, 1, 0);
   XTestFakeButtonEvent(Dpy, 1, 0, 0);
+  if ATwice then
+  begin
+    { Inside any sane double-click interval, and the flush matters: two presses
+      delivered in one batch can reach the toolkit as one. }
+    XFlush(Dpy);
+    Sleep(80);
+    XTestFakeButtonEvent(Dpy, 1, 1, 0);
+    XTestFakeButtonEvent(Dpy, 1, 0, 0);
+  end;
   XFlush(Dpy);
   Sleep(250);
 end;
@@ -230,16 +239,17 @@ begin
       TypeText(Arg)
     else if Cmd = 'wait' then
       Sleep(StrToIntDef(Arg, 0))
-    else if Cmd = 'click' then
+    else if (Cmd = 'click') or (Cmd = 'dblclick') then
     begin
       P := Pos(' ', Arg);
       if P = 0 then
       begin
-        WriteLn(StdErr, 'xdrive: click needs two coordinates');
+        WriteLn(StdErr, 'xdrive: ', Cmd, ' needs two coordinates');
         Halt(2);
       end;
       ClickAt(StrToIntDef(Copy(Arg, 1, P - 1), 0),
-              StrToIntDef(Trim(Copy(Arg, P + 1, Length(Arg))), 0));
+              StrToIntDef(Trim(Copy(Arg, P + 1, Length(Arg))), 0),
+              Cmd = 'dblclick');
     end
     else if Cmd = 'raise' then
       RaiseWindow

@@ -296,10 +296,6 @@ to change it, so the reader knows where to check.
 
 What is still absent, and must not be described otherwise:
 
-- **No call stack pane.** `stackTrace` is in the protocol, the codec decodes it and
-  `TDebugSession.RequestStackTrace` sends it; nothing asks. Every variables request is
-  for frame 0 -- *by index*, so the pane does not have to be rewritten when frame 1
-  becomes selectable.
 - **No watches and no evaluate.** `capabilities.evaluate` is `false` on every host
   today, and the editor must never close that gap in-process: an expression evaluator
   here would be an interpreter here. See the invariant at the top.
@@ -307,7 +303,13 @@ What is still absent, and must not be described otherwise:
   could not arm is shown as a **grey row** rather than a hollow mark, because a mark
   needs a `TImageList` and the gtk2 image-list work is roadmap item 13.
 
-Two engine-side facts that the editor cannot paper over, both measured on 2026-09-16
+The **call stack pane** landed on 2026-09-16 and is driven on both platforms. Two
+rules in it are worth keeping: every `variables` request goes **by frame index**, which
+is what made the pane a selection rather than a rewrite; and both panes are **emptied
+whenever the state is not `dsStopped`**, because a stack and a set of locals describe a
+program standing still, and the host refuses to answer about either while one runs.
+
+Three engine-side facts that the editor cannot paper over, all measured on 2026-09-16
 by speaking PDBP to the host directly:
 
 - **A breakpoint on the first statement is reported installed and never fires.**
@@ -315,6 +317,11 @@ by speaking PDBP to the host directly:
   completion. The editor believes the host, because the installed set is the only
   verified/unverified marker the protocol has -- so line 1 is drawn armed and behaves
   dead. This belongs in Phosphor.
+- **Only the innermost frame carries a line.** `stackTrace` answers every caller with
+  `line: 0`, because the engine does not record a call site per frame. The pane leaves
+  those cells empty rather than printing `0` -- which would read as a location -- and a
+  double-click on such a row does nothing. Finding the function's header by searching
+  the text for its name is exactly the invented location `GotoSource` warns about.
 - **An exception stop does not linger.** The host emits
   `{"event":"stopped","reason":"exception","line":4,"text":"division by zero"}` and
   closes the socket in the same breath, so the read-only gating around a terminal stop

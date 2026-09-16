@@ -1,0 +1,18 @@
+# The other half of the pane's contract: it describes a program standing still,
+# so it must be EMPTY while one runs. blocked.bas stops on line 3 and then sits
+# in `line input` forever, which is the longest a program is ever "running".
+key ^g
+wait 700
+type 3{ENTER}
+wait 500
+key {F5}
+wait 500
+key +{F9}
+wait 5000
+at 161 561
+wait 600
+shot 11-stack-while-stopped
+key {F6}
+wait 3500
+shot 12-stack-while-running
+memo

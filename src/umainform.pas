@@ -133,6 +133,8 @@ type
     StatusBar1: TStatusBar;
     TabOutput: TTabSheet;
     TabProblems: TTabSheet;
+    TabStack: TTabSheet;
+    ListStack: TListView;
     TabVariables: TTabSheet;
     ListVariables: TListView;
     TbCheck: TToolButton;
@@ -172,6 +174,9 @@ type
     procedure ActOpenExecute(Sender: TObject);
     procedure ActPackExecute(Sender: TObject);
     procedure ActPasteExecute(Sender: TObject);
+    procedure ListStackDblClick(Sender: TObject);
+    procedure ListStackSelectItem(Sender: TObject; Item: TListItem;
+      Selected: Boolean);
     procedure ActPreferencesExecute(Sender: TObject);
     procedure ActRedoExecute(Sender: TObject);
     procedure ActReplaceExecute(Sender: TObject);
@@ -241,6 +246,23 @@ type
       switching leaves the first-time user reading an empty Output pane wondering
       what Debug did. }
     FVarShown: Boolean;
+
+    { The frames of the current stop, exactly as the host reported them. Kept
+      because two things need them after the fact: the variables pane names the
+      frame it is showing, and a double-click needs the path and line of the row
+      that was hit rather than of whatever is selected now.
+
+      Emptied whenever the program is not stopped. A call stack is a description
+      of a program standing still; keeping it on screen while one runs is the
+      same defect as the current-line stripe that outlived its stop. }
+    FStackFrames: TPdbpFrames;
+    { Selecting a row asks the host for that frame's variables, and filling the
+      list selects row 0 -- so without this the fill asks a question the stop
+      already asked. }
+    FStackFilling: Boolean;
+    { The caller-has-no-line explanation is worth saying once per session and
+      unbearable once per stop. }
+    FStackLineNoted: Boolean;
     { Set by an exception stop. The session is still connected and still reports
       dsStopped, which is true and is not the whole truth: nothing may be sent. }
     FDebugTerminal: Boolean;
@@ -299,6 +321,9 @@ type
       const AInstalled: TPdbpLines);
     procedure DebugVariables(Sender: TObject; AFrame: Integer;
       const AVars: TPdbpVariables);
+    procedure DebugStack(Sender: TObject; const AFrames: TPdbpFrames);
+    procedure ClearStack;
+    function FrameName(AIndex: Integer): String;
     procedure SyncBreakpoints(ADoc: TEditorDoc);
     function DocByPath(const APath: String): TEditorDoc;
     function BreakpointIsArmed(ADoc: TEditorDoc; ALine: Integer): Boolean;
@@ -393,6 +418,7 @@ begin
   FDebug.OnNote := @DebugNote;
   FDebug.OnLinesInstalled := @DebugLinesInstalled;
   FDebug.OnVariables := @DebugVariables;
+  FDebug.OnStackTrace := @DebugStack;
 
   FDebugTimer := TTimer.Create(Self);
   FDebugTimer.Enabled := False;
@@ -1534,7 +1560,9 @@ begin
   FDebugLine := 0;
   FVarShown := False;
   FDebugTerminal := False;
+  FStackLineNoted := False;
   ClearVariables;
+  ClearStack;
   FDebugTimer.Enabled := True;
   RefreshDebugActions;
   Result := True;
@@ -1558,6 +1586,8 @@ begin
     the program is gone is the same defect as the stale hint on an action. }
   ClearVariables;
   TabVariables.Caption := 'Variables';
+  ClearStack;
+  FStackLineNoted := False;
   FInstalledPath := '';
   FInstalledLines := nil;
   if AWhy <> '' then
@@ -1593,6 +1623,17 @@ begin
   begin
     FDebugLine := 0;
     RepaintEditors;
+  end;
+
+  { AND NEITHER IS A VARIABLE OR A FRAME. Both panes describe a program standing
+    still at one statement; the moment it resumes they are a photograph presented
+    as a live view, and the host will not answer a question about either while it
+    runs. Same rule as the stripe, one line further out. }
+  if (FDebug.State <> dsStopped) and (Length(FStackFrames) > 0) then
+  begin
+    ClearStack;
+    ClearVariables;
+    TabVariables.Caption := 'Variables';
   end;
 
   { AND THE SESSION ENDS WHERE IT IS DECIDED. Idle is idle however it was
@@ -1643,9 +1684,11 @@ begin
     AddOutput(Format('> stopped at line %d (%s)',
       [ALine, PdbpStopReasonName(AReason)]));
 
-  { Frame 0 is the only one there is today. Asking BY INDEX anyway is what stops
-    this pane being rewritten when a call-stack pane arrives and frame 1 becomes
-    selectable -- the answer already carries the frame it belongs to. }
+  { THE STACK FIRST, then frame 0's variables. Both answers carry what they are
+    about, so the order on the wire does not matter -- but the stack arriving
+    first means the variables pane can already name the frame it is showing
+    instead of relabelling itself a moment later. }
+  FDebug.RequestStackTrace;
   FDebug.RequestVariables(0);
   if not FVarShown then
   begin
@@ -1777,6 +1820,122 @@ begin
   ListVariables.Items.Clear;
 end;
 
+procedure TFrmMain.ClearStack;
+begin
+  FStackFrames := nil;
+  FStackFilling := True;
+  try
+    ListStack.Items.Clear;
+  finally
+    FStackFilling := False;
+  end;
+  TabStack.Caption := 'Call Stack';
+end;
+
+function TFrmMain.FrameName(AIndex: Integer): String;
+begin
+  Result := '';
+  if (AIndex >= 0) and (AIndex <= High(FStackFrames)) then
+    Result := FStackFrames[AIndex].Name;
+end;
+
+procedure TFrmMain.DebugStack(Sender: TObject; const AFrames: TPdbpFrames);
+var
+  I: Integer;
+  Item: TListItem;
+  Callerless: Boolean;
+begin
+  { AN ANSWER ABOUT A PROGRAM THAT HAS MOVED ON IS NOT AN ANSWER. Continue and
+    the reply to a request made while stopped can cross on the wire; filling the
+    pane with it would show the user a call stack the program no longer has. }
+  if FDebug.State <> dsStopped then
+    Exit;
+
+  FStackFrames := AFrames;
+  FStackFilling := True;
+  try
+    ListStack.Items.BeginUpdate;
+    try
+      ListStack.Items.Clear;
+      Callerless := False;
+      for I := 0 to High(AFrames) do
+      begin
+        Item := ListStack.Items.Add;
+        Item.Caption := IntToStr(AFrames[I].Index);
+        Item.SubItems.Add(AFrames[I].Name);
+        { A LINE OF 0 IS NOT LINE ZERO, IT IS NO LINE. Measured against the real
+          host on 2026-09-16: only the innermost frame carries one, and every
+          caller comes back with line 0 because the engine does not record a
+          return site per frame. Printing `0` would read as a location; an empty
+          cell reads as what it is. }
+        if AFrames[I].Line > 0 then
+          Item.SubItems.Add(IntToStr(AFrames[I].Line))
+        else
+        begin
+          Item.SubItems.Add('');
+          if I > 0 then
+            Callerless := True;
+        end;
+        Item.SubItems.Add(ExtractFileName(AFrames[I].Path));
+      end;
+      if ListStack.Items.Count > 0 then
+        ListStack.Items[0].Selected := True;
+    finally
+      ListStack.Items.EndUpdate;
+    end;
+  finally
+    FStackFilling := False;
+  end;
+
+  TabStack.Caption := Format('Call Stack (%d)', [Length(AFrames)]);
+
+  if Callerless then
+  begin
+    ListStack.Hint := 'This host reports a line only for the innermost frame, ' +
+      'so only that row can be jumped to.';
+    if not FStackLineNoted then
+    begin
+      FStackLineNoted := True;
+      AddOutput('  debug: this host reports a line only for the innermost ' +
+        'frame; the callers are listed without one and cannot be jumped to');
+    end;
+  end
+  else
+    ListStack.Hint := 'Double-click a frame to go to it.';
+end;
+
+procedure TFrmMain.ListStackSelectItem(Sender: TObject; Item: TListItem;
+  Selected: Boolean);
+begin
+  { Filling the list selects row 0, which would otherwise re-ask for the frame
+    the stop already asked for. And a DEselection is not a choice of anything. }
+  if FStackFilling or (not Selected) or (Item = nil) then
+    Exit;
+  if FDebug.State <> dsStopped then
+    Exit;
+  { By index, which is what the protocol takes and what the answer carries back.
+    A frame the host has since forgotten is refused with `no frame N`, and the
+    session reports that through OnNote rather than guessing. }
+  FDebug.RequestVariables(Item.Index);
+end;
+
+procedure TFrmMain.ListStackDblClick(Sender: TObject);
+var
+  Item: TListItem;
+begin
+  Item := ListStack.Selected;
+  if (Item = nil) or (Item.Index > High(FStackFrames)) then
+    Exit;
+  { NOTHING HAPPENS FOR A FRAME WITH NO LINE, on purpose. The alternative --
+    finding the function's header by searching the text for its name -- is the
+    editor inventing a location, which is the defect GotoSource's own comment
+    warns about one layer down: a plausible-looking jump to somewhere the
+    program is not. The pane's hint says why, and so does one line of output. }
+  if FStackFrames[Item.Index].Line <= 0 then
+    Exit;
+  GotoSource(FStackFrames[Item.Index].Path, FStackFrames[Item.Index].Line);
+end;
+
 procedure TFrmMain.DebugVariables(Sender: TObject; AFrame: Integer;
   const AVars: TPdbpVariables);
 
@@ -1798,6 +1957,11 @@ procedure TFrmMain.DebugVariables(Sender: TObject; AFrame: Integer;
 var
   I: Integer;
 begin
+  { Same reason as the stack: a reply that crossed a Continue describes a moment
+    that has passed. }
+  if FDebug.State <> dsStopped then
+    Exit;
+
   ListVariables.Items.BeginUpdate;
   try
     ListVariables.Items.Clear;
@@ -1816,7 +1980,18 @@ begin
     ListVariables.Items.EndUpdate;
   end;
 
-  TabVariables.Caption := Format('Variables (%d)', [Length(AVars)]);
+  { WHICH FRAME, when it is not the innermost one. The stack pane shows the
+    selection, but the two panes cannot both be on screen, and a list of locals
+    with no frame attached is a list of locals belonging to nothing in
+    particular. }
+  if (AFrame > 0) and (FrameName(AFrame) <> '') then
+    { WITH THE INDEX, because the name alone is ambiguous exactly where this
+      pane earns its keep: four frames of `down` in a recursion are four
+      different sets of locals and one name. }
+    TabVariables.Caption := Format('Variables (%d) in %s #%d',
+      [Length(AVars), FrameName(AFrame), AFrame])
+  else
+    TabVariables.Caption := Format('Variables (%d)', [Length(AVars)]);
 end;
 
 procedure TFrmMain.ActDebugStartExecute(Sender: TObject);

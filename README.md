@@ -253,9 +253,20 @@ Phosphor gained `TPhosphorDebugProc`, `ArmDebug`, four step actions and the `Dbg
 accessors; this editor's end of the protocol had been written first, on purpose, and
 the menu followed on 2026-09-16.
 
-What is **not** built: no call-stack pane (the protocol and codec have `stackTrace`;
-nothing asks yet), no watches, no evaluate -- `capabilities.evaluate` is false on every
-host, and an expression evaluator in here would be an interpreter in here.
+The **Call Stack** pane lists the frames the program is standing in -- four `down`
+calls and `(main)`, in a three-deep recursion -- and selecting one shows that frame's
+variables, so the locals of the outermost call are one click away from the innermost.
+Double-click a frame to go to it. Both panes empty themselves the moment the program
+resumes: they describe a program standing still, and a photograph presented as a live
+view is the same defect as a current-line marker that outlives its stop.
+
+One limitation that is the host's and not the editor's: **only the innermost frame
+carries a line**, because the engine does not record a call site per frame. The callers
+are listed without one and cannot be jumped to, which the pane says rather than
+guessing at a location.
+
+What is **not** built: no watches and no evaluate -- `capabilities.evaluate` is false on
+every host, and an expression evaluator in here would be an interpreter in here.
 `docs/debugger-lane.md` records what each step was verified against, and what the first
 cut got wrong.
 

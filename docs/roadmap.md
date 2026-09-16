@@ -446,7 +446,14 @@ stopped; no code path in the pane formats a number.
 
 ## 10. A call-stack pane
 
-**Next, and reachable today** — items 3 to 9 are done, so nothing is waiting on the
+**DONE 2026-09-16**, driven on both platforms and recorded in
+`docs/debugger-lane.md`. Three-deep recursion shows five rows including `(main)`,
+double-click moves the caret, selecting a frame drives the variables pane by index,
+and both panes empty when the program resumes. One thing the item asked for cannot
+be done and is now a Phosphor debt: **only the innermost frame carries a line**, so
+the callers cannot be jumped to.
+
+**Was: next, and reachable today** — items 3 to 9 are done, so nothing is waiting on the
 other repository any more. Two things found on 2026-09-16 belong with it:
 
 - **Phosphor owes a fix**: a breakpoint on the **first statement** is answered as
@@ -456,6 +463,10 @@ other repository any more. Two things found on 2026-09-16 belong with it:
   `setBreakpoints lines:[1]` on any file answers `lines:[1]`.
 - **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
   because a mark needs the `TImageList` of item 13.
+- **Phosphor owes a second fix**: `stackTrace` answers every frame but the innermost
+  with `line: 0`. The engine does not record a call site per frame, so a call-stack
+  pane can list the callers and cannot take you to them. Reproduce with
+  `tools/lane/pdbp-probe.py` against a recursive program.
 - ~~The debuggee inherits the editor's listening socket.~~ **Fixed 2026-09-16**,
   the day it was found, and measured on both sides of the change with `ss -ltnp`.
   Left struck rather than deleted because the reason it was invisible for so long

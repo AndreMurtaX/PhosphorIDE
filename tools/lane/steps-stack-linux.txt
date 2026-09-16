@@ -1,0 +1,45 @@
+# The call stack pane under gtk2 -- the same case as steps-stack.txt.
+#
+# EVERY CLICK IS MEASURED UP FROM THE BOTTOM EDGE. mutter gives this window a
+# different height on different runs -- 700, 725 and 750 all seen on the same
+# afternoon -- so an offset from the top lands in a different pane each time.
+# The output panel is bottom-anchored; from the bottom, every row keeps its
+# place. Two earlier attempts clicked into the variables list instead of the
+# stack, and both read as a pane that did not work.
+#
+#   tab strip   184 up   (Call Stack at x 191, Variables at 289)
+#   list rows   135 up for row 0, then 23 less per row
+raise
+key ctrl+g
+wait 700
+key ctrl+a
+type 4
+key Return
+wait 500
+key F5
+wait 600
+key shift+F9
+wait 5000
+bot 191 184
+wait 700
+shot 21-call-stack
+bot 100 66
+wait 1200
+shot 22-frame-3-selected
+bot 289 184
+wait 700
+shot 23-variables-of-frame-3
+key ctrl+g
+wait 700
+key ctrl+a
+type 12
+key Return
+wait 600
+bot 191 184
+wait 500
+bot2 100 135
+wait 900
+shot 24-after-double-click
+key F6
+wait 3000
+shot 25-after-continue

@@ -1,0 +1,45 @@
+# The call stack pane, three calls deep in deep.bas.
+#
+# Tab strip and row geometry were measured from a screenshot rather than
+# guessed: the output tabs sit at y 561, the list rows start at 603 and step 16.
+key ^g
+wait 700
+type 4{ENTER}
+wait 500
+key {F5}
+wait 500
+key +{F9}
+wait 5000
+
+# the stack itself: down x4 and (main)
+at 161 561
+wait 600
+shot 01-call-stack
+
+# frame 3 -- the outermost `down`, called with n = 3
+at 100 651
+wait 1200
+shot 02-frame-3-selected
+
+# ...and the variables pane follows the selection
+at 250 561
+wait 600
+shot 03-variables-of-frame-3
+
+# put the caret somewhere else, then jump back through the innermost frame
+key ^g
+wait 700
+type 12{ENTER}
+wait 600
+at 161 561
+wait 500
+dblclick 100 603
+wait 800
+shot 04-after-double-click
+memo
+
+# and both panes empty when the program is no longer standing still
+key {F6}
+wait 3000
+shot 05-after-continue
+memo

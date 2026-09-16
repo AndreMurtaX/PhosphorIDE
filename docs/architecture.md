@@ -621,12 +621,16 @@ scanned (`engine/PhosphorLexer.pas:392`), so `PrintLn` and `println` are one wor
 
 ### What does not exist
 
-**A call-stack pane, watches, and evaluate.** `stackTrace` is specified, decoded
-and sendable; nothing asks for it yet, and every `variables` request is for frame
-0 -- by index, so the pane survives the day frame 1 becomes selectable. Watches
-and evaluate need `capabilities.evaluate`, which is false on every host today,
-and they must never be closed in-process: an expression evaluator here would be
-an interpreter here.
+**Watches and evaluate.** They need `capabilities.evaluate`, which is false on
+every host today, and they must never be closed in-process: an expression
+evaluator here would be an interpreter here.
+
+**A call-stack pane** was in this list until 2026-09-16. It is a fourth tab in
+`PagesOutput`: frame index, function, line and file, with the selection driving
+the variables pane by frame INDEX -- which is why that pane needed no rewriting
+when frame 1 became selectable. Only frame 0 has a line to show; the engine does
+not record a call site per frame, so the callers are listed without one and a
+double-click on them does nothing rather than inventing a location.
 
 **Step debugging** was in this list until 2026-09-16, with four citations, and is
 now the section above. The obstruction was in Phosphor and was structural:

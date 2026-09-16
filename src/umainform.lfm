@@ -189,6 +189,42 @@ object FrmMain: TFrmMain
         TabOrder = 0
       end
     end
+    object TabStack: TTabSheet
+      Caption = 'Call Stack'
+      ClientHeight = 152
+      ClientWidth = 992
+      object ListStack: TListView
+        Left = 0
+        Height = 152
+        Top = 0
+        Width = 992
+        Align = alClient
+        Columns = <
+          item
+            Caption = '#'
+            Width = 40
+          end
+          item
+            Caption = 'Function'
+            Width = 220
+          end
+          item
+            Caption = 'Line'
+            Width = 70
+          end
+          item
+            Caption = 'File'
+            Width = 400
+          end>
+        HideSelection = False
+        ReadOnly = True
+        RowSelect = True
+        TabOrder = 0
+        ViewStyle = vsReport
+        OnDblClick = ListStackDblClick
+        OnSelectItem = ListStackSelectItem
+      end
+    end
     object TabVariables: TTabSheet
       Caption = 'Variables'
       ClientHeight = 152
