@@ -26,7 +26,7 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
 | `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
 | `steps-signature.txt`, `steps-signature-linux.txt` | every arity of `mid$`, the argument marked as it moves, the hint gone when the call closes, and nothing at all for `callfunc` |
-| `steps-find.txt` | find in files: the pane, a jump into a file that was not open, a walk of 1006 files finished and a walk of 57,000 stopped |
+| `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |
 | `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
 | `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, same commands as the Linux one |

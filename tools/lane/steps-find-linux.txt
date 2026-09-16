@@ -1,0 +1,81 @@
+# Find in Files under gtk2. The same case as steps-find.txt, with the keys
+# spelled the X way and the clicks measured UP FROM THE BOTTOM EDGE -- mutter
+# gives this window a different height on different runs and the output panel is
+# bottom-anchored, so an offset from the top lands in a different pane each time.
+raise
+key ctrl+shift+f
+wait 900
+shot 110-pane-opened
+type bottom
+key Return
+wait 1800
+shot 111-one-row
+
+# THE JUMP. deep.bas is not open -- lane345.bas is -- so this is GotoSource's
+# open-it branch, and the status bar's line:column is the proof that the 4 in
+# the row meant line 4.
+bot2 200 97
+wait 1800
+shot 114-jumped-to-deep
+
+# A word in every fixture, to see more than one file at once.
+key ctrl+shift+f
+wait 500
+key ctrl+a
+type println
+key Return
+wait 1800
+shot 112-many-rows
+
+# And a word in none of them: "0 matches" has to arrive where the question was
+# asked, not only in a status bar at the other end of the window.
+key ctrl+shift+f
+wait 500
+key ctrl+a
+type nosuchwordanywhere
+key Return
+wait 1800
+shot 113-no-matches
+
+# NO GARBAGE ROWS. `LooksBinary` is a symbol in ufindinfiles.pas AND a string
+# inside the compiled binaries beside it; emptying the mask puts all of them in
+# front of the sniff, and only the text ones may come back.
+bot 210 123
+key ctrl+a
+type /home/andre/PhosphorIDE
+bot 553 122
+key ctrl+a
+key Delete
+bot 210 151
+key ctrl+a
+type LooksBinary
+key Return
+wait 6000
+shot 117-no-binary-rows
+
+# A THOUSAND FILES, FINISHED. The sibling checkout is 923 files outside its
+# dot-directories, and this one runs to the end rather than being stopped.
+bot 210 123
+key ctrl+a
+type /home/andre/Phosphor
+bot 210 151
+key ctrl+a
+type BREAKPOINT
+key Return
+wait 12000
+shot 118-a-thousand-files
+
+# STOPPING A REAL WALK: the whole home directory, which nobody is going to wait
+# for, which is what the button is for.
+bot 210 123
+key ctrl+a
+type /home/andre
+bot 210 151
+key ctrl+a
+type println
+key Return
+wait 1500
+shot 115-running
+bot 612 155
+wait 1200
+shot 116-stopped

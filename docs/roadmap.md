@@ -694,11 +694,19 @@ Four answers the item asked for:
   and this pane is not going to be the one search in the program that can do
   something the others cannot.
 
-Measured with `tools/lane/steps-find.txt`: the sibling checkout, 1006 files with
-no mask, walked to the end in under eight seconds with 387 matches and the editor
-usable throughout; `C:\Dev\PhosphorIDE` with no mask returning 7 rows from 150
-files for `LooksBinary`, a word that is also a symbol inside the compiled
-`.exe` and `.ppu` files beside them.
+Measured on BOTH machines rather than one, with `tools/lane/steps-find.txt` and
+`tools/lane/steps-find-linux.txt`, which drive the same six cases:
+
+| | Windows | gtk2 |
+| --- | --- | --- |
+| the sibling checkout, no mask, run to the end | 387 matches in 1006 files | 351 in 925 |
+| `LooksBinary` over this checkout, no mask | 7 rows from 150 files, none from a binary | 10 from 150, none from a binary |
+| a walk nobody would wait for, stopped | after 702 files | after 2413 files, 2649 matches |
+
+The gtk2 run also re-earned its own lesson: the window came up 725 pixels high on
+one run and 775 on the next, so every click in the Linux script is measured UP
+FROM THE BOTTOM EDGE (`bot DX DYUP`). An offset from the top would have landed in
+a different pane on the second run.
 
 **Was:**
 

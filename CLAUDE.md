@@ -107,8 +107,15 @@ has watched; a session and a virtual framebuffer are not quite the same thing.
 `src/phosphoride.lpr:40-41` says `scripts/build.ps1` runs the selftest after
 `lazbuild`, and it does. Both scripts exist and both have been run: `build.ps1` on
 Windows and `build.sh` on Ubuntu, each green end to end. What remains unmeasured is
-narrower than it was -- the `xvfb-run` branch of `build.sh`, and the editor DRIVEN by
-hand under gtk2 rather than merely constructed there.
+narrower again: the **`xvfb-run` branch** of `build.sh`, and nothing else. The other
+half of that sentence -- the editor DRIVEN under gtk2 rather than merely constructed
+there -- stopped being true on 2026-09-16 and is now `tools/lane/`: keys through
+XTest, frames through `xwd` decoded by PIL, and a `steps-*-linux.txt` per case,
+covering a debug session, the gutter marks, completion, signature help and find in
+files. One fact from it is worth carrying here, because it cost two runs that read
+as broken panes: **mutter gives this window a different height on different runs**
+-- 700, 725, 750 and 775 all seen -- so every click in a Linux script is measured UP
+from the bottom edge, where the output panel is anchored.
 
 If one of the five cannot be met you are **blocked**. Say so precisely; do not lower
 the bar.
