@@ -1,0 +1,23 @@
+# The hollow mark under gtk2. Same case as steps-gutter.txt; the only difference
+# is that nothing here needs a click, so there is no geometry to get wrong.
+raise
+key ctrl+g
+wait 700
+key ctrl+a
+type 3
+key Return
+wait 500
+key F5
+wait 400
+key ctrl+g
+wait 700
+key ctrl+a
+type 10
+key Return
+wait 500
+key F5
+wait 600
+shot 71-before-any-session
+key shift+F9
+wait 5000
+shot 72-stopped-line-3-hollow
