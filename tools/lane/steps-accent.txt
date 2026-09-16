@@ -1,0 +1,34 @@
+# The byte column, driven, with an ASCII control line in the same run.
+#
+# acentos.bas holds the same statement twice: line 4 is pure ASCII, line 5 has a
+# cedilla and a tilde, so it is 17 characters and 19 bytes. The caret at the end
+# of line 5 is column 18 by SynEdit's CaretX (a DISPLAY column,
+# syneditpointclasses.pas:823) and column 20 by LogicalCaretXY.X (the byte
+# index, synedit.pp:2935) -- and LineText is bytes.
+#
+# The control line is the point of the pair: if BOTH popups are unfiltered, the
+# driving is wrong; if only the accented one is, the column is.
+#
+# AND NOT `key ^{END}` TO GET THERE. SynEdit's ecEditorBottom sets the caret
+# from Length(Lines[last]) -- a BYTE count used as a physical column -- so
+# Ctrl+End on a UTF-8 line lands two columns PAST the end of the text, which
+# eoScrollPastEol makes a legal place to be. The completion popup then opens
+# unfiltered, correctly, because there is no word where the caret is; and the
+# first version of this case read that as the bug it was meant to prove.
+# Measured 2026-09-16. `{END}` on the line itself is exact.
+key ^{HOME}
+key {DOWN}{DOWN}{DOWN}{END}
+wait 500
+key ^<space>
+wait 1200
+shot 120-ascii-line
+key {ESC}
+wait 400
+key {DOWN}{END}
+wait 500
+key ^<space>
+wait 1200
+shot 121-accented-line
+key {ENTER}
+wait 700
+shot 122-accepted

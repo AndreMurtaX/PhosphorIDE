@@ -359,7 +359,7 @@ var
   Sigs: TPhosphorWordList;
   CoreN, PkgN, GuiN, I, Arg: Integer;
   Sorted, Cut: Boolean;
-  Nm: String;
+  Nm, Acc: String;
 
   { CallAtCaret has two out parameters, which a Check cannot hold. }
   function CallAt(const ALine: String; ACol: Integer;
@@ -433,6 +433,28 @@ begin
   Check('remark does not', not InLiteralOrComment('remark = 1', 10));
   Check('and a rem inside a string is just text',
         not InLiteralOrComment('s = "rem" + t', 13));
+
+  { --- the column that indexes bytes is the byte column --------------------- }
+
+  { THE DEFECT THIS PINS LIVES IN THE CALLER, which is why it is two checks on
+    one string rather than one check on a window. SynEdit offers two numbers for
+    "the caret's column" and they are not the same number: CaretX is
+    FCaret.CharPos, which syneditpointclasses.pas:823 computes through
+    LogicalToPhysical -- a DISPLAY column, a tab counted out to its tab stop and
+    a two-byte letter counted as one -- while LogicalCaretXY.X is
+    FCaret.LineBytePos (synedit.pp:2935), the byte index. LineText is bytes.
+    Handing the first to a function that indexes the second is right only while
+    the line holds nothing but ASCII and no tabs.
+
+    `t$ = "acao" + pri` with a cedilla and a tilde is 17 characters and 19 bytes,
+    so the caret at its end is column 18 by one measure and 20 by the other, and
+    the two answers below are what this editor got before and after 2026-09-16.
+    The wrong one does not crash: it accepts `println` over a one-letter range
+    and leaves `printlnri` in somebody's file. }
+  Acc := 't$ = "a' + #$C3#$A7 + #$C3#$A3 + 'o" + pri';
+  CheckEqInt('the accented line is 19 bytes', 19, Length(Acc));
+  CheckEq('the byte column sees the whole word', 'pri', Pre(Acc, 20));
+  CheckEq('the display column sees a fragment of it', 'p', Pre(Acc, 18));
 
   { --- the candidates ------------------------------------------------------ }
   Items := CompletionCandidates('lef', ptGui);

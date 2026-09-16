@@ -307,7 +307,10 @@ type
     { What the user had typed when the popup opened, and where it began. The
       popup's own idea of the token uses SynEdit's identifier characters; this
       uses the highlighter's rule, which is the one that knows a suffix is part
-      of the name. They agree today and this does not depend on it. }
+      of the name. They agree today and this does not depend on it.
+
+      FCompletionStart is a BYTE column into the line, which is what
+      PrefixAtCaret measures and what TSynCompletion's ASourceStart wants. }
     FCompletionTyped: String;
     FCompletionStart: Integer;
     FCompletionLine: Integer;
@@ -1600,13 +1603,29 @@ begin
     shortcut that silently does nothing is indistinguishable from one that is
     broken, and this is the only place in the editor where the right answer to a
     keypress is "no list". }
-  if InLiteralOrComment(Line, Doc.Edit.CaretX) then
+  { LOGICALCARETXY.X AND NOT CARETX. Both are "the caret's column" and they are
+    not the same number: CaretX is FCaret.CharPos, which
+    syneditpointclasses.pas:823 computes as LogicalToPhysical -- a DISPLAY
+    column, with a tab counted out to its tab stop and a two-byte letter counted
+    as one. LineText is the line's BYTES. Pairing them indexes a byte string
+    with a display column, and the two agree only while the line is pure ASCII
+    with no tabs.
+
+    That is not an exotic input here: `x = "ola" : pri` with an accent in the
+    string is a Portuguese comment or literal ahead of the caret, and it is what
+    the person who wrote this editor types all day. LogicalCaretXY is
+    FCaret.LineBytePos (synedit.pp:2935), which is the index this whole chain
+    wants -- PrefixAtCaret measures a byte range, and TSynCompletion's
+    ASourceStart/ASourceEnd are logical points too. Measured and corrected on
+    2026-09-16; it had been latent since completion landed. }
+  if InLiteralOrComment(Line, Doc.Edit.LogicalCaretXY.X) then
   begin
     StatusBar1.Panels[3].Text := 'no completion inside a string or a comment';
     Exit;
   end;
 
-  FCompletionTyped := PrefixAtCaret(Line, Doc.Edit.CaretX, FCompletionStart);
+  FCompletionTyped := PrefixAtCaret(Line, Doc.Edit.LogicalCaretXY.X,
+                                    FCompletionStart);
   FCompletionLine := Doc.Edit.CaretY;
   FCompletionItems := CompletionCandidates(FCompletionTyped, CompletionTier);
   if Length(FCompletionItems) = 0 then
@@ -2646,7 +2665,10 @@ begin
     Exit;
   end;
 
-  if not CallAtCaret(Doc.Edit.LineText, Doc.Edit.CaretX, CallName, Arg) then
+  { The same byte-versus-display column as ActCompleteExecute, and the same
+    fix: LineText is bytes, so the column that indexes it is LogicalCaretXY.X. }
+  if not CallAtCaret(Doc.Edit.LineText, Doc.Edit.LogicalCaretXY.X,
+                     CallName, Arg) then
   begin
     HideSignatureHint;
     Exit;

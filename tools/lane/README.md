@@ -26,6 +26,7 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
 | `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
 | `steps-signature.txt`, `steps-signature-linux.txt` | every arity of `mid$`, the argument marked as it moves, the hint gone when the call closes, and nothing at all for `callfunc` |
+| `steps-accent.txt` + `acentos.bas` | the byte column: the same statement with and without accents, and the popup filtered on both |
 | `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |
 | `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
@@ -67,6 +68,16 @@ Four things cost real time on 2026-09-16 and are worth not rediscovering:
   invocation and every invocation is `nofocus` unless the script says `raise`.
 - **A background GUI holding ssh's stdout keeps ssh from returning** even after
   the script ends. `setsid` plus a redirect.
+
+**Two columns are both called "the caret's column", and only one indexes
+`LineText`.** `CaretX` is `FCaret.CharPos`, which `syneditpointclasses.pas:823`
+computes through `LogicalToPhysical` -- a DISPLAY column -- and
+`LogicalCaretXY.X` is `FCaret.LineBytePos` (`synedit.pp:2935`). `LineText` is
+bytes. `steps-accent.txt` is the case that shows it, and it carries an ASCII
+control line for a reason: the first run of it failed on BOTH lines, and the
+cause was not the column at all but `Ctrl+End`, which SynEdit implements from
+`Length(Lines[last])` -- a byte count used as a physical column -- so it lands
+two columns past the end of a UTF-8 line.
 
 **A GTK popup needs `popshot`, not `shot`.** The completion list, a menu and the
 signature hint are each an override-redirect window of their own, so
