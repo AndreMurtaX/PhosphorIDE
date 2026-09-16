@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 291 checks, exit code 0.
+- `bin\phosphoridetest` green: 384 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -670,7 +670,7 @@ which is a modal dialog rather than a failure.
 
 **DONE 2026-09-16.** `Ctrl+Shift+F`, or **Edit > Find in Files**, and the results
 are the fifth tab of the output pane. `src/core/ufindinfiles.pas` is the search
-and has no LCL in it; 36 of the 291 checks are its.
+and has no LCL in it, with 36 headless checks of its own.
 
 Four answers the item asked for:
 
@@ -739,6 +739,73 @@ so the matching is testable headless.
 
 ## 15. An outline pane and go-to-definition for user functions
 
+**DONE 2026-09-16.** The **Outline** tab is the sixth in the output pane and
+`F12` is Go to Definition; `src/core/uphosphoroutline.pas` is the scanner and has
+no LCL in it, with 90 headless checks of its own.
+
+The item's own warning is the whole of it, so it is answered first. A scanner
+that treats a word as structural IS wrong about some legal program, because
+Phosphor has no keyword table -- and the unit's header says so, names the trade
+in `usynphosphor`'s terms, and then forbids its own use in any code path that
+changes a buffer. Folding is referred to item 17 rather than decided there.
+
+Within that limit it was measured rather than assumed, and the obvious scanner
+is wrong about all five. Every line below was compiled and run against
+`bin/phosphor.exe`:
+
+| legal Phosphor | what a first-word scanner does |
+| --- | --- |
+| `x = 1 : function f()` | misses it; a definition begins a STATEMENT, not a line |
+| `if x > 0 then function f()`, `... else function f()` | misses it |
+| `head: function a%() return 1 : end function : function b%() return 2 : end function` | finds at most one of the TWO |
+| `10 function h()` | misses it; a leading integer is a label |
+| `end function` as two words, adjacent | never sees a terminator, so every file using it reads as unterminated |
+
+And two more that decide behaviour rather than parsing: the type suffix is part
+of the name, so `g$ m% n? o@` are four different functions and the suffix is the
+only return type the language declares; and `FUNCTION Upper()` ... `END FUNCTION`
+is legal, so names are matched FOLDED and shown AS TYPED.
+
+**The finding that changed the design is arity.** `function len(a, b)` beside
+`println len("abcd")` does NOT shadow the built-in: the host resolves by name AND
+argument count, so that call prints 4 and `len(1, 2)` prints 99. Measured. A
+go-to-definition matching on the name alone would send the caret, confidently,
+into a body the call never enters -- so F12 counts the arguments at the call site
+first, and `FindOutlineFunc` takes an arity.
+
+Four answers to the done-when's clauses, and one it did not ask for:
+
+- Ten functions, ten rows, in source order, and the three ghosts -- `function`
+  inside a `rem`, inside a `'` comment and inside a string -- produce none.
+- **Clicking a row moves the caret AND LEAVES THE KEYBOARD IN THE LIST**, so
+  arrowing down the outline walks the file; a double-click hands the keyboard
+  back. `GotoSource` grew an optional column and an optional focus for it rather
+  than being copied, and the column is load-bearing: two definitions can share a
+  line, and column 1 would be the wrong one of them.
+- F12 on a name nothing defines writes one line to the status bar. A call to an
+  undefined name COMPILES in Phosphor and fails only when it runs, so finding
+  nothing is an ordinary answer and not a diagnostic.
+- F12 on a built-in OFFERS the function reference, in the `MessageDlg` shape
+  `ActDebugWhyExecute` already uses, and never opens a browser unasked. A word
+  that is a statement keyword (`println`) says that instead, which is a truer
+  answer than either of the other two.
+- Not asked for: the selection follows the caret, so the pane also answers "which
+  function am I in"; and the rebuild is debounced at **250 ms** rather than the
+  40 ms this program uses everywhere else -- that one is a DRAIN cadence for
+  things arriving from outside, and this is a debounce on the user's own typing,
+  which is a different quantity.
+
+Labels and `gosub` targets are deliberately absent, and that is the one place
+this went smaller than it could have: they are a second table in the compiler
+that never consults the function table, and they would need a reserved-word test
+this repository does not extract. An absence that is written down beats a jump
+that is wrong and looks right.
+
+Driven on both platforms with `tools/lane/steps-outline.txt` and
+`tools/lane/outline.bas`, a fixture that compiles and runs.
+
+**Was:**
+
 **What.** A list of the `function` definitions in the active buffer, and F12 on a call
 jumping to its definition.
 
@@ -765,7 +832,11 @@ scanner is checked headless against a file containing the word `function` inside
 literal and inside a `'` comment, neither of which may produce an entry.
 
 **Touches.** A new unit under `src/core/`, `src/umainform.pas`, `src/umainform.lfm`,
-`tests/phosphoridetest.lpr`, `src/phosphoride.lpi`.
+`tests/phosphoridetest.lpr`, ~~`src/phosphoride.lpi`~~ -- struck because it was wrong:
+that project's `<Units>` list stops at `udebugsession` and names none of
+`uphosphorcomplete`, `ufindinfiles`, `udebugtransport` or `uphosphoricons` either. They
+all resolve through `<OtherUnitFiles Value="core"/>`, and adding one entry would turn a
+visibly partial list into one that reads as complete and is not.
 
 ---
 
@@ -839,9 +910,11 @@ already written down in `docs/architecture.md` and in the highlighter's own head
   will mis-fold a legal program, and the failure mode is **text hidden from the user**,
   which is worse than a wrong colour.
 
-If it is done anyway: build it on the structural scanner from item 15 rather than by
-promoting the highlighter, and accept that it will be wrong on the same rare programs the
-outline is wrong on -- with the same justification, that a fold is visible and reversible.
+If it is done anyway: build it on the structural scanner from item 15 -- which exists now,
+`src/core/uphosphoroutline.pas` -- rather than by promoting the highlighter, and accept
+that it will be wrong on the same rare programs the outline is wrong on, with the same
+justification, that a fold is visible and reversible. That unit's header refuses to decide
+this either way on its own; it names this item instead.
 
 **Done when.** The five block kinds fold and unfold; a file with `function` inside a string
 literal and `for` inside a comment produces no fold for either; fold state survives an edit

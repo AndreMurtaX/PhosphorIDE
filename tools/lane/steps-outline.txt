@@ -1,0 +1,93 @@
+# The outline pane and F12, on outline.bas -- ten definitions, four of them
+# where a first-word scanner will not look: after a `:`, after `then`, after a
+# numeric label, and TWO on one line after a named label. All ten compile and
+# run; `phosphor run tools/lane/outline.bas` prints 1 5 3 4 5 6 7 true 42.
+key ^+o
+wait 900
+shot 130-ten-definitions
+
+# A SINGLE CLICK MOVES THE CARET AND LEAVES THE KEYBOARD IN THE LIST. Row 6 is
+# `22: sixth%()`, the second of the two definitions on line 22, so the column in
+# the status bar is the proof that the jump used the NAME's column and not 1.
+at 100 657
+wait 700
+shot 131-a-click-moves-the-caret
+
+# And the arrow key still belongs to the list, which is how an outline is read.
+key {DOWN}
+wait 700
+shot 132-arrowing-walks-the-file
+
+# A double-click is "I have arrived": the caret AND the focus.
+dblclick 100 582
+wait 800
+shot 133-a-double-click-hands-over-the-keyboard
+
+# F12 on a call. Line 41 is `println second(2, 3)`; nine rights from the start
+# of it puts the caret inside `second`, which is defined on line 10 after a `:`.
+key ^g
+wait 500
+key ^a
+type 41
+key {ENTER}
+wait 600
+key {HOME}
+key {RIGHT 9}
+wait 300
+key {F12}
+wait 900
+shot 134-f12-jumped-to-the-definition
+
+# And the caret is now ON that definition's name, which is its own answer.
+key {F12}
+wait 900
+shot 135-f12-on-the-definition-itself
+
+# F12 on `println`, which is a STATEMENT and not a registered built-in. There is
+# no document to offer for it and no definition to jump to, and saying which of
+# those it is beats saying nothing.
+key ^g
+wait 500
+key ^a
+type 40
+key {ENTER}
+wait 600
+key {HOME}
+key {RIGHT 2}
+wait 300
+key {F12}
+wait 1000
+shot 136-f12-on-a-statement-keyword
+
+# F12 on a real built-in OFFERS the reference rather than opening a browser
+# unasked: a keypress that launches one is a keypress people stop pressing.
+key ^g
+wait 500
+key ^a
+type 49
+key {ENTER}
+wait 600
+key {HOME}
+key {RIGHT 9}
+wait 300
+key {F12}
+wait 1200
+shot 138-f12-on-a-builtin-offers-the-reference
+key {ESC}
+wait 700
+shot 139-and-the-offer-can-be-declined
+
+# And a name nothing defines is an ordinary answer in the status bar, not a
+# dialog: a call to an undefined name COMPILES in Phosphor and fails only when
+# it runs, so F12 finding nothing is not a diagnostic.
+key ^g
+wait 500
+key ^a
+type 10
+key {ENTER}
+wait 600
+key {HOME}
+wait 300
+key {F12}
+wait 900
+shot 137-f12-finds-nothing-and-says-so

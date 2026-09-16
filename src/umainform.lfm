@@ -313,6 +313,23 @@ object FrmMain: TFrmMain
         TabOrder = 1
       end
     end
+    object TabOutline: TTabSheet
+      Caption = 'Outline'
+      ClientHeight = 152
+      ClientWidth = 992
+      object ListOutline: TListBox
+        Left = 0
+        Height = 152
+        Top = 0
+        Width = 992
+        Align = alClient
+        ItemHeight = 0
+        OnClick = ListOutlineClick
+        OnDblClick = ListOutlineDblClick
+        ScrollWidth = 990
+        TabOrder = 0
+      end
+    end
     object TabStack: TTabSheet
       Caption = 'Call Stack'
       ClientHeight = 152
@@ -478,11 +495,17 @@ object FrmMain: TFrmMain
       object SepE4: TMenuItem
         Caption = '-'
       end
+      object MnuGotoDefinition: TMenuItem
+        Action = ActGotoDefinition
+      end
       object MnuFindInFiles: TMenuItem
         Action = ActFindInFiles
       end
       object MnuComplete: TMenuItem
         Action = ActComplete
+      end
+      object MnuOutline: TMenuItem
+        Action = ActOutline
       end
     end
     object MnuRunMenu: TMenuItem
@@ -651,6 +674,18 @@ object FrmMain: TFrmMain
       Hint = 'Search a directory tree; the results list opens below'
       OnExecute = ActFindInFilesExecute
       ShortCut = 24646
+    end
+    object ActGotoDefinition: TAction
+      Caption = 'Go to &Definition'
+      Hint = 'Jump to the function this name defines, in this file'
+      OnExecute = ActGotoDefinitionExecute
+      ShortCut = 123
+    end
+    object ActOutline: TAction
+      Caption = '&Outline'
+      Hint = 'List the function definitions in this buffer'
+      OnExecute = ActOutlineExecute
+      ShortCut = 24655
     end
     object ActComplete: TAction
       Caption = 'Complete &Word'

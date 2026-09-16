@@ -117,6 +117,15 @@ begin
         pane that looks exactly right. 24646 is Ctrl+Shift+F. }
       Report.Add(Format('find in files: shortcut %d, default mask %s',
         [FrmMain.ActFindInFiles.ShortCut, FrmMain.EditFindMask.Text]));
+      { THE TWO SHORTCUTS AND NOTHING ELSE. The tab itself is already counted by
+        the `output tabs` number above, and duplicating it here would be a second
+        thing to keep in step; what nothing else covers is a TAction whose
+        ShortCut streamed as 0, which still draws its menu item, still runs when
+        clicked, and answers F12 with silence. 123 is F12 and 24655 is
+        Ctrl+Shift+O. }
+      Report.Add(Format('outline: F12 %d, pane %d, rows %d',
+        [FrmMain.ActGotoDefinition.ShortCut, FrmMain.ActOutline.ShortCut,
+         FrmMain.ListOutline.Items.Count]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

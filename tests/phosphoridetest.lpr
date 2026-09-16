@@ -46,7 +46,11 @@ uses
   { The search runs against a tree this program writes into a temporary
     directory: no fixture in the repository, nothing to keep in step, and the
     same answers on a machine that has never seen this project. }
-  ufindinfiles, FileUtil;
+  ufindinfiles, FileUtil,
+  { The outline scans a buffer that is a string literal in this file: ten
+    definitions and every legal spelling that breaks the obvious scanner, with
+    no fixture on disk to keep in step with it. }
+  uphosphoroutline;
 
 var
   Checks: Integer = 0;
@@ -805,6 +809,239 @@ begin
   end;
 end;
 
+{ ------------------------------------------------------------- the outline -- }
+
+procedure TestOutline;
+var
+  Funcs: TOutlineFuncs;
+  Src, LE: String;
+  I: Integer;
+
+  function NameOf(AIndex: Integer): String;
+  begin
+    if (AIndex < 0) or (AIndex > High(Funcs)) then
+      Result := '<none>'
+    else
+      Result := Funcs[AIndex].Display;
+  end;
+
+  function LineOf(const AName: String): Integer;
+  var
+    J: Integer;
+  begin
+    J := FindOutlineFunc(Funcs, AName, -1);
+    if J < 0 then
+      Result := 0
+    else
+      Result := Funcs[J].Line;
+  end;
+
+  function Word(const ALine: String; ACol: Integer): String;
+  var
+    Ignored: Integer;
+  begin
+    Result := WordAtCaret(ALine, ACol, Ignored);
+  end;
+
+begin
+  Group('uphosphoroutline: the definitions in a buffer, and where a name is');
+
+  LE := LineEnding;
+  { EVERY LINE HERE WAS COMPILED AND RUN AGAINST bin/phosphor.exe ON 2026-09-16.
+    None of it is invented, and the awkward ones are the point: a definition
+    begins a STATEMENT and not a line, so `:`, `then`, `else` and a leading
+    integer label all put one somewhere a first-word scanner will not look. }
+  Src :=
+    'rem function ghost()' + LE +                                   { 1 }
+    '''  function alsoghost()' + LE +                               { 2 }
+    'println "function stringghost()"' + LE +                       { 3 }
+    'function first()' + LE +                                       { 4 }
+    '  return 1' + LE +                                             { 5 }
+    'endfunction' + LE +                                            { 6 }
+    'x = 1 : function second(a, b)' + LE +                          { 7 }
+    '  return a + b' + LE +                                         { 8 }
+    'end function' + LE +                                           { 9 }
+    'if x > 0 then function third()' + LE +                         { 10 }
+    '  return 3' + LE +                                             { 11 }
+    'endfunction' + LE +                                            { 12 }
+    '10 function fourth$()' + LE +                                  { 13 }
+    '  return "4"' + LE +                                           { 14 }
+    'endfunction' + LE +                                            { 15 }
+    'head: function fifth%() return 5 : end function : ' +
+      'function sixth%() return 6 : end function' + LE +            { 16 }
+    'y = function + 1' + LE +                                       { 17 }
+    'FUNCTION Seventh()' + LE +                                     { 18 }
+    '  RETURN 7' + LE +                                             { 19 }
+    'END FUNCTION' + LE +                                           { 20 }
+    'function eighth?(n)' + LE +                                    { 21 }
+    '  return true' + LE +                                          { 22 }
+    'endfunction' + LE +                                            { 23 }
+    'function ninth@()' + LE +                                      { 24 }
+    'endfunction' + LE +                                            { 25 }
+    'function tenth()' + LE;                                        { 26 }
+
+  Funcs := ScanOutlineText(Src);
+
+  { --- ten functions, in source order -------------------------------------- }
+  CheckEqInt('ten definitions', 10, Length(Funcs));
+  CheckEq('  1', 'first', NameOf(0));
+  CheckEq('  2', 'second', NameOf(1));
+  CheckEq('  3', 'third', NameOf(2));
+  CheckEq('  4', 'fourth$', NameOf(3));
+  CheckEq('  5', 'fifth%', NameOf(4));
+  CheckEq('  6', 'sixth%', NameOf(5));
+  CheckEq('  7', 'Seventh', NameOf(6));
+  CheckEq('  8', 'eighth?', NameOf(7));
+  CheckEq('  9', 'ninth@', NameOf(8));
+  CheckEq('  10', 'tenth', NameOf(9));
+
+  { --- the three that must NOT be there ------------------------------------ }
+  { The roadmap names these two by hand; the third is the same rule seen from
+    the other side. A word inside a comment or a literal is text. }
+  CheckEqInt('a rem comment defines nothing', -1,
+             FindOutlineFunc(Funcs, 'ghost', -1));
+  CheckEqInt('an apostrophe comment defines nothing', -1,
+             FindOutlineFunc(Funcs, 'alsoghost', -1));
+  CheckEqInt('a string literal defines nothing', -1,
+             FindOutlineFunc(Funcs, 'stringghost', -1));
+  { `function` is only a keyword where a statement may begin. `y = function + 1`
+    compiles and assigns from a variable called function. Measured. }
+  Check('function as a variable defines nothing',
+        Length(Funcs) = 10);
+
+  { --- the lines, which is what a jump lands on ---------------------------- }
+  CheckEqInt('a plain definition', 4, LineOf('first'));
+  CheckEqInt('one after a : separator', 7, LineOf('second'));
+  CheckEqInt('one after then', 10, LineOf('third'));
+  CheckEqInt('one after a numeric label', 13, LineOf('fourth$'));
+  CheckEqInt('one after a named label', 16, LineOf('fifth%'));
+  CheckEqInt('and the SECOND one on that same line', 16, LineOf('sixth%'));
+  { Two definitions on one line differ only by column, which is why the record
+    carries one. }
+  Check('the two on line 16 start at different columns',
+        Funcs[4].Column <> Funcs[5].Column);
+
+  { --- the terminators ----------------------------------------------------- }
+  CheckEqInt('endfunction closes', 6, Funcs[0].EndLine);
+  CheckEqInt('end function, two words, closes too', 9, Funcs[1].EndLine);
+  CheckEqInt('and so does an uppercase one', 20, Funcs[6].EndLine);
+  CheckEqInt('a terminator mid-line closes the one it belongs to', 16,
+             Funcs[4].EndLine);
+  CheckEqInt('an unterminated definition says 0', 0, Funcs[9].EndLine);
+  Check('and nothing before it was left open', Funcs[8].EndLine = 25);
+
+  { --- names, spellings and suffixes --------------------------------------- }
+  { The lexer folds every identifier as it scans, so the name is matched folded
+    -- and SHOWN as typed, because the file belongs to whoever wrote it. }
+  CheckEq('the display name is as typed', 'Seventh', Funcs[6].Display);
+  CheckEq('the matched name is folded', 'seventh', Funcs[6].Name);
+  Check('a folded lookup finds it',
+        FindOutlineFunc(Funcs, 'SEVENTH', -1) = 6);
+  { All four suffixes are part of the name, and are the only return type
+    Phosphor declares. }
+  CheckEq('a dollar suffix belongs to the name', 'fourth$', Funcs[3].Name);
+  CheckEq('a percent one too', 'fifth%', Funcs[4].Name);
+  CheckEq('a question mark too', 'eighth?', Funcs[7].Name);
+  CheckEq('an at sign too', 'ninth@', Funcs[8].Name);
+  Check('and fourth alone is not the same name',
+        FindOutlineFunc(Funcs, 'fourth', -1) < 0);
+
+  { --- parameters ---------------------------------------------------------- }
+  CheckEq('the parameter text is kept as written', 'a, b', Funcs[1].Params);
+  CheckEqInt('and counted', 2, Funcs[1].ParamCount);
+  CheckEqInt('an empty list is zero', 0, Funcs[0].ParamCount);
+  CheckEqInt('one parameter is one', 1, Funcs[7].ParamCount);
+  CheckEq('the row reads like the header', 'second(a, b)',
+          OutlineRowText(Funcs[1]));
+  CheckEq('and an empty one keeps its parentheses', 'first()',
+          OutlineRowText(Funcs[0]));
+
+  { --- arity is part of the answer ----------------------------------------- }
+  { MEASURED: `function len(a, b)` beside `println len("abcd")` prints 4, the
+    BUILT-IN, because the host resolves by name AND count. A go-to definition
+    that matched on the name alone would jump into a function that call never
+    reaches. }
+  Check('a call of the right arity resolves',
+        FindOutlineFunc(Funcs, 'second', 2) = 1);
+  CheckEqInt('one of the wrong arity does not', -1,
+             FindOutlineFunc(Funcs, 'second', 1));
+  Check('and asking for any arity still finds it',
+        FindOutlineFunc(Funcs, 'second', -1) = 1);
+  CheckEqInt('a name nobody defined', -1, FindOutlineFunc(Funcs, 'nosuch', -1));
+  CheckEqInt('how many definitions a name has', 1,
+             CountOutlineFunc(Funcs, 'second'));
+  CheckEq('the arities it is defined at', '2', OutlineArities(Funcs, 'second'));
+
+  { --- which function the caret is in --------------------------------------- }
+  CheckEqInt('a line inside the first body', 0, FuncAtLine(Funcs, 5));
+  CheckEqInt('its header counts as inside', 0, FuncAtLine(Funcs, 4));
+  CheckEqInt('its terminator too', 0, FuncAtLine(Funcs, 6));
+  CheckEqInt('a line between two definitions belongs to neither', -1,
+             FuncAtLine(Funcs, 17));
+  CheckEqInt('a line before the first', -1, FuncAtLine(Funcs, 1));
+  CheckEqInt('and an unterminated one runs to the end', 9,
+             FuncAtLine(Funcs, 999));
+
+  { --- the corners that only happen while typing ---------------------------- }
+  Funcs := ScanOutlineText('function half' + LE);
+  CheckEqInt('a header with no parameter list is still a definition',
+             1, Length(Funcs));
+  CheckEqInt('  and says it has no list', -1, Funcs[0].ParamCount);
+  CheckEq('  so the row shows what is there', 'half', OutlineRowText(Funcs[0]));
+
+  Funcs := ScanOutlineText('endfunction' + LE + 'println 1' + LE);
+  CheckEqInt('an endfunction with nothing open is ignored', 0, Length(Funcs));
+
+  Funcs := ScanOutlineText('function outer()' + LE + '  function inner()' + LE +
+                           '  endfunction' + LE + 'endfunction' + LE);
+  CheckEqInt('a nested definition is LISTED', 2, Length(Funcs));
+  Check('  and marked', Funcs[1].Nested);
+  Check('  while the outer one is not', not Funcs[0].Nested);
+
+  { `end` at the end of one line and `function` at the start of the next is NOT
+    a terminator: the lexer's merge needs them adjacent, and the compiler then
+    reports the NEXT definition as a nested one. Measured. }
+  Funcs := ScanOutlineText('function g()' + LE + '  return 1' + LE + 'end' + LE +
+                           'function' + LE);
+  CheckEqInt('end and function on two lines do not merge', 0, Funcs[0].EndLine);
+
+  { --- how many arguments a call site is passing ---------------------------- }
+  CheckEqInt('no arguments', 0, CallArgCount('f()', 2));
+  CheckEqInt('one', 1, CallArgCount('f(1)', 2));
+  CheckEqInt('two', 2, CallArgCount('f(1, 2)', 2));
+  CheckEqInt('a comma inside a nested call does not count', 1,
+             CallArgCount('f(g(1, 2))', 2));
+  CheckEqInt('nor one inside a string', 1, CallArgCount('f("a, b")', 2));
+  CheckEqInt('whitespace only is no arguments', 0, CallArgCount('f(  )', 2));
+  { A CALL IS AN IDENTIFIER WHOSE VERY NEXT TOKEN IS `(`. Anything else is a
+    name merely mentioned, and reporting an arity for it would make F12 answer
+    a question nobody asked. }
+  CheckEqInt('a space before the parenthesis is not a call', -1,
+             CallArgCount('f (1)', 2));
+  CheckEqInt('a name with nothing after it is not a call', -1,
+             CallArgCount('f', 2));
+  CheckEqInt('and an unclosed one is not decidable', -1,
+             CallArgCount('f(1,', 2));
+
+  { --- the word under the caret --------------------------------------------- }
+  { PrefixAtCaret looks backwards because completion asks what has been TYPED.
+    This asks what the word IS, so it reaches both ways from the caret. }
+  CheckEq('mid-word, the whole word', 'println', Word('println', 4));
+  CheckEq('at its start', 'println', Word('println', 1));
+  CheckEq('just past its end', 'println', Word('println', 8));
+  CheckEq('inside a line', 'second', Word('x = second(1, 2)', 8));
+  CheckEq('a suffix comes with it', 'left$', Word('left$', 3));
+  CheckEq('and after the suffix', 'left$', Word('left$', 6));
+  CheckEq('on a space, the word ahead', 'def', Word('abc def', 5));
+  CheckEq('nothing on an empty line', '', Word('', 1));
+  CheckEq('nothing past the end of a line', '', Word('abc', 9));
+  CheckEq('a number is not a word', '', Word('123', 2));
+  CheckEq('nor is a name that starts with one', '', Word('1abc', 3));
+  for I := 1 to 8 do
+    CheckEq('the same word from every column of it', 'println',
+            Word('println', I));
+end;
+
 { ------------------------------------------------------------ breakpoints --- }
 
 procedure TestBreakpoints;
@@ -1238,6 +1475,7 @@ begin
   TestHighlighter;
   TestBreakpoints;
   TestCompletion;
+  TestOutline;
   TestFindInFiles;
   TestProtocol;
   TestTransport;

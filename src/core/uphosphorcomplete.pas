@@ -76,6 +76,22 @@ type
 function PrefixAtCaret(const ALine: String; ACol: Integer;
   out AStart: Integer): String;
 
+{ The whole word the caret is ON or immediately AFTER, by the same rule.
+
+  PrefixAtCaret answers what has been TYPED, so it looks only backwards: with
+  the caret in the middle of `println` it says `pri`, which is exactly right for
+  a completion list. Go-to-definition asks a different question -- what is this
+  word -- and the answer there is `println` wherever in it the caret happens to
+  sit. Two questions, two functions, ONE set of character rules: a second copy
+  of IdentStart/IdentChar/SuffixChar somewhere else is the defect this unit's
+  header already warns about.
+
+  A caret immediately after a type suffix delegates to PrefixAtCaret, because a
+  suffix can only be the last character of a name, so there is nothing to the
+  right to extend into. }
+function WordAtCaret(const ALine: String; ACol: Integer;
+  out AStart: Integer): String;
+
 { Is the caret inside a string literal or a comment, judged from this line only?
   See the unit header for why one line is enough. An unterminated literal counts:
   the program will not compile, and offering `println` in the middle of it helps
@@ -186,6 +202,46 @@ begin
 
   AStart := BodyStart;
   Result := Copy(ALine, BodyStart, Last - BodyStart + 1);
+end;
+
+function WordAtCaret(const ALine: String; ACol: Integer;
+  out AStart: Integer): String;
+var
+  Len, Left, Right: Integer;
+begin
+  Result := '';
+  AStart := ACol;
+  Len := Length(ALine);
+  if (ACol < 1) or (ACol > Len + 1) then
+    Exit;
+
+  { Just past a finished name: `left$|`. There is no right-hand side to find. }
+  if (ACol >= 2) and (ALine[ACol - 1] in SuffixChar) then
+  begin
+    Result := PrefixAtCaret(ALine, ACol, AStart);
+    Exit;
+  end;
+
+  Left := ACol - 1;
+  while (Left >= 1) and (ALine[Left] in IdentChar) do
+    Dec(Left);
+  Inc(Left);
+
+  Right := ACol;
+  while (Right <= Len) and (ALine[Right] in IdentChar) do
+    Inc(Right);
+  if (Right <= Len) and (ALine[Right] in SuffixChar) then
+    Inc(Right);
+
+  if Right <= Left then
+    Exit;
+  { A name that begins with a digit is not a name: `1abc` is a number and then
+    one, which is what the scanner makes of it too. }
+  if not (ALine[Left] in IdentStart) then
+    Exit;
+
+  AStart := Left;
+  Result := Copy(ALine, Left, Right - Left);
 end;
 
 function InLiteralOrComment(const ALine: String; ACol: Integer): Boolean;

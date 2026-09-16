@@ -27,7 +27,7 @@ uses
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
   usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
-  uphosphorcomplete, ufindinfiles, SynCompletion;
+  uphosphorcomplete, uphosphoroutline, ufindinfiles, SynCompletion;
 
 type
 
@@ -39,6 +39,8 @@ type
     ActClearBreakpoints: TAction;
     ActComplete: TAction;
     ActFindInFiles: TAction;
+    ActGotoDefinition: TAction;
+    ActOutline: TAction;
     BtnFindBrowse: TButton;
     BtnFindGo: TButton;
     BtnFindStop: TButton;
@@ -50,10 +52,14 @@ type
     LblFindRoot: TLabel;
     LblFindWhat: TLabel;
     ListFind: TListBox;
+    ListOutline: TListBox;
     MnuFindInFiles: TMenuItem;
+    MnuGotoDefinition: TMenuItem;
+    MnuOutline: TMenuItem;
     PanelFind: TPanel;
     SelectDirectoryDialog1: TSelectDirectoryDialog;
     TabFind: TTabSheet;
+    TabOutline: TTabSheet;
     ActCloseTab: TAction;
     ActCompile: TAction;
     ActContinue: TAction;
@@ -175,12 +181,16 @@ type
     procedure ActClearBreakpointsExecute(Sender: TObject);
     procedure ActCompleteExecute(Sender: TObject);
     procedure ActFindInFilesExecute(Sender: TObject);
+    procedure ActGotoDefinitionExecute(Sender: TObject);
+    procedure ActOutlineExecute(Sender: TObject);
     procedure BtnFindBrowseClick(Sender: TObject);
     procedure BtnFindGoClick(Sender: TObject);
     procedure BtnFindStopClick(Sender: TObject);
     procedure EditFindWhatKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
     procedure ListFindDblClick(Sender: TObject);
+    procedure ListOutlineClick(Sender: TObject);
+    procedure ListOutlineDblClick(Sender: TObject);
     procedure ActCloseTabExecute(Sender: TObject);
     procedure ActCompileExecute(Sender: TObject);
     procedure ActCopyExecute(Sender: TObject);
@@ -315,6 +325,22 @@ type
     FCompletionStart: Integer;
     FCompletionLine: Integer;
 
+    { The outline of the active buffer, what it was scanned from, and the
+      debounce that keeps it from being rescanned between keystrokes.
+
+      FOutlineRows is `line|path` per row, the same shape FProblemLines and
+      FFindRows carry and read by the same six lines. THE PATH IS THE POINT: a
+      row holds no TEditorDoc and no index into FDocs, so a pane that has not
+      caught up with a tab change cannot send the caret into the wrong file --
+      GotoSource simply finds no document of that name and does nothing. }
+    FOutline: TOutlineFuncs;
+    FOutlineTimer: TTimer;
+    FOutlineRows: TStringList;
+    { The list is being refilled, so the selection changes it makes are ours and
+      not the user's. Without this, Items.Clear fires OnClick and the caret goes
+      somewhere nobody asked it to go. }
+    FOutlineFilling: Boolean;
+
     { The search, its cadence, and where each row points.
 
       FFindRows is `line|path` per row, exactly the shape FProblemLines uses and
@@ -389,6 +415,11 @@ type
       AX, AY: Integer; ASelected: Boolean; AIndex: Integer): Boolean;
     procedure RefreshSignatureHint;
     procedure HideSignatureHint;
+    procedure ScheduleOutline;
+    procedure OutlineTimerTick(Sender: TObject);
+    procedure RebuildOutline;
+    procedure SyncOutlineSelection;
+    procedure JumpToOutlineRow(AIndex: Integer; AFocus: Boolean);
     procedure FindTimerTick(Sender: TObject);
     procedure FindHits(Sender: TObject; const AHits: TFindHits);
     procedure FindDone(Sender: TObject; AFilesSeen, AHitCount: Integer;
@@ -426,7 +457,8 @@ type
     procedure ScrollOutputToEnd;
     procedure TrimOutput;
     procedure AddProblem(const AMsg: TPhosphorMessage; const AFallbackPath: String);
-    procedure GotoSource(const APath: String; ALine: Integer);
+    procedure GotoSource(const APath: String; ALine: Integer;
+      AColumn: Integer = 1; AFocus: Boolean = True);
 
     procedure EditorChange(Sender: TObject);
     procedure EditorStatusChange(Sender: TObject; AChanges: TSynStatusChanges);
@@ -518,6 +550,18 @@ begin
 
   FSigHint := THintWindow.Create(Self);
   FSigHint.AutoHide := False;
+
+  FOutlineRows := TStringList.Create;
+  { 250 ms, and NOT the 40 ms this program uses everywhere else. That one is a
+    DRAIN cadence for things arriving from outside -- a pipe, a socket, a walker
+    thread -- and it is one number with one reason. This is a DEBOUNCE on the
+    user's own typing, which is a different quantity: rescanning between the
+    keystrokes of a fast typist makes the list flicker and the selection jump,
+    and on gtk2 that reads as the editor struggling. }
+  FOutlineTimer := TTimer.Create(Self);
+  FOutlineTimer.Enabled := False;
+  FOutlineTimer.Interval := 250;
+  FOutlineTimer.OnTimer := @OutlineTimerTick;
 
   FFindRows := TStringList.Create;
   FFind := TFindSearch.Create;
@@ -629,6 +673,9 @@ begin
     thread deposits into a buffer this object owns. Freeing the rows out from
     under a thread that is still walking is the one ordering mistake available
     here, and closing a window during a search is how it would be found. }
+  if FOutlineTimer <> nil then
+    FOutlineTimer.Enabled := False;
+  FOutlineRows.Free;
   if FFindTimer <> nil then
     FFindTimer.Enabled := False;
   FFind.Free;
@@ -748,6 +795,12 @@ begin
   PagesEditors.ActivePage := Page;
   RefreshTabCaption(Result);
   FocusEditor(Result);
+  { EXPLICIT, and not left to PagesEditorsChange. A TPageControl fires OnChange
+    for a PROGRAMMATIC ActivePage change on some widgetsets and not others, and
+    LoadFromFile above runs BEFORE Edit.OnChange is assigned, so opening a file
+    fires no EditorChange either. Neither of those may be the thing correctness
+    rests on. }
+  RebuildOutline;
 end;
 
 procedure TFrmMain.FocusEditor(ADoc: TEditorDoc);
@@ -779,6 +832,7 @@ begin
   if FDocs.Count = 0 then
     NewDoc('');
   RefreshStatus;
+  RebuildOutline;
 end;
 
 function TFrmMain.ConfirmSaved(ADoc: TEditorDoc): Boolean;
@@ -827,6 +881,9 @@ begin
     if (not Doc.IsUntitled) and (CompareFilenames(Doc.FileName, Full) = 0) then
     begin
       PagesEditors.ActivePageIndex := I;
+      { The same reason as the one at the end of NewDoc, which this path never
+        reaches: the tab changed programmatically. }
+      RebuildOutline;
       Exit;
     end;
   end;
@@ -961,6 +1018,11 @@ begin
   RefreshRecentMenu;
   RefreshTabCaption(Doc);
   RefreshStatus;
+  { SAVE AS CHANGES THE DOCUMENT'S NAME AND NOT A CHARACTER OF ITS TEXT, so it
+    fires no EditorChange and arms no debounce -- and every row in the pane is
+    still pointing at a path this document no longer has. The rows would then
+    match no open document and every click would be a silent no-op. }
+  RebuildOutline;
 end;
 
 procedure TFrmMain.ActCloseTabExecute(Sender: TObject);
@@ -1474,7 +1536,8 @@ begin
   GotoSource(Copy(Entry, Sep + 1, MaxInt), Line);
 end;
 
-procedure TFrmMain.GotoSource(const APath: String; ALine: Integer);
+procedure TFrmMain.GotoSource(const APath: String; ALine: Integer;
+  AColumn: Integer; AFocus: Boolean);
 var
   I, Line: Integer;
   Doc: TEditorDoc;
@@ -1515,9 +1578,20 @@ begin
   if Line < 1 then
     Line := 1;
 
-  Doc.Edit.CaretXY := Point(1, Line);
+  { The column is 1 for everything that came from a diagnostic -- the host never
+    reports one -- and the NAME's column for a jump that came from the outline,
+    where two definitions can share a line (`function a() ... : function b() ...`
+    is one legal line) and column 1 would be the wrong one of them. }
+  if AColumn < 1 then
+    AColumn := 1;
+  Doc.Edit.CaretXY := Point(AColumn, Line);
   Doc.Edit.EnsureCursorPosVisible;
-  FocusEditor(Doc);
+  { AND THE FOCUS IS THE CALLER'S DECISION. A double-click in a results list is
+    "take me there"; a single click in the outline is "show me", and moving the
+    keyboard out of the list after one click makes the list unusable by arrow
+    key -- which is how an outline is actually read. }
+  if AFocus then
+    FocusEditor(Doc);
   RefreshStatus;
 end;
 
@@ -1855,6 +1929,278 @@ begin
   if (Code <> 0) or (Line <= 0) then
     Exit;
   GotoSource(Copy(Entry, Sep + 1, MaxInt), Line);
+end;
+
+{ ------------------------------------------------------------ the outline --- }
+
+procedure TFrmMain.ScheduleOutline;
+begin
+  { ENABLED := TRUE ON A TIMER THAT IS ALREADY RUNNING DOES NOTHING.
+    TCustomTimer.SetEnabled is guarded by `if Value <> FEnabled`, so re-arming
+    has to stop the OS timer and start a new one -- otherwise this is not a
+    debounce at all, it is a 250 ms metronome that fires in the middle of
+    typing, which is the very thing it exists to prevent. }
+  FOutlineTimer.Enabled := False;
+  FOutlineTimer.Enabled := True;
+end;
+
+procedure TFrmMain.OutlineTimerTick(Sender: TObject);
+begin
+  FOutlineTimer.Enabled := False;   { one shot, not a heartbeat }
+  RebuildOutline;
+end;
+
+procedure TFrmMain.RebuildOutline;
+var
+  Doc: TEditorDoc;
+  I: Integer;
+  Row, Path: String;
+begin
+  FOutlineTimer.Enabled := False;
+  Doc := ActiveDoc;
+  if Doc = nil then
+  begin
+    FOutline := nil;
+    Path := '';
+  end
+  else
+  begin
+    { THE BUFFER AND NOT THE FILE ON DISK. The outline exists to describe what is
+      being typed, and the file on disk is a version of it that stopped being
+      true at the first keystroke. }
+    FOutline := ScanOutline(Doc.Edit.Lines);
+    Path := Doc.FullDisplayName;
+  end;
+
+  { THE LIST AND ITS ROWS ARE CLEARED AND FILLED TOGETHER, ALWAYS, and while the
+    flag is up: Items.Clear changes the selection, a selection change is a click
+    on some widgetsets, and a click here moves somebody's caret. }
+  FOutlineFilling := True;
+  ListOutline.Items.BeginUpdate;
+  try
+    ListOutline.Items.Clear;
+    FOutlineRows.Clear;
+    for I := 0 to High(FOutline) do
+    begin
+      Row := Format('%d: %s', [FOutline[I].Line, OutlineRowText(FOutline[I])]);
+      { Three things the pane knows that the build does not say, or does not say
+        yet. An unterminated definition is what every function looks like while
+        it is being written, so it is a note and not a complaint. }
+      if FOutline[I].EndLine = 0 then
+        Row := Row + '   (no endfunction yet)';
+      if FOutline[I].Nested then
+        Row := Row + '   (nested -- the host refuses this)';
+      { AND THE ANNOTATION IS COMPUTED WITH THE LOOKUP F12 USES. A second
+        definition of one name at one arity is unreachable -- the host takes the
+        first -- and if these two ever disagreed the pane would say so. }
+      if FindOutlineFunc(FOutline, FOutline[I].Name, FOutline[I].ParamCount) <> I then
+        Row := Row + '   (unreachable -- the first of this arity wins)';
+      ListOutline.Items.Add(Row);
+      FOutlineRows.Add(Format('%d|%s', [FOutline[I].Line, Path]));
+    end;
+    if Length(FOutline) = 0 then
+    begin
+      { A row that says so, with a line number the jump refuses -- the exact
+        trick FProblemLines uses for a diagnostic that carries no location, so
+        the two arrays can never fall out of step. "None" is an answer, and it
+        has to arrive where the question was asked. }
+      ListOutline.Items.Add('-- no function definitions in this buffer');
+      FOutlineRows.Add('0|');
+    end;
+  finally
+    ListOutline.Items.EndUpdate;
+    FOutlineFilling := False;
+  end;
+  SyncOutlineSelection;
+end;
+
+procedure TFrmMain.SyncOutlineSelection;
+var
+  Doc: TEditorDoc;
+  Idx: Integer;
+begin
+  Doc := ActiveDoc;
+  if (Doc = nil) or (Length(FOutline) = 0) then
+    Exit;
+  Idx := FuncAtLine(FOutline, Doc.Edit.CaretY);
+  if Idx >= ListOutline.Items.Count then
+    Exit;
+  if ListOutline.ItemIndex = Idx then
+    Exit;
+  { Assigning ItemIndex is a selection change, and a selection change is a click
+    on some widgetsets. This one is the program's, not the user's. }
+  FOutlineFilling := True;
+  try
+    ListOutline.ItemIndex := Idx;
+  finally
+    FOutlineFilling := False;
+  end;
+end;
+
+procedure TFrmMain.JumpToOutlineRow(AIndex: Integer; AFocus: Boolean);
+var
+  Sep, Line, Code, Col: Integer;
+  Entry: String;
+begin
+  if (AIndex < 0) or (AIndex >= FOutlineRows.Count) then
+    Exit;
+  Entry := FOutlineRows[AIndex];
+  Sep := Pos('|', Entry);
+  if Sep < 1 then
+    Exit;
+  Val(Copy(Entry, 1, Sep - 1), Line, Code);
+  if (Code <> 0) or (Line <= 0) then
+    Exit;
+  { THE NAME'S COLUMN AND NOT COLUMN 1, because two definitions can share a line
+    -- `function a() ... : function b() ...` is one legal line, measured -- and
+    column 1 would be the wrong one of them for every row but the first. }
+  Col := 1;
+  if AIndex <= High(FOutline) then
+    Col := FOutline[AIndex].Column;
+  GotoSource(Copy(Entry, Sep + 1, MaxInt), Line, Col, AFocus);
+end;
+
+procedure TFrmMain.ListOutlineClick(Sender: TObject);
+begin
+  if FOutlineFilling then
+    Exit;
+  { A SINGLE CLICK MOVES THE CARET AND LEAVES THE KEYBOARD IN THE LIST. The
+    roadmap asks for "clicking one moves the caret", and it is also how an
+    outline is actually read -- arrowing down the list walks the file. Taking
+    the focus on the first click would send the second arrow key into the text. }
+  JumpToOutlineRow(ListOutline.ItemIndex, False);
+end;
+
+procedure TFrmMain.ListOutlineDblClick(Sender: TObject);
+begin
+  { And a double-click is "I have arrived": the same thing the Problems and Find
+    panes do, and the way back to the text without reaching for the mouse. }
+  JumpToOutlineRow(ListOutline.ItemIndex, True);
+end;
+
+procedure TFrmMain.ActOutlineExecute(Sender: TObject);
+begin
+  RebuildOutline;
+  PagesOutput.ActivePage := TabOutline;
+  if ListOutline.CanFocus then
+    ListOutline.SetFocus;
+end;
+
+procedure TFrmMain.ActGotoDefinitionExecute(Sender: TObject);
+var
+  Doc: TEditorDoc;
+  Funcs: TOutlineFuncs;
+  Line, Nm, Extra, TierName: String;
+  Col, Start, Idx, Args, Defined, I: Integer;
+  Tier: TPhosphorTier;
+begin
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Exit;
+
+  Line := Doc.Edit.LineText;
+  { The BYTE column, because LineText is bytes. See ActCompleteExecute. }
+  Col := Doc.Edit.LogicalCaretXY.X;
+
+  if InLiteralOrComment(Line, Col) then
+  begin
+    StatusBar1.Panels[3].Text := 'nothing to go to inside a string or a comment';
+    Exit;
+  end;
+
+  Nm := WordAtCaret(Line, Col, Start);
+  if Nm = '' then
+  begin
+    StatusBar1.Panels[3].Text := 'no name under the caret';
+    Exit;
+  end;
+
+  { SCANNED FRESH, EVERY PRESS, and deliberately not read out of the pane. The
+    pane's copy is up to one debounce old, and a jump a quarter of a second
+    stale lands a few lines off while looking exactly like a jump that is right.
+    One keypress, one pass over the buffer. }
+  Funcs := ScanOutline(Doc.Edit.Lines);
+
+  { IS THE CARET ON THE DEFINITION ITSELF? Answering "no definition found" with
+    the caret sitting on the name in `function pick()` is how somebody decides
+    the key is broken. }
+  for I := 0 to High(Funcs) do
+    if (Funcs[I].Line = Doc.Edit.CaretY) and (Funcs[I].Column = Start) then
+    begin
+      StatusBar1.Panels[3].Text :=
+        Format('this is the definition of %s', [Funcs[I].Display]);
+      Exit;
+    end;
+
+  { HOW MANY ARGUMENTS THIS CALL SITE PASSES, because the host resolves a call
+    by name AND count: with `function len(a, b)` in the file, `len("abcd")` runs
+    the BUILT-IN and prints 4. Measured. -1 means the site does not say, and
+    then any arity will do. }
+  Args := CallArgCount(Line, Start + Length(Nm));
+  Idx := FindOutlineFunc(Funcs, Nm, Args);
+  if Idx >= 0 then
+  begin
+    GotoSource(Doc.FullDisplayName, Funcs[Idx].Line, Funcs[Idx].Column);
+    StatusBar1.Panels[3].Text := Format('%s is defined on line %d',
+      [Funcs[Idx].Display, Funcs[Idx].Line]);
+    Exit;
+  end;
+
+  Defined := CountOutlineFunc(Funcs, Nm);
+
+  if PhosphorBuiltinTier(Nm, Tier) then
+  begin
+    case Tier of
+      ptCore: TierName := 'core';
+      ptPackage: TierName := 'package';
+    else
+      TierName := 'GUI';
+    end;
+    Extra := '';
+    if Defined > 0 then
+      Extra := Format(' -- the %s in this file takes %s', [Nm, OutlineArities(Funcs, Nm)]);
+    StatusBar1.Panels[3].Text :=
+      Format('%s is a %s built-in%s', [Nm, TierName, Extra]);
+    { THE ONE DIALOG THIS ACTION MAY OPEN, and it is an OFFER rather than a jump:
+      a keypress that launches a browser unasked is a keypress people stop
+      pressing. The shape is ActDebugWhyExecute's, for the same kind of answer --
+      "the thing you want is a document, shall I open it". }
+    if MessageDlg('PhosphorIDE',
+      Format('%s is a %s built-in, not a function defined in this file.'#10#10 +
+             'Open the function reference on GitHub?', [Nm, TierName]),
+      mtInformation, [mbYes, mbNo], 0) = mrYes then
+      OpenURL(UrlFunctionReference);
+    Exit;
+  end;
+
+  { DEFINED HERE, BUT NOT AT THIS ARITY -- and no built-in to fall through to,
+    so this call fails at run time. Saying "not found" about a name plainly
+    visible three lines up reads as a broken feature; saying which arities exist
+    is the answer to the question actually being asked. }
+  if Defined > 0 then
+  begin
+    StatusBar1.Panels[3].Text := Format(
+      'no %s taking %d argument(s) in this file -- it is defined taking %s',
+      [Nm, Args, OutlineArities(Funcs, Nm)]);
+    Exit;
+  end;
+
+  if IsPhosphorKeyword(Nm) or IsPhosphorOperatorWord(Nm) or
+     IsPhosphorLiteralWord(Nm) then
+  begin
+    { And it may still be a function name -- Phosphor has no keyword table, so
+      `function if(a)` is legal and would have been found above. Reaching here
+      means nobody defined one. }
+    StatusBar1.Panels[3].Text :=
+      Format('%s is a keyword here, not a function', [Nm]);
+    Exit;
+  end;
+
+  { A CALL TO A NAME NOTHING DEFINES COMPILES, and fails only when it runs. So
+    F12 finding nothing is an ordinary answer and not a diagnostic, and it
+    belongs in the status bar rather than in a dialog. }
+  StatusBar1.Panels[3].Text :=
+    Format('no definition for %s in this file', [Nm]);
 end;
 
 procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
@@ -2625,6 +2971,9 @@ begin
     FMarksDirty := False;
     SyncGutterMarks(ActiveDoc);
   end;
+  { NOT a rebuild: a rescan of the whole buffer on every keystroke is the storm
+    the roadmap forbids. This arms the debounce. }
+  ScheduleOutline;
 end;
 
 procedure TFrmMain.EditorStatusChange(Sender: TObject; AChanges: TSynStatusChanges);
@@ -2632,6 +2981,11 @@ begin
   if (scCaretX in AChanges) or (scCaretY in AChanges) or (scModified in AChanges) then
   begin
     RefreshStatus;
+    { AND THE OUTLINE FOLLOWS THE CARET, which is the difference between a list
+      and an outline: it answers "where am I" without being asked. A walk over
+      ten records, on the caret path, and nothing is rescanned here. }
+    if scCaretY in AChanges then
+      SyncOutlineSelection;
     { THE CARET IS THE ONLY TRIGGER THE HINT NEEDS. Typing `(` moves it, typing
       `)` moves it, and moving out of the call by any route -- arrow key, mouse,
       Go to Line -- moves it too. There is nothing to dismiss because there is
@@ -2768,6 +3122,9 @@ end;
 procedure TFrmMain.PagesEditorsChange(Sender: TObject);
 begin
   RefreshStatus;
+  { AT ONCE, not on the debounce: a list of another file's functions that can be
+    clicked is a wrong jump waiting a quarter of a second to happen. }
+  RebuildOutline;
   { A hint belongs to a caret, and the caret just changed file. }
   HideSignatureHint;
 end;
@@ -2878,6 +3235,7 @@ begin
   ActFindNext.Enabled := (Doc <> nil) and (FLastSearch <> '');
   ActReplace.Enabled := Doc <> nil;
   ActGotoLine.Enabled := Doc <> nil;
+  ActGotoDefinition.Enabled := Doc <> nil;
 
   ActRun.Enabled := (Doc <> nil) and not Busy;
   ActCheck.Enabled := ActRun.Enabled;

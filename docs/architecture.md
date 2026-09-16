@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 291 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 384 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -779,6 +779,32 @@ TIER, and by nothing else.
 `phosphoridetest` pins every one without a window. The popup is
 `TSynCompletion` in `umainform`.
 
+**The outline** is `src/core/uphosphoroutline.pas`, and it is the fourth LCL-free
+unit here for the third distinct reason: not because it must run on a thread, and
+not because it must run headless in CI, but because it is the piece most likely to
+be WRONG and the only way to argue about it is to write the argument down as
+checks. It scans a buffer for `function` definitions and answers where a name is
+defined; `tests/phosphoridetest.lpr` pins it against ten definitions and every
+legal spelling that breaks the obvious scanner.
+
+It is a scanner and not a parser, and the header says so in the terms
+`usynphosphor` uses for colour: Phosphor decides keywords by POSITION, so
+`then = 5` is a legal assignment, `function if(a)` legally defines a function
+called `if`, and anything that reads a word and concludes "that is the keyword" is
+wrong about some legal program. The trade is acceptable for NAVIGATION and for
+nothing else -- being wrong costs a row in a list rather than a character of
+somebody's file -- which is why the unit forbids its own use in any code path
+that edits, and refers folding to roadmap item 17 rather than deciding it.
+
+Three of its findings were measured against the real host rather than reasoned
+about, and each one breaks the scanner a reasonable person would write first: a
+definition begins a STATEMENT and not a line, so `x = 1 : function f()`,
+`if c then function f()` and two complete definitions on one line after a label
+are all legal; `end function` merges with `endfunction` only when the two words
+are adjacent; and a call resolves by name AND ARGUMENT COUNT, so
+`function len(a, b)` in your file does not shadow `len("abcd")` -- which is why
+F12 counts the arguments at the call site before it jumps anywhere.
+
 **Searching a tree** is `src/core/ufindinfiles.pas`, and it is the fourth thing in
 this program built to the same shape as the other three: a worker fills a
 lock-guarded buffer, the caller drains it from its own timer, and no thread ever
@@ -830,7 +856,7 @@ not at all.
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 291 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 384 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

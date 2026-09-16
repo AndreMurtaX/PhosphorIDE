@@ -89,7 +89,7 @@ Each script does the same six things in the same order:
    The script checks that the binary exists and is executable before it says a word about
    success. This is Phosphor's rule and it is here for the same reason.
 4. **Run the unit checks** -- `bin/phosphoridetest`, which prints
-   `291 checks, all green.` and exits 0. A non-zero exit is the number of failures, each
+   `384 checks, all green.` and exits 0. A non-zero exit is the number of failures, each
    already printed with what it expected and what it got.
 5. **Run `--selftest`, under a timeout.** `bin/phosphoride --selftest <report>` builds
    every form once and exits 0 or 1. The timeout is not caution, it is the fix for a
@@ -170,7 +170,7 @@ program and already exercises the units where a leak would be worth finding.
 
 Three of them. They cover different things and none of them covers what the other two do.
 
-### `bin/phosphoridetest` -- 291 checks
+### `bin/phosphoridetest` -- 384 checks
 
 ```
 bin\phosphoridetest.exe          # Windows

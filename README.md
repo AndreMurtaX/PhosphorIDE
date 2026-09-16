@@ -102,6 +102,7 @@ on line 1 of an otherwise perfect program, and every Windows editor and
 | gutter click | the same toggle, where every other editor puts it              |
 | `Ctrl+G`   | Go to Line; `Ctrl+F` / `F3` / `Ctrl+R` find, find next, replace  |
 | `Ctrl+Shift+F` | Find in Files -- searches a directory tree, not the buffer  |
+| `F12` `Ctrl+Shift+O` | Go to Definition; Outline -- the functions in this buffer |
 | `Ctrl+N` `Ctrl+O` `Ctrl+S` `Ctrl+Shift+S` `Ctrl+W` `Ctrl+Q` | new, open, save, save as, close tab, exit |
 
 Compile to Bytecode and Pack Executable sit in the Run menu without shortcuts. Pack
@@ -291,6 +292,57 @@ Three things it does deliberately:
   shown; offering it here alone would make this the one search in the program
   that can do something the others cannot.
 
+## The outline, and going to a definition
+
+The **Outline** tab lists the `function` definitions in the buffer you are
+typing in, in source order, as `10: second(a, b)`. Clicking a row moves the
+caret and leaves the keyboard in the list, so arrowing down it walks the file;
+double-clicking hands the keyboard back to the text. The selection follows the
+caret, so the pane also answers "which function am I in". **F12** on a name
+jumps to the function that defines it.
+
+`src/core/uphosphoroutline.pas` is the scanner, and its header is worth reading
+before trusting it, because **it is a scanner and not a parser**. Phosphor's
+lexer has no keyword table -- every keyword reaches the parser as an ordinary
+identifier and is decided by position -- so `then = 5` is a legal assignment and
+`function if(a)` legally defines a function called `if`. Anything that reads a
+word and concludes "that is the keyword" is therefore wrong about some legal
+program. That trade is acceptable for NAVIGATION, where being wrong costs a row
+in a list, and it is why nothing in that unit may be used by code that changes a
+buffer.
+
+Within that limit it is careful, and every case below was compiled and run
+against the real host rather than assumed:
+
+- A definition begins a **statement**, not a line. `x = 1 : function f()` is
+  legal, so are `if x > 0 then function f()` and `... else function f()`, and
+  `head: function a%() return 1 : end function : function b%() return 2 : end
+  function` is ONE line holding TWO complete definitions.
+- `end function` written as two words is the same token as `endfunction` -- but
+  only when they are adjacent, so an `end` ending one line and a `function`
+  beginning the next is not a terminator.
+- The type suffix is part of the name: `g$`, `m%`, `n?` and `o@` are four
+  different functions, and the suffix is the only return type the language
+  declares. Names are matched folded, because the lexer folds them, and shown as
+  you typed them, because the file is yours.
+- `rem function ghost()`, `' function ghost()` and `println "function ghost()"`
+  define nothing.
+
+**F12 knows about arity, and that is not pedantry.** The host resolves a call by
+name *and* argument count, so with `function len(a, b)` in your file the call
+`len("abcd")` still runs the built-in and prints 4. A go-to-definition matching
+on the name alone would send you, confidently, into a body that call never
+enters. So F12 counts the arguments at the call site, and when the name resolves
+to something else it says which: a built-in offers the function reference rather
+than opening a browser unasked, a statement keyword says so, and a name nothing
+defines writes one line to the status bar -- a call to an undefined name
+compiles in Phosphor and fails only when it runs, so finding nothing is an
+ordinary answer and not a diagnostic.
+
+Labels and `gosub` targets are deliberately absent. They are a second table in
+the compiler that never consults the function table, and an absence that is
+written down beats a jump that is wrong and looks right.
+
 ## Debugging
 
 **Stepping works.** Set a breakpoint in the gutter or with F5, press **Shift+F9**,
@@ -372,7 +424,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 291 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 384 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner
