@@ -352,8 +352,17 @@ end;
 procedure TestCompletion;
 var
   Items: TCompletionItems;
-  CoreN, PkgN, GuiN, I: Integer;
+  Sigs: TPhosphorWordList;
+  CoreN, PkgN, GuiN, I, Arg: Integer;
   Sorted, Cut: Boolean;
+  Nm: String;
+
+  { CallAtCaret has two out parameters, which a Check cannot hold. }
+  function CallAt(const ALine: String; ACol: Integer;
+    out AName: String; out AArg: Integer): Boolean;
+  begin
+    Result := CallAtCaret(ALine, ACol, AName, AArg);
+  end;
 
   function Pre(const ALine: String; ACol: Integer): String;
   var
@@ -458,6 +467,89 @@ begin
     if Items[I - 1].Word >= Items[I].Word then
       Sorted := False;
   Check('the list is sorted and has no repeats', Sorted);
+
+
+  { --- the signatures, which are facts about the other repository ---------- }
+  Sigs := PhosphorSignatures('mid$');
+  { mid$ IS THE CASE THE WHOLE TABLE EXISTS FOR: Reg.Add overwrites by
+    signature, not by name, so `mid$:$n` and `mid$:$nn` are two slots. An editor
+    that showed one arity for a name that has two would be worse than one that
+    showed none. }
+  CheckEqInt('mid$ has two arities', 2, Length(Sigs));
+  if Length(Sigs) = 2 then
+  begin
+    CheckEq('the shorter one comes first', '$n', Sigs[0]);
+    CheckEq('and then the longer', '$nn', Sigs[1]);
+  end;
+
+  { ABSENT AND EMPTY ARE DIFFERENT ANSWERS. dirseparator$ is registered as
+    `dirseparator$:` -- it is KNOWN, and takes nothing. }
+  Sigs := PhosphorSignatures('dirseparator$');
+  CheckEqInt('a zero-argument name has one signature', 1, Length(Sigs));
+  if Length(Sigs) = 1 then
+    CheckEq('and it is the empty string', '', Sigs[0]);
+
+  { ...whereas a name whose signature is assembled at run time has NONE, and the
+    difference is the whole reason the table can say either. callfunc registers
+    one slot per arity from a loop, so the literal in the source says `$` and the
+    truth is nine different things. }
+  CheckEqInt('callfunc carries no signature at all', 0,
+             Length(PhosphorSignatures('callfunc')));
+  { The four compiler special forms are in no registry, so there is nothing to
+    extract and nothing is claimed. }
+  CheckEqInt('eof carries none either', 0, Length(PhosphorSignatures('eof')));
+  CheckEqInt('and a word that is not a built-in carries none', 0,
+             Length(PhosphorSignatures('zzqzz')));
+  Check('lookup is case-insensitive here too',
+        Length(PhosphorSignatures('MID$')) = 2);
+  CheckEqInt('the table holds what the unit says it holds',
+             PhosphorSignatureNameCount, 1136);
+
+  { --- which call the caret is in ------------------------------------------ }
+  Check('inside a call', CallAt('mid$(s, 1', 10, Nm, Arg));
+  CheckEq('the name is the one before the parenthesis', 'mid$', Nm);
+  CheckEqInt('and the argument is counted by commas', 1, Arg);
+  Check('on the first argument', CallAt('mid$(', 6, Nm, Arg));
+  CheckEqInt('which is zero', 0, Arg);
+  { SPACE DOES NOT BREAK THE NAME, or the popup vanishes when somebody types
+    one; anything else does. }
+  Check('a space before the parenthesis is the same call',
+        CallAt('mid$ (s', 8, Nm, Arg));
+  CheckEq('still mid$', 'mid$', Nm);
+  Check('grouping is not a call', not CallAt('x = (a + b', 11, Nm, Arg));
+  Check('a closed call is over', not CallAt('mid$(s, 1)', 11, Nm, Arg));
+  { THE INNERMOST ONE, because that is what is being typed. }
+  { COLUMN 16 IS INSIDE mid$, 17 IS NOT: the closing parenthesis at 16 ends that
+    call, and a caret after it is back in left$. The first version of this asked
+    for 17 and expected mid$ -- the code was right and the expectation was
+    wrong, which is the good way round to find out. }
+  Check('nested answers the inner call',
+        CallAt('left$(mid$(s, 2), 4', 16, Nm, Arg));
+  CheckEq('which is mid$', 'mid$', Nm);
+  CheckEqInt('on its second argument', 1, Arg);
+  Check('and after it closes, the outer one',
+        CallAt('left$(mid$(s, 2), 4', 20, Nm, Arg));
+  CheckEq('which is left$', 'left$', Nm);
+  CheckEqInt('on its second argument too', 1, Arg);
+  { The same two silences as completion, for the same reasons. }
+  Check('never inside a string', not CallAt('s = "mid$(a', 12, Nm, Arg));
+  Check('never inside a comment', not CallAt('mid$(s '' why', 13, Nm, Arg));
+  Check('a parenthesis inside a string is not an open call',
+        not CallAt('s = "(" + mid', 14, Nm, Arg));
+
+  { --- how a signature reads ----------------------------------------------- }
+  CheckEq('kinds, not parameter names', 'mid$([string], number)',
+          SignatureText('mid$', '$n', 0));
+  CheckEq('the caret is marked where it is', 'mid$(string, [number])',
+          SignatureText('mid$', '$n', 1));
+  { A signature shorter than the argument being typed no longer matches, and is
+    rendered unmarked rather than hidden. }
+  CheckEq('a shorter arity is left unmarked', 'mid$(string, number)',
+          SignatureText('mid$', '$n', 5));
+  CheckEq('no arguments is an empty pair', 'dirseparator$()',
+          SignatureText('dirseparator$', '', 0));
+  CheckEq('every code has a word', 'f([number], int%, string, handle, bool)',
+          SignatureText('f', 'n%$@?', 0));
 
   { --- the insertion keeps the user's case --------------------------------- }
   CheckEq('lower stays lower', 'println', CompletionInsertion('prin', 'println'));

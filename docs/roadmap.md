@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 222 checks, exit code 0.
+- `bin\phosphoridetest` green: 255 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -558,6 +558,32 @@ a keyword". Completion is downstream.
 ---
 
 ## 12. Signature help from the registry's `:`-signature strings
+
+**DONE 2026-09-16.** `gen-keywords.py` keeps the codes, `uphosphorlang` carries
+**1226 signatures over 1136 names**, and a hint under the caret shows every arity
+of the call being typed with the current argument in brackets. Both counts are
+asserted the way the tier counts are, so a Phosphor release that changes a
+registration is a red build here.
+
+Three answers the item asked for, and one it did not:
+
+- `mid$` has two arities and both show. Sorted shortest first, because the short
+  one is what is being typed when the hint first appears.
+- **Absent and empty are different answers.** `dirseparator$:` is a registration
+  and means "takes nothing"; `callfunc` means "nothing known", because its
+  arities are assembled in a loop at run time and the literal in the source says
+  `$` while the truth is nine things. Taking the literal would have been a WRONG
+  fact rather than a missing one, so those names carry none at all.
+- The four compiler special forms carry none either, and the generator says why:
+  there is nothing in a registry to extract, and writing one by hand is the
+  second copy of another repository's fact that `uphosphorlang` exists to
+  prevent.
+- Not asked for and worth having: the hint is a `THintWindow` and not a second
+  completion list. Nothing is being chosen, so a widget that took the keyboard
+  would be in the way of the typing it is meant to help, and there is nothing to
+  dismiss — closing the call moves the caret out of it.
+
+**Was:**
 
 **What.** Show the argument kinds while the caret is inside a call's parentheses.
 

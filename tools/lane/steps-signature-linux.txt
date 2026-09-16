@@ -1,0 +1,29 @@
+# Signature help under gtk2. Same case as steps-signature.txt; every character
+# goes in by keysym name, so no layout gets a vote and no dead key composes
+# with the vowel after it.
+raise
+key ctrl+End
+wait 400
+key Return
+wait 300
+type s = mid$(
+wait 900
+shot 111-first-argument
+type "z",
+wait 900
+shot 112-second-argument
+# AND THE HINT ITSELF. A GTK popup is an override-redirect window of its own, so
+# the shot above has the text and not the window over it; popshot finds the
+# window that was not there at startup.
+popshot 112b-the-hint-itself
+type 2, 3
+wait 900
+shot 113-third-argument
+type )
+wait 900
+shot 114-closed-and-gone
+key Return
+wait 300
+type t = callfunc(
+wait 900
+shot 115-nothing-known

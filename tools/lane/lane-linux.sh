@@ -49,10 +49,41 @@ fi
 echo "window $WIN  pid $IDE_PID"
 xwininfo -id "$WIN" | grep -E 'Absolute upper-left|Width:|Height:'
 
+# EVERY POPUP THIS PROGRAM OWNS, RECORDED AS "NOT YET THERE". A GTK menu, a
+# completion list and a hint are override-redirect windows of their OWN, which is
+# why `xwd -id $WIN` photographs the form with nothing over it -- recorded twice
+# in this repository as "cannot be photographed at all", and wrong twice. They
+# are in the root's tree; the only hard part is telling them from the LCL's three
+# permanent decoys and from the mutter frame.
+#
+# So the set of the process's own top-level windows is taken once, before
+# anything can pop up, and `popshot` photographs whatever is NEW. No rule about
+# sizes, no guess about names.
+own_windows() {
+    xwininfo -root -tree 2>/dev/null | grep -E '\("phosphoride"' |
+        sed -E 's/^ *(0x[0-9a-f]+).*/\1/' | sort
+}
+BASE_WINDOWS="$(own_windows)"
+
 # A GTK menu is an override-redirect window of its OWN, not a child of the form,
 # so `xwd -id $WIN` photographs a window with no menu in it however open the menu
 # is. The whole root is the only way to see one. Paid for on 2026-09-16 by
 # concluding twice that a menu had not opened when it had.
+# A popup: the process's top-level window that was not there at startup.
+popshot() {
+    local new
+    new=$(comm -13 <(printf '%s\n' "$BASE_WINDOWS") <(own_windows) | head -1)
+    if [ -z "$new" ]; then
+        echo "  NO POPUP FOUND for $1" >&2
+        return
+    fi
+    if xwd -id "$new" -out "$OUT/$1.xwd" 2>"$OUT/$1.err"; then
+        python3 "$HERE/shot.py" "$OUT/$1.xwd" "$OUT/$1.png" && rm -f "$OUT/$1.xwd" "$OUT/$1.err"
+    else
+        echo "  POPSHOT FAILED $1: $(head -1 "$OUT/$1.err")" >&2
+    fi
+}
+
 rootshot() {
     if xwd -root -out "$OUT/$1.xwd" 2>"$OUT/$1.err"; then
         python3 "$HERE/shot.py" "$OUT/$1.xwd" "$OUT/$1.png" && rm -f "$OUT/$1.xwd" "$OUT/$1.err"
@@ -128,6 +159,7 @@ while IFS= read -r line; do
     case "$line" in
         shot\ *) flush; shot "${line#shot }" ;;
         rootshot\ *) flush; rootshot "${line#rootshot }" ;;
+        popshot\ *) flush; popshot "${line#popshot }" ;;
         at\ *) flush; at ${line#at } ;;
         at2\ *) flush; at ${line#at2 } dblclick ;;
         bot\ *) flush; bot ${line#bot } ;;

@@ -245,6 +245,21 @@ that works on its author's desktop reaches a server and stops.
 It stays quiet inside a string or a comment, and says so in the status bar rather
 than appearing broken.
 
+**Signature help** appears on its own while the caret is inside a call's
+parentheses: every arity the host registered for that name, with the argument
+being typed in brackets.
+
+```
+mid$(string, [number])
+mid$(string, [number], number)
+```
+
+Two arities, because Phosphor's registry overwrites by SIGNATURE and not by name.
+The kinds are all there is to show — the registry stores argument kinds and no
+parameter names — and a name whose arities are assembled at run time, or which
+the compiler handles as a special form, shows nothing rather than something
+invented.
+
 ## Debugging
 
 **Stepping works.** Set a breakpoint in the gutter or with F5, press **Shift+F9**,
@@ -326,7 +341,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 222 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 255 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

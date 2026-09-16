@@ -25,6 +25,7 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-gutter.txt`, `steps-gutter-linux.txt` | the hollow ring beside the solid dot, and both solid before any session |
 | `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
 | `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
+| `steps-signature.txt`, `steps-signature-linux.txt` | every arity of `mid$`, the argument marked as it moves, the hint gone when the call closes, and nothing at all for `callfunc` |
 | `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
 | `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, same commands as the Linux one |
@@ -52,20 +53,26 @@ Four things cost real time on 2026-09-16 and are worth not rediscovering:
   `XGetImage` on a frame is `BadMatch` — `xwd` then writes a zero-byte file and
   exits 1. Match on the window CLASS. There are also three decoy 10×10 windows
   named `phosphoride`: the LCL's own hidden top-levels.
-- **`xwd -root` also fails on Xwayland**, so a GTK menu — which is an
-  override-redirect window of its own, not a child of the form — cannot be
-  photographed at all. Twice this read as "the menu never opened".
+- **`xwd -root` also fails on Xwayland**, so for a while a GTK menu — an
+  override-redirect window of its own, not a child of the form — read as
+  something that could not be photographed at all, twice. **That was wrong**, and
+  `popshot` is the answer: those windows ARE in the root's tree, and the only
+  hard part is telling them from the LCL's three permanent decoys. The script
+  records the process's own top-level windows once, before anything can pop up,
+  and photographs whatever is new. A hint window came out 217x42 on the first
+  try. Menus and the completion list are reachable the same way.
 - **Nothing may steal focus mid-script.** A GTK menu holds a keyboard grab, and
   `XSetInputFocus` on the form drops it, so consecutive keys go in ONE `xdrive`
   invocation and every invocation is `nofocus` unless the script says `raise`.
 - **A background GUI holding ssh's stdout keeps ssh from returning** even after
   the script ends. `setsid` plus a redirect.
 
-**A GTK popup cannot be photographed either.** The completion list, like a menu,
-is an override-redirect window of its own, so `xwd -id <win>` shows the editor
-with no popup over it. The Linux completion case therefore asserts the RESULT --
-what the line says after Return -- rather than the picture, which is the same
-lesson as reading the transcript as text.
+**A GTK popup needs `popshot`, not `shot`.** The completion list, a menu and the
+signature hint are each an override-redirect window of their own, so
+`xwd -id <win>` shows the editor with nothing over it. `popshot` photographs the
+window that was not there at startup. Where a popup's EFFECT is the thing under
+test — what the line says after Return — asserting that is still better than a
+picture of it.
 
 **Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
 not down from the top. mutter gives this window a different height on different
@@ -86,7 +93,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 
            -Fixture tools\lane\deep.bas -Steps tools\lane\steps-stack.txt
 ```
 
-`SendKeys` is enough for the keyboard. The two facts that are not obvious:
+`SendKeys` is enough for the keyboard, with two escapes. `type` is literal text,
+so `+ ^ % ~ ( ) { } [ ]` are braced by the driver — `type s = mid$(` opened a
+modifier group and ate what followed, and the line came out as `s = mid$ bc",`.
+`key` is a chord, so a step that wants a literal `)` writes `key {)}`. And
+`key ^<space>` is Ctrl+Space: every line is trimmed and SendKeys has no
+`{SPACE}`.
+
+**THE LAYOUT DECIDES WHAT ARRIVES, ON BOTH SIDES, DIFFERENTLY.** SendKeys types
+CHARACTERS, and on an ABNT2 keyboard `"` is a DEAD KEY: `"a` composes to a
+diaeresis and both characters vanish, which is why the fixtures here write `"z`.
+XTest injects a KEYCODE, and a keycode is a physical key carrying several symbols
+at different shift levels: `XKeysymToKeycode('dollar')` names the key and not how
+to reach it, so on the same Brazilian map pressing it bare typed `mid4(`. `xdrive`
+now asks `XKeycodeToKeysym` which level the symbol is on and presses Shift or
+AltGr to match. Both were measured on 2026-09-16, and both looked like editor
+bugs first.
+
+The two facts that are not obvious:
 
 - **`Process.MainWindowHandle` is not the form.** The LCL creates a hidden
   top-level window holding `Application.Title` and Windows returns that one, so

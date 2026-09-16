@@ -15,7 +15,9 @@ program xdrive;
   script is one command per line:
 
       key ctrl+g            one chord; modifiers are shift, ctrl, alt
-      type 10               literal characters, one keystroke each
+      type 10               literal characters, each sent by KEYSYM NAME rather
+                            than by a shifted keycode, so the layout does not
+                            decide what arrives
       wait 400              milliseconds
       raise                 focus and raise the window again
 
@@ -40,10 +42,24 @@ var
   Dpy: PDisplay;
   Win: TWindow;
 
-function CodeOf(const AName: String): TKeyCode;
+{ THE KEYCODE IS NOT THE WHOLE ANSWER, AND BELIEVING IT COST A RUN. XTest
+  injects a KEYCODE, and a keycode is a physical key carrying several symbols at
+  different shift LEVELS. XKeysymToKeycode says which key `dollar` lives on and
+  says nothing about how to reach it -- on the Brazilian map that key is `4`
+  unshifted, so pressing it bare typed `mid4(` where the script said `mid$(`, and
+  `quotedbl` came out as an apostrophe the same way. Measured on 2026-09-16,
+  under a comment of mine claiming the opposite.
+
+  So the level is asked for too: index 0 is the bare key, 1 is with Shift, 2 and
+  3 are the AltGr pair. XKeycodeToKeysym is deprecated in favour of the Xkb call
+  and is what FPC's x11 package exports; for reading a level off a key it is
+  exact. }
+function CodeOf(const AName: String; out AMod: String): TKeyCode;
 var
   Sym: TKeySym;
+  Level: Integer;
 begin
+  AMod := '';
   Sym := XStringToKeysym(PChar(AName));
   if Sym = 0 then
   begin
@@ -56,6 +72,27 @@ begin
     WriteLn(StdErr, 'xdrive: keysym ', AName, ' is not on this keyboard map');
     Halt(2);
   end;
+  for Level := 0 to 3 do
+    if XKeycodeToKeysym(Dpy, Result, Level) = Sym then
+    begin
+      case Level of
+        1: AMod := 'Shift_L';
+        2, 3: AMod := 'ISO_Level3_Shift';
+      end;
+      Exit;
+    end;
+  { On the key but at no level this knows. Saying so beats typing whatever the
+    bare key happens to carry. }
+  WriteLn(StdErr, 'xdrive: keysym ', AName,
+          ' is on a shift level this driver cannot reach');
+  Halt(2);
+end;
+
+function PlainCodeOf(const AName: String): TKeyCode;
+var
+  Ignored: String;
+begin
+  Result := CodeOf(AName, Ignored);
 end;
 
 procedure Tap(const AName: String; const AMods: array of String);
@@ -63,11 +100,20 @@ var
   I: Integer;
   ModCodes: array of TKeyCode;
   Code: TKeyCode;
+  Needed: String;
 begin
+  Code := CodeOf(AName, Needed);
   SetLength(ModCodes, Length(AMods));
   for I := 0 to High(AMods) do
-    ModCodes[I] := CodeOf(AMods[I]);
-  Code := CodeOf(AName);
+    ModCodes[I] := PlainCodeOf(AMods[I]);
+  { The level the symbol sits at is a modifier the CALLER did not ask for and
+    cannot know: `type $` says nothing about Shift, and on one keyboard it needs
+    it and on another it does not. }
+  if Needed <> '' then
+  begin
+    SetLength(ModCodes, Length(ModCodes) + 1);
+    ModCodes[High(ModCodes)] := PlainCodeOf(Needed);
+  end;
 
   for I := 0 to High(ModCodes) do
     XTestFakeKeyEvent(Dpy, ModCodes[I], 1, 0);
@@ -139,7 +185,10 @@ begin
     if C in ['a'..'z', '0'..'9'] then
       Tap(C, [])
     else if C in ['A'..'Z'] then
-      Tap(LowerCase(C), ['Shift_L'])
+      { By its own keysym -- `A` is a keysym, and CodeOf works out that it needs
+        Shift. Naming Shift here as well would press it twice, which is
+        harmless, but the point is that the caller does not have to know. }
+      Tap(C, [])
     else if C = ' ' then
       Tap('space', [])
     else if C = '.' then
@@ -147,9 +196,34 @@ begin
     else if C = '/' then
       Tap('slash', [])
     else if C = '_' then
-      Tap('underscore', ['Shift_L'])
+      Tap('underscore', [])
     else if C = '-' then
       Tap('minus', [])
+    { BY KEYSYM NAME, and CodeOf works out which shift level it is on -- see
+      there for why naming the keysym alone was not enough. The Windows side of
+      this lane has the mirror-image problem: SendKeys types CHARACTERS, and on
+      the same Brazilian layout a `"` is a DEAD KEY that composes with the vowel
+      after it and eats both. }
+    else if C = '(' then
+      Tap('parenleft', [])
+    else if C = ')' then
+      Tap('parenright', [])
+    else if C = '"' then
+      Tap('quotedbl', [])
+    else if C = ',' then
+      Tap('comma', [])
+    else if C = '=' then
+      Tap('equal', [])
+    else if C = '$' then
+      Tap('dollar', [])
+    else if C = '%' then
+      Tap('percent', [])
+    else if C = '+' then
+      Tap('plus', [])
+    else if C = ':' then
+      Tap('colon', [])
+    else if C = ';' then
+      Tap('semicolon', [])
     else
     begin
       WriteLn(StdErr, 'xdrive: cannot type ', C);

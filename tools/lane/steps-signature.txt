@@ -1,0 +1,35 @@
+# Signature help. `mid$` is the case the whole table exists for: Reg.Add
+# overwrites by signature and not by name, so it has two arities and both must
+# show. The hint follows the caret, marks the argument being typed, and needs no
+# dismissal -- closing the call moves the caret out of it.
+#
+# NO VOWEL AFTER A QUOTE. On an ABNT2 layout `"` is a DEAD KEY, so SendKeys
+# composes it with whatever follows: `"a` becomes a diaeresis and both
+# characters are lost. `"z` is safe. Measured on 2026-09-16, when the line came
+# out as `s = mid$( bc",` and the editor was blamed first.
+key ^{END}
+wait 400
+key {ENTER}
+wait 300
+type s = mid$(
+wait 900
+shot 101-first-argument
+type "z",
+wait 900
+shot 102-second-argument
+type 2, 3
+wait 900
+shot 103-third-argument
+# BRACED, because `key` is a chord and a bare ) is SendKeys syntax. The first
+# version wrote `key )` and the parenthesis was never typed, so the hint stayed
+# up and looked like a dismissal bug.
+key {)}
+wait 900
+shot 104-closed-and-gone
+
+# A name whose arities are assembled at run time claims nothing.
+key {ENTER}
+wait 300
+type t = callfunc(
+wait 900
+shot 105-nothing-known

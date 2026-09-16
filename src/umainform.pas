@@ -22,7 +22,7 @@ unit umainform;
 interface
 
 uses
-  Classes, SysUtils, Math, Forms, Controls, Graphics, Dialogs, Menus, ComCtrls,
+  Classes, SysUtils, Math, Types, Forms, Controls, Graphics, Dialogs, Menus, ComCtrls,
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
@@ -289,6 +289,15 @@ type
     FCompletionStart: Integer;
     FCompletionLine: Integer;
 
+    { The signature hint. A THintWindow rather than a second TSynCompletion:
+      nothing is being chosen here, so a list that takes the keyboard would be
+      in the way of the typing it is meant to help. It follows the caret and
+      disappears when the call closes, which is the only dismissal it needs. }
+    FSigHint: THintWindow;
+    { What the hint currently says, so that moving along one argument does not
+      redraw an identical window on every keystroke. }
+    FSigShown: String;
+
     { An edit moved the breakpoint set and the gutter has not caught up yet.
       See DocBreakpointsChanged for why it cannot catch up immediately. }
     FMarksDirty: Boolean;
@@ -343,6 +352,8 @@ type
       AShift: TShiftState);
     function CompletionPaintItem(const AKey: String; ACanvas: TCanvas;
       AX, AY: Integer; ASelected: Boolean; AIndex: Integer): Boolean;
+    procedure RefreshSignatureHint;
+    procedure HideSignatureHint;
     function StartDebugSession: Boolean;
     procedure EndDebugSession(const AWhy: String);
     procedure DebugTimerTick(Sender: TObject);
@@ -465,6 +476,9 @@ begin
     deprecated, and this project treats a hint as a defect until proven
     cosmetic. The form exists from the constructor (syncompletion.pas:1397). }
   FCompletion.TheForm.NbLinesInWindow := 12;
+
+  FSigHint := THintWindow.Create(Self);
+  FSigHint.AutoHide := False;
 
   FDocs := TList.Create;
   FProblemLines := TStringList.Create;
@@ -2377,7 +2391,80 @@ end;
 procedure TFrmMain.EditorStatusChange(Sender: TObject; AChanges: TSynStatusChanges);
 begin
   if (scCaretX in AChanges) or (scCaretY in AChanges) or (scModified in AChanges) then
+  begin
     RefreshStatus;
+    { THE CARET IS THE ONLY TRIGGER THE HINT NEEDS. Typing `(` moves it, typing
+      `)` moves it, and moving out of the call by any route -- arrow key, mouse,
+      Go to Line -- moves it too. There is nothing to dismiss because there is
+      nothing that stays up on its own. }
+    RefreshSignatureHint;
+  end;
+end;
+
+procedure TFrmMain.HideSignatureHint;
+begin
+  FSigShown := '';
+  if FSigHint <> nil then
+    FSigHint.Hide;
+end;
+
+procedure TFrmMain.RefreshSignatureHint;
+var
+  Doc: TEditorDoc;
+  { Not Name and Text: TComponent publishes both, and a local that shadows a
+    published property of the enclosing class is a duplicate identifier here. }
+  CallName, Body: String;
+  Arg, I: Integer;
+  Sigs: TPhosphorWordList;
+  R: TRect;
+  P: TPoint;
+begin
+  Doc := ActiveDoc;
+  if (Doc = nil) or (Doc.Edit = nil) or (not Doc.Edit.Focused) then
+  begin
+    HideSignatureHint;
+    Exit;
+  end;
+
+  if not CallAtCaret(Doc.Edit.LineText, Doc.Edit.CaretX, CallName, Arg) then
+  begin
+    HideSignatureHint;
+    Exit;
+  end;
+
+  { NOTHING KNOWN IS NOT AN EMPTY SIGNATURE, and the difference is why this asks
+    for the length rather than for the first row. A name whose arities are built
+    at run time, one of the four compiler special forms, or a user's own
+    function: all three come back with no rows, and the honest hint for all three
+    is no hint. }
+  Sigs := PhosphorSignatures(CallName);
+  if Length(Sigs) = 0 then
+  begin
+    HideSignatureHint;
+    Exit;
+  end;
+
+  Body := '';
+  Text := '';
+  for I := 0 to High(Sigs) do
+  begin
+    if I > 0 then
+      Body := Body + LineEnding;
+    Body := Body + SignatureText(CallName, Sigs[I], Arg);
+  end;
+
+  { Redrawn only when it would say something different. The caret moves on every
+    keystroke inside a call, and re-activating a hint window per character is a
+    flicker the user reads as the editor struggling. }
+  if Body = FSigShown then
+    Exit;
+  FSigShown := Body;
+
+  P := Doc.Edit.ClientToScreen(
+    Point(Doc.Edit.CaretXPix, Doc.Edit.CaretYPix + Doc.Edit.LineHeight + 2));
+  R := FSigHint.CalcHintRect(0, Body, nil);
+  Types.OffsetRect(R, P.X, P.Y);
+  FSigHint.ActivateHint(R, Body);
 end;
 
 procedure TFrmMain.EditorSpecialLineMarkup(Sender: TObject; ALine: Integer;
@@ -2439,6 +2526,8 @@ end;
 procedure TFrmMain.PagesEditorsChange(Sender: TObject);
 begin
   RefreshStatus;
+  { A hint belongs to a caret, and the caret just changed file. }
+  HideSignatureHint;
 end;
 
 { --------------------------------------------------------------- chrome ----- }

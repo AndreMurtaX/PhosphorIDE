@@ -120,7 +120,15 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         # <space> is spelled out because every line is trimmed, and SendKeys has
         # no {SPACE} of its own -- so "key ^ " would arrive as "key ^".
         'key'      { [System.Windows.Forms.SendKeys]::SendWait(($rest -replace '<space>', ' ')); Start-Sleep -Milliseconds 120 }
-        'type'     { [System.Windows.Forms.SendKeys]::SendWait($rest); Start-Sleep -Milliseconds 120 }
+        # TYPE IS LITERAL TEXT AND KEY IS A CHORD, so this escapes what SendKeys
+        # would otherwise read as syntax: + ^ % ~ ( ) { } [ ] each go in braces.
+        # Paid for on 2026-09-16 -- "type s = mid$(" opened a modifier group and
+        # ate the characters after it, and the line came out as "s = mid$ bc",".
+        'type'     {
+            $lit = -join ($rest.ToCharArray() | ForEach-Object {
+                if ('+^%~(){}[]'.Contains($_)) { '{' + $_ + '}' } else { $_ } })
+            [System.Windows.Forms.SendKeys]::SendWait($lit); Start-Sleep -Milliseconds 120
+        }
         'wait'     { Start-Sleep -Milliseconds ([int]$rest) }
         'shot'     { Grab $rest }
         'raise'    { Focus }

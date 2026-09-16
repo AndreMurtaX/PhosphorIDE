@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 222 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 255 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -164,7 +164,8 @@ the bar.
   `python tools/gen-keywords.py ../Phosphor`. Its 53 keywords, 538 core, 181 package
   and 426 GUI built-ins are facts about the *other* repository; a hand edit puts them
   in two places and the edited copy is the one that goes stale. The script asserts
-  `EXPECTED = {'core': 534, 'package': 181, 'gui': 426}` (534 registrations plus the
+  `EXPECTED = {'core': 534, 'package': 181, 'gui': 426}`, and
+  `EXPECTED_SIG_NAMES` / `EXPECTED_SIG_PAIRS` for the signatures (534 registrations plus the
   four special forms `eof input$ loc lof` makes the unit's 538) and **refuses to
   generate** when Phosphor has moved, so a new Phosphor release is a red build rather
   than silence. Decide the new numbers deliberately, update `EXPECTED`, and say so in
@@ -225,6 +226,17 @@ the bar.
   reports one owning PID. `TDebugTransport.HandlesArePrivate` is the invariant
   as a boolean, and `phosphoridetest` pins it -- because deleting one line in
   `Listen` is otherwise a silent regression with a symptom only `ss` can see.
+- **A SIGNATURE IS ABSENT OR IT IS EMPTY, AND THOSE ARE DIFFERENT ANSWERS.**
+  `PhosphorSignatures` gives a one-element list holding `''` for a name that
+  takes no arguments, and a zero-element list for a name nothing is known about.
+  A caller that treats them alike tells somebody that `callfunc` takes nothing.
+  `callfunc` and its four suffixed forms register one slot per arity from a loop,
+  so the literal in the Phosphor source says `$` and the truth is nine things;
+  the generator drops them rather than keep the literal, because an editor
+  showing one arity for a name that has nine is worse than one showing none. The
+  four compiler special forms carry none for the same kind of reason: there is no
+  registry entry to extract, and a hand-written one would be a second copy of
+  another repository's fact.
 - **Completion reads the word tables, never the highlighter.** `usynphosphor`
   colours keywords by word and not by position, deliberately and wrongly, and its
   own header says nothing downstream may assume a coloured keyword IS a keyword.

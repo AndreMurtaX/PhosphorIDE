@@ -24,9 +24,27 @@ Two extraction traps, both already paid for:
    engine/libs, so scanning the repo ROOT doubles every count. Only the three
    known directories are scanned.
 
-The counts are asserted, not assumed: engine 534, packages 181, gui 426. If a
-Phosphor release moves them, this script fails and a human decides what the new
-numbers are before the unit changes.
+SIGNATURES ARE EXTRACTED TOO, AND SOME ARE DELIBERATELY NOT. Phosphor registers
+as Reg.Add('name:sig'), where the codes are one character per argument -- n
+numeric, % an exact int% that does not widen, $ string, @ handle, ? bool -- and a
+zero-argument function is 'name:'. One name can carry SEVERAL signatures, because
+Reg.Add overwrites by signature rather than by name: mid$:$n and mid$:$nn are two
+slots and not a conflict. So the table maps a name to a LIST.
+
+The exception is a registration whose signature is BUILT AT RUN TIME.
+PhosphorCallLib registers callfunc and its four suffixed forms once per arity,
+with the argument codes accumulated in a loop variable, so the literal in the
+source says ':$' and the real set is ':$', ':$*', ':$**' ... up to eight. Taking
+the literal would tell an editor that callfunc takes one string, which is a WRONG
+fact rather than a missing one -- and the project's own rule is that showing one
+arity for a name that has nine is worse than showing none. Those names are
+therefore recorded with NO signature at all, and the unit says absent rather than
+empty.
+
+The counts are asserted, not assumed: engine 534, packages 181, gui 426, and
+1136 names carrying 1226 signatures between them. If a Phosphor release moves
+any of them, this script fails and a human decides what the new numbers are
+before the unit changes.
 """
 
 import os
@@ -34,6 +52,9 @@ import re
 import sys
 
 EXPECTED = {'core': 534, 'package': 181, 'gui': 426}
+# Names carrying at least one extractable signature, and (name, signature) pairs.
+EXPECTED_SIG_NAMES = 1136
+EXPECTED_SIG_PAIRS = 1226
 
 TIER_DIRS = [
     ('core', 'engine/libs'),
@@ -52,6 +73,19 @@ REG_RE = re.compile(r"""\b(?:Reg|Registry)\.Add(?:Host)?\s*\(\s*'([^']*?)(?::[^'
 # same way, instead of silently going missing until a count assertion fires.
 LOOP_REG_RE = re.compile(r"""\b(?:Reg|Registry)\.Add(?:Host)?\s*\(\s*([A-Za-z_]\w*)\s*\[""")
 QUOTED_RE = re.compile(r"'([^']*)'")
+
+# The whole registration literal, name and signature together. Separate from
+# REG_RE because that one throws the signature away by design and is the thing
+# every count has always been measured with.
+SIG_RE = re.compile(r"""\b(?:Reg|Registry)\.Add(?:Host)?\s*\(\s*'([^']*)'""")
+
+# A loop registration whose signature IS a plain literal: Reg.Add(Arr[i] + ':n',
+# @fn). The trailing group says what follows the literal -- a comma means the
+# expression ended there and the signature is exactly what it says; a `+` means
+# it is built from something this script cannot see, and the name gets none.
+LOOP_SIG_RE = re.compile(
+    r"""\b(?:Reg|Registry)\.Add(?:Host)?\s*\(\s*([A-Za-z_]\w*)\s*\[[^\]]*\]"""
+    r"""\s*\+\s*'([^']*)'\s*(,|\+)""")
 
 
 def const_array_items(src, ident):
@@ -83,8 +117,38 @@ def names_in_file(path):
     return found
 
 
+def signatures_in_file(path, sigs, unknown):
+    """Add this unit's (name -> set of code strings) to sigs.
+
+    A name whose signature cannot be read STATICALLY goes into `unknown`, and
+    the caller drops whatever else was collected for it: a partial answer about
+    arity is a wrong answer, and the unit has a way to say nothing."""
+    with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+        src = fh.read()
+
+    for literal in SIG_RE.findall(src):
+        if ':' not in literal:
+            # Every registration in Phosphor today carries one. If that ever
+            # stops being true, the name is recorded WITHOUT a signature rather
+            # than with a guessed empty one -- those mean different things.
+            unknown.add(literal)
+            continue
+        name, sig = literal.split(':', 1)
+        sigs.setdefault(name, set()).add(sig)
+
+    for ident, literal, tail in LOOP_SIG_RE.findall(src):
+        items = const_array_items(src, ident)
+        for name in items:
+            if tail == ',' and literal.startswith(':'):
+                sigs.setdefault(name, set()).add(literal[1:])
+            else:
+                unknown.add(name)
+
+
 def collect(phosphor_root):
     tiers = {}
+    sigs = {}
+    unknown = set()
     for tier, rel in TIER_DIRS:
         directory = os.path.join(phosphor_root, rel)
         if not os.path.isdir(directory):
@@ -92,9 +156,13 @@ def collect(phosphor_root):
         names = set()
         for entry in sorted(os.listdir(directory)):
             if entry.lower().endswith('.pas'):
-                names |= names_in_file(os.path.join(directory, entry))
+                path = os.path.join(directory, entry)
+                names |= names_in_file(path)
+                signatures_in_file(path, sigs, unknown)
         tiers[tier] = sorted(names)
-    return tiers
+    for name in unknown:
+        sigs.pop(name, None)
+    return tiers, sigs
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +200,13 @@ LITERALS = 'false null true'.split()
 # Four names the compiler handles as special forms rather than registry lookups,
 # and which a user function may not shadow (engine/PhosphorCompiler.pas:461-469,
 # 800-832). They are in no registry, so nothing above finds them.
+#
+# AND THEY CARRY NO SIGNATURE, deliberately. There is none to extract: the
+# compiler parses them in its own code rather than looking them up, so writing
+# one here would be a hand-typed copy of a fact from the other repository --
+# which is the mistake this whole file exists to prevent. The unit therefore
+# answers "nothing known" for them, and an editor says nothing rather than
+# something it made up.
 SPECIAL_FORMS = 'eof input$ loc lof'.split()
 
 HEADER = """unit uphosphorlang;
@@ -184,6 +259,22 @@ function PhosphorOperatorWords: TPhosphorWordList;
 function PhosphorLiteralWords: TPhosphorWordList;
 function PhosphorBuiltins(ATier: TPhosphorTier): TPhosphorWordList;
 
+{ Every signature registered for AName, as CODE STRINGS: one character per
+  argument, from `n` numeric, `%` an exact int% that does not widen, `$` string,
+  `@` handle, `?` bool.
+
+  ABSENT AND EMPTY ARE DIFFERENT ANSWERS, and a caller that treats them alike
+  will tell somebody a lie. A result of LENGTH ZERO means nothing is known --
+  either the name is not a built-in, or its signature is assembled at run time
+  (callfunc and its four suffixed forms register one slot per arity from a loop),
+  or it is one of the four compiler special forms that are in no registry at all.
+  A result of length ONE holding the EMPTY STRING means the name is known and
+  takes no arguments: `dirseparator$:` is a registration, not a gap.
+
+  One name can have several, because Reg.Add overwrites by signature and not by
+  name -- `mid$:$n` and `mid$:$nn` are two slots. Sorted, shortest first. }
+function PhosphorSignatures(const AName: String): TPhosphorWordList;
+
 const
   { What this unit was generated from, so a mismatch is legible in a bug report
     rather than a mystery. }
@@ -192,6 +283,10 @@ const
   PhosphorBuiltinCoreCount = %(ncore)d;
   PhosphorBuiltinPackageCount = %(npkg)d;
   PhosphorBuiltinGuiCount = %(ngui)d;
+  { Names carrying at least one signature, and the total number of signatures
+    across them. Both asserted by the generator. }
+  PhosphorSignatureNameCount = %(nsigname)d;
+  PhosphorSignatureCount = %(nsig)d;
 
 implementation
 
@@ -223,6 +318,12 @@ const
 %(arrays)s
 
 var
+  { The signature index carries the row number in SignatureCodes as the object,
+    so one binary search answers both "is it there" and "which codes". }
+  FSignatureIndex: TStringList;
+  { The initialization section's loop counter. A unit has nowhere else to put
+    one. }
+  SigRow: Integer;
   { Sorted, case-insensitive indexes over the arrays above, built once at unit
     load. A TStringList.Find is a binary search; the highlighter asks this
     question once per identifier token on every visible line, so a linear scan
@@ -322,6 +423,37 @@ begin
   end;
 end;
 
+function PhosphorSignatures(const AName: String): TPhosphorWordList;
+var
+  Row, Start, Len, I, N: Integer;
+  Packed_: String;
+begin
+  Result := nil;
+  if not FSignatureIndex.Find(AName, Row) then
+    Exit;
+  Packed_ := SignatureCodes[PtrInt(FSignatureIndex.Objects[Row])];
+
+  { The codes for one name are joined with '|', which no signature can contain:
+    the whole alphabet is n % $ @ ? and the empty string. A single empty entry is
+    therefore a real answer -- the name takes no arguments -- and is why this
+    counts separators rather than testing the string for emptiness. }
+  N := 1;
+  for I := 1 to Length(Packed_) do
+    if Packed_[I] = '|' then
+      Inc(N);
+  SetLength(Result, N);
+  N := 0;
+  Start := 1;
+  for I := 1 to Length(Packed_) + 1 do
+    if (I > Length(Packed_)) or (Packed_[I] = '|') then
+    begin
+      Len := I - Start;
+      Result[N] := Copy(Packed_, Start, Len);
+      Inc(N);
+      Start := I + 1;
+    end;
+end;
+
 initialization
   FKeywordIndex := MakeIndex(KeywordWords);
   FOperatorIndex := MakeIndex(OperatorWords);
@@ -329,6 +461,11 @@ initialization
   FBuiltinIndex[ptCore] := MakeIndex(BuiltinCoreWords);
   FBuiltinIndex[ptPackage] := MakeIndex(BuiltinPackageWords);
   FBuiltinIndex[ptGui] := MakeIndex(BuiltinGuiWords);
+  FSignatureIndex := TStringList.Create;
+  FSignatureIndex.CaseSensitive := False;
+  for SigRow := Low(SignatureNames) to High(SignatureNames) do
+    FSignatureIndex.AddObject(SignatureNames[SigRow], TObject(PtrInt(SigRow)));
+  FSignatureIndex.Sorted := True;
 
 finalization
   FreeAndNil(FKeywordIndex);
@@ -337,13 +474,29 @@ finalization
   FreeAndNil(FBuiltinIndex[ptCore]);
   FreeAndNil(FBuiltinIndex[ptPackage]);
   FreeAndNil(FBuiltinIndex[ptGui]);
+  FreeAndNil(FSignatureIndex);
 
 end.
 """
 
 
-def render(tiers, source_label):
+def signature_arrays(sigs):
+    """Two parallel arrays: the names, sorted, and their codes joined by '|'.
+
+    Joined rather than one row per pair because the popup wants all the arities
+    of one name at once, and a name is looked up far more often than a signature
+    is. The separator is safe by construction: a signature is made of n % $ @ ?
+    and nothing else."""
+    names = sorted(sigs)
+    # SHORTEST FIRST inside a name, so `mid$($n)` is offered before `mid$($nn)`
+    # -- the shorter arity is the one being typed when the popup first appears.
+    codes = ['|'.join(sorted(sigs[n], key=lambda c: (len(c), c))) for n in names]
+    return names, codes
+
+
+def render(tiers, sigs, source_label):
     core = sorted(set(tiers['core']) | set(SPECIAL_FORMS))
+    sig_names, sig_codes = signature_arrays(sigs)
     arrays = '\n\n'.join([
         pas_array('KeywordWords', sorted(KEYWORDS)),
         pas_array('OperatorWords', sorted(OPERATORS)),
@@ -351,6 +504,8 @@ def render(tiers, source_label):
         pas_array('BuiltinCoreWords', core),
         pas_array('BuiltinPackageWords', sorted(tiers['package'])),
         pas_array('BuiltinGuiWords', sorted(tiers['gui'])),
+        pas_array('SignatureNames', sig_names),
+        pas_array('SignatureCodes', sig_codes),
     ])
     text = HEADER
     text = text.replace('%(source)s', source_label)
@@ -358,6 +513,8 @@ def render(tiers, source_label):
     text = text.replace('%(ncore)d', str(len(core)))
     text = text.replace('%(npkg)d', str(len(tiers['package'])))
     text = text.replace('%(ngui)d', str(len(tiers['gui'])))
+    text = text.replace('%(nsigname)d', str(len(sig_names)))
+    text = text.replace('%(nsig)d', str(sum(len(v) for v in sigs.values())))
     text += BODY.replace('%(arrays)s', arrays)
     return text.replace('\r\n', '\n')
 
@@ -368,7 +525,7 @@ def main(argv):
     root = os.path.abspath(argv[1])
     check_only = '--check' in argv[2:]
 
-    tiers = collect(root)
+    tiers, sigs = collect(root)
     for tier, expected in EXPECTED.items():
         actual = len(tiers[tier])
         if actual != expected:
@@ -378,8 +535,18 @@ def main(argv):
                 'in this script, and say so in the commit message.'
                 % (tier, actual, expected))
 
+    n_names = len(sigs)
+    n_pairs = sum(len(v) for v in sigs.values())
+    if (n_names, n_pairs) != (EXPECTED_SIG_NAMES, EXPECTED_SIG_PAIRS):
+        sys.exit(
+            'refusing to generate: %d names carry %d signatures, expected '
+            '%d and %d.\nPhosphor changed a registration. Decide what the new '
+            'numbers are, update EXPECTED_SIG_* in this script, and say so in '
+            'the commit message.'
+            % (n_names, n_pairs, EXPECTED_SIG_NAMES, EXPECTED_SIG_PAIRS))
+
     label = 'Phosphor engine/libs + host/packages + host/gui/libs'
-    text = render(tiers, label)
+    text = render(tiers, sigs, label)
 
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        '..', 'src', 'core', 'uphosphorlang.pas')
@@ -392,9 +559,10 @@ def main(argv):
             current = fh.read().replace('\r\n', '\n')
         if current != text:
             sys.exit('%s is stale -- rerun tools/gen-keywords.py' % out)
-        print('uphosphorlang.pas is current (%d core, %d package, %d gui)'
+        print('uphosphorlang.pas is current (%d core, %d package, %d gui, '
+              '%d signatures over %d names)'
               % (len(tiers['core']) + len(SPECIAL_FORMS),
-                 len(tiers['package']), len(tiers['gui'])))
+                 len(tiers['package']), len(tiers['gui']), n_pairs, n_names))
         return 0
 
     with open(out, 'w', encoding='utf-8', newline='\n') as fh:

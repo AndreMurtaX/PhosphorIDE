@@ -34,7 +34,7 @@ repository (`tests/debug_protocol_test.py`):
 ## What is built on this side
 
 Both are tested headless — no widgetset, no display, no `phosphor` binary — and both
-are in the 222 checks `bin/phosphoridetest` runs.
+are in the 255 checks `bin/phosphoridetest` runs.
 
 **`src/core/udebugtransport.pas`** — the loopback listener. Binds `127.0.0.1:0`, reads
 the ephemeral port back, accepts one connection on its own thread, reads on another,
@@ -176,7 +176,7 @@ One that stands:
 ### Linux, measured the same day
 
 Ubuntu 24 under VirtualBox, Lazarus 4.8 with FPC 3.2.2, **gtk2 on a real Xwayland
-session**. All five gates green there -- `lazbuild -B` clean at `-vewn`, 222 checks,
+session**. All five gates green there -- `lazbuild -B` clean at `-vewn`, 255 checks,
 `--selftest` 0 under a timeout with every form constructed under gtk2, generated
 tables current -- and then the same lane driven with `tools/lane/`:
 
