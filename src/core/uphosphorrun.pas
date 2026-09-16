@@ -233,10 +233,11 @@ function HandleIsPrivate(AHandle: THandle): Boolean;
 
 implementation
 
-{$IFDEF UNIX}
-uses
-  BaseUnix;
-{$ENDIF}
+{ BaseUnix is in the INTERFACE's uses now, for MakeHandlePrivate. It used to be
+  here, for the SIGPIPE call in Create, and having it in both is `Duplicate
+  identifier "BaseUnix"` -- an error that only exists on Unix, so a Windows
+  build is perfectly happy with it. Measured on the VM on 2026-09-16, which is
+  the whole reason the fifth gate is "green on Linux too". }
 
 const
   { How often the main thread turns collected bytes into lines. Small enough that
