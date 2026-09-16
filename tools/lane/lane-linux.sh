@@ -17,8 +17,12 @@
 #    forever for a window nobody is watching.
 set -u
 
-HERE="$HOME/phosphor-scratch/idelane"
-IDE="$HOME/PhosphorIDE/bin/phosphoride"
+# This script's own directory, so it runs from the repository checkout rather
+# than from wherever it was first written. $0 rather than BASH_SOURCE because it
+# is never sourced.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# ../../bin/phosphoride, and PHOSPHORIDE overrides for a binary built elsewhere.
+IDE="${PHOSPHORIDE:-$HERE/../../bin/phosphoride}"
 OUT="$HERE/shots"
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/*.xwd

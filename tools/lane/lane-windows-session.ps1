@@ -26,8 +26,14 @@ Get-ChildItem $shot -Filter *.png -ErrorAction SilentlyContinue | Remove-Item -F
 
 $fix = Join-Path $PSScriptRoot "lane345.bas"
 
-$p = Start-Process -FilePath "C:\Dev\PhosphorIDE\bin\phosphoride.exe" `
-     -WorkingDirectory "C:\Dev\PhosphorIDE" -ArgumentList $fix -PassThru
+# The repository root is two levels up, so this runs from a checkout
+# rather than from wherever it was written. $env:PHOSPHORIDE overrides
+# for a binary built somewhere else.
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$exe = if ($env:PHOSPHORIDE) { $env:PHOSPHORIDE } else { Join-Path $root "bin\phosphoride.exe" }
+
+$p = Start-Process -FilePath $exe `
+     -WorkingDirectory $root -ArgumentList $fix -PassThru
 Start-Sleep -Seconds 5
 $p.Refresh()
 Write-Output "pid=$($p.Id)"
