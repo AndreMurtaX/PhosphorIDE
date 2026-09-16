@@ -1,1 +1,4 @@
 shots/
+xdrive
+*.o
+*.ppu
