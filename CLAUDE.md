@@ -48,8 +48,12 @@ Nothing is done on a claim. An increment is complete when all five hold:
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
    trap 3.
-4. `python tools/gen-keywords.py ../Phosphor --check` is **clean**. It prints
-   `uphosphorlang.pas is current (538 core, 181 package, 426 gui)` and exits 0.
+4. **Both generated units are current.**
+   `python tools/gen-keywords.py ../Phosphor --check` prints
+   `uphosphorlang.pas is current (538 core, 181 package, 426 gui)`, and
+   `python tools/gen-icons.py --check` prints
+   `uphosphoricons.pas is current (9 icons, 16 and 24 px)`. Both exit 0, and both
+   build scripts run them.
 5. **Green on Linux too.** Windows-green has shipped Linux-broken defects in the
    sibling repository (SIGPIPE, soname, cert generation), and this repository has two
    Linux-only hazards of its own: `cthreads` and the gtk2 widgetset.
@@ -135,6 +139,27 @@ the bar.
   while the child is still running, after two idle drain ticks, because an unterminated
   line that has gone quiet is a prompt. The `ACompleteLine` flag says which of the two
   it is, and a partial is never handed to the diagnostic parser.
+- **`src/core/uphosphoricons.pas` is GENERATED. Never hand-edit it.** The toolbar's
+  nine icons are DRAWN by `tools/gen-icons.py` — a few hundred bytes of PNG each,
+  at 16 and at 24, decoded into an empty `TImageList` at `FormCreate`. They are not in
+  the `.lfm` because a `TImageList` streams its pictures as one binary blob, and a blob
+  in a form file people edit by hand cannot be reviewed or diffed. `tools/icons-preview.png`
+  is written by the same run and checked by the same `--check`: it is the only form
+  these icons have that a person can review, and a set that has drifted from the picture
+  of it is worse than no picture.
+
+  **Two resolutions, drawn twice, never scaled once.** A single-resolution image list is
+  scaled by the widgetset, the two widgetsets scale differently, one gives a blurred
+  mark and the other a missing one, and neither is a build failure — so nobody finds
+  out until a screenshot arrives from the other platform. The geometry is written in
+  EIGHTHS of the box, because 16 and 24 are both divisible by 8 and every coordinate
+  then lands on a whole pixel at both sizes. `--selftest` reports the widths, not just
+  the count: two resolutions of 16 would count as two.
+
+  **The toolbar is light on Windows and dark under gtk2.** One icon set has to read on
+  both, so nothing is drawn in near-black or near-white alone and outlines are mid grey.
+  A dark outline on a dark toolbar is an icon nobody can see, and that is not a build
+  failure either.
 - **`src/core/uphosphorlang.pas` is GENERATED. Never hand-edit it.** Rewrite it with
   `python tools/gen-keywords.py ../Phosphor`. Its 53 keywords, 538 core, 181 package
   and 426 GUI built-ins are facts about the *other* repository; a hand edit puts them

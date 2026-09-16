@@ -26,7 +26,7 @@ uses
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
-  usynphosphor, udebugproto, udebugsession;
+  usynphosphor, udebugproto, udebugsession, uphosphoricons;
 
 type
 
@@ -132,6 +132,7 @@ type
     SplitterOutput: TSplitter;
     StatusBar1: TStatusBar;
     TabOutput: TTabSheet;
+    ImagesToolbar: TImageList;
     TabProblems: TTabSheet;
     TabStack: TTabSheet;
     ListStack: TListView;
@@ -396,6 +397,16 @@ const
 
 procedure TFrmMain.FormCreate(Sender: TObject);
 begin
+  { THE ICONS ARE DECODED, NOT STREAMED. ImagesToolbar is empty in the .lfm on
+    purpose -- a TImageList streams its pictures as one binary blob, and a blob
+    in a form file people edit by hand cannot be reviewed or diffed. The list is
+    filled from uphosphoricons, which tools/gen-icons.py writes, with BOTH
+    resolutions registered; the buttons' ImageIndex values are already streamed
+    and point at slots that exist by the time anything paints.
+
+    First, so that nothing drawn before this has an empty list to draw from. }
+  InstallToolbarIcons(ImagesToolbar);
+
   FDocs := TList.Create;
   FProblemLines := TStringList.Create;
   FUntitledCounter := 0;

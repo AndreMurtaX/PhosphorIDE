@@ -45,7 +45,8 @@ var
 function SelfTest(const AReportPath: String): Integer;
 var
   Report: TStringList;
-  Failure: String;
+  Failure, IconSizes: String;
+  I: Integer;
 begin
   { A STREAMING ERROR IS A MODAL DIALOG, NOT A FAILURE, unless this flag is set.
 
@@ -85,6 +86,26 @@ begin
         [FrmMain.ListVariables.Columns.Count, FrmMain.PagesOutput.PageCount]));
       Report.Add(Format('call stack pane: %d columns',
         [FrmMain.ListStack.Columns.Count]));
+      { AN IMAGE LIST THAT STREAMED EMPTY IS A TOOLBAR OF BLANK BUTTONS, and
+        that is not a failure anywhere: the buttons still have captions, the
+        form still builds, and only a screenshot would show it. Counted here
+        with its RESOLUTIONS, because the trap the roadmap named is a list with
+        one of them -- the widgetset then scales, differently on each platform,
+        and the blur arrives from the machine nobody is looking at. }
+      IconSizes := '';
+      for I := 0 to FrmMain.ImagesToolbar.ResolutionCount - 1 do
+      begin
+        if IconSizes <> '' then
+          IconSizes := IconSizes + '+';
+        IconSizes := IconSizes +
+          IntToStr(FrmMain.ImagesToolbar.ResolutionByIndex[I].Width);
+      end;
+      { THE WIDTHS, not just the count. Two resolutions of 16 would count as two
+        and be the very defect this line exists to catch: a list the widgetset
+        then scales, differently on each platform, with the blur arriving from
+        the machine nobody is looking at. }
+      Report.Add(Format('toolbar icons: %d images at %s px',
+        [FrmMain.ImagesToolbar.Count, IconSizes]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

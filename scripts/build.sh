@@ -141,5 +141,15 @@ else
         || fail 'uphosphorlang.pas is stale -- rerun tools/gen-keywords.py.'
 fi
 
+# The other generated unit; see build.ps1 for why this one needs no repository.
+echo ""
+echo "generated icons"
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "  SKIPPED: python3 not found."
+else
+    python3 "$root/tools/gen-icons.py" --check \
+        || fail 'uphosphoricons.pas is not what tools/gen-icons.py writes.'
+fi
+
 echo ""
 echo "built and checked: $exe"

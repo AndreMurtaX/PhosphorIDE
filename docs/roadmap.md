@@ -586,6 +586,19 @@ hand-edited), `src/umainform.pas`, `tests/phosphoridetest.lpr`.
 
 ## 13. Icons and a toolbar image list
 
+**DONE 2026-09-16.** Nine icons at 16 and 24, drawn by `tools/gen-icons.py`, decoded
+into an empty `TImageList` at `FormCreate`, with `List = True` so every caption sits
+beside its icon rather than under it — which is also what keeps the toolbar one row
+tall. `--selftest` reports `toolbar icons: 9 images at 16+24 px`, and both build
+scripts fail on a hand-edited `uphosphoricons.pas` or a stale `icons-preview.png`.
+
+The trap below was designed for and not discovered; what WAS discovered is that
+`AddMultipleResolutions` is overloaded on `array of TCustomBitmap` and
+`array of TRasterImage`, and a `TPortableNetworkGraphic` is both, so a bare open array
+is a compile error until the array is given a name and a type.
+
+**Was:**
+
 **What.** `ToolBar1` has `ShowCaptions = True` and no `Images` property
 (`src/umainform.lfm:14-21`): every button is text. Add an image list and icons for New,
 Open, Save, Run, Stop, Check Syntax, Toggle Breakpoint, Step Over and Step Into.

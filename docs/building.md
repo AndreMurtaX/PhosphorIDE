@@ -268,6 +268,17 @@ matches the script; it does not prove the script matches Phosphor. A Phosphor re
 that adds a keyword is invisible to every gate in this repository until somebody reads
 `IsReservedWord`.
 
+### The generated units
+
+Two, and both are checked by `scripts/build.ps1` and `scripts/build.sh`:
+`src/core/uphosphorlang.pas` (the language tables, extracted from a Phosphor checkout)
+and `src/core/uphosphoricons.pas` (the toolbar icons, drawn by `tools/gen-icons.py`).
+Neither may be hand-edited; `--check` on either is a red build. The icon generator also
+writes `tools/icons-preview.png`, a magnified sheet of all nine at both sizes on a light
+band and a dark one, because PNG bytes in a diff are not something a person can review.
+
+---
+
 ### What none of the three covers
 
 No check here runs a BASIC program. Run, Check Syntax, Compile to `.pbc`, Pack, Stop, the

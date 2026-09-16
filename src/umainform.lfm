@@ -13,10 +13,15 @@ object FrmMain: TFrmMain
   LCLVersion = '4.8.0.0'
   object ToolBar1: TToolBar
     Left = 0
-    Height = 26
+    Height = 30
     Top = 0
     Width = 1000
+    AutoSize = True
+    ButtonHeight = 26
     Caption = 'ToolBar1'
+    Images = ImagesToolbar
+    ImagesWidth = 16
+    List = True
     ShowCaptions = True
     TabOrder = 0
     object TbNew: TToolButton
@@ -24,18 +29,21 @@ object FrmMain: TFrmMain
       Top = 2
       Action = ActNew
       Caption = 'New'
+      ImageIndex = 0
     end
     object TbOpen: TToolButton
       Left = 45
       Top = 2
       Action = ActOpen
       Caption = 'Open...'
+      ImageIndex = 1
     end
     object TbSave: TToolButton
       Left = 96
       Top = 2
       Action = ActSave
       Caption = 'Save'
+      ImageIndex = 2
     end
     object TbSep1: TToolButton
       Left = 141
@@ -49,12 +57,14 @@ object FrmMain: TFrmMain
       Top = 2
       Action = ActRun
       Caption = 'Run'
+      ImageIndex = 3
     end
     object TbStop: TToolButton
       Left = 187
       Top = 2
       Action = ActStop
       Caption = 'Stop'
+      ImageIndex = 4
     end
     object TbSep2: TToolButton
       Left = 233
@@ -68,6 +78,7 @@ object FrmMain: TFrmMain
       Top = 2
       Action = ActCheck
       Caption = 'Check Syntax'
+      ImageIndex = 5
     end
     object TbSep3: TToolButton
       Left = 300
@@ -81,18 +92,21 @@ object FrmMain: TFrmMain
       Top = 2
       Action = ActToggleBreakpoint
       Caption = 'Toggle Breakpoint'
+      ImageIndex = 6
     end
     object TbStepOver: TToolButton
       Left = 407
       Top = 2
       Action = ActStepOver
       Caption = 'Step Over'
+      ImageIndex = 7
     end
     object TbStepInto: TToolButton
       Left = 478
       Top = 2
       Action = ActStepInto
       Caption = 'Step Into'
+      ImageIndex = 8
     end
   end
   object StatusBar1: TStatusBar
@@ -606,6 +620,10 @@ object FrmMain: TFrmMain
       Caption = '&About PhosphorIDE'
       OnExecute = ActAboutExecute
     end
+  end
+  object ImagesToolbar: TImageList
+    Left = 152
+    Top = 128
   end
   object OpenDialog1: TOpenDialog
     Options = [ofFileMustExist, ofEnableSizing, ofViewDetail]

@@ -152,5 +152,21 @@ if ($PhosphorRepo -eq '' -or -not (Test-Path (Join-Path $PhosphorRepo 'engine\li
     }
 }
 
+# THE OTHER GENERATED UNIT, and it needs no second repository -- the icons are
+# drawn by the script that writes them, so this can always run. Without it a
+# hand-edit of uphosphoricons.pas survives until somebody regenerates and
+# wonders why their icon came back.
+Write-Host ''
+Write-Host 'generated icons'
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) {
+    Write-Host '  SKIPPED: python not found.'
+} else {
+    & python (Join-Path $root 'tools\gen-icons.py') --check
+    if ($LASTEXITCODE -ne 0) {
+        Fail 'uphosphoricons.pas is not what tools\gen-icons.py writes.'
+    }
+}
+
 Write-Host ''
 Write-Host "built and checked: $exe" -ForegroundColor Green

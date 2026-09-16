@@ -1,0 +1,4 @@
+# Just look at the toolbar. Nothing is driven: the icons are judged by eye, and
+# the only thing a script can do here is put the window on screen and hold still.
+wait 800
+shot 41-toolbar
