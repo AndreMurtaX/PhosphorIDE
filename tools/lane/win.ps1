@@ -45,6 +45,7 @@ public class Wnd {
       R r; GetWindowRect(h, out r);
       outp.Add(h.ToInt64() + "\t" + c.ToString() + "\t" +
                r.L + "," + r.T + "," + r.Rr + "," + r.B + "\t" +
+               (IsWindowVisible(h) ? "1" : "0") + "\t" +
                t.ToString().Replace("\r\n", "¶"));
       return true;
     }, IntPtr.Zero);

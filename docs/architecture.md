@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 409 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 456 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -832,18 +832,43 @@ Phosphor itself does not have, and the editor would then be the authority on a
 concept the language has never heard of. Recent files and per-file state are what
 is actually needed today, and that is what exists.
 
-**An integrated REPL.** `phosphor` with no arguments is a REPL, and it would be
-easy to spawn it into the output pane. It is left out for one concrete reason:
-a REPL never exits. It has no end-of-run event, `Running` stays true forever, and
-the single-child model in `TPhosphorRunner` -- one process at a time, Stop kills
-it, Run refuses while one is live -- would have to become a session model with
-its own lifecycle, its own prompt handling and its own "is this output or is this
-a prompt" problem. Phosphor's own working rules already warn that starting
-`phosphor.exe` with no arguments and no piped stdin opens a REPL that never exits
-and locks its own executable. The input box under the output pane feeds `INPUT`
-and `LINE INPUT`, which is what programs under development actually need; a
-proper REPL pane is a second execution model and it should be built as one, or
-not at all.
+**An integrated REPL** was in this list until 2026-09-16, and the paragraph it
+replaces ended "a proper REPL pane is a second execution model and it should be
+built as one, or not at all". That was the right instruction and it has been
+followed: the REPL tab is a second execution model, with its own
+`TPhosphorRunner`, its own three handlers, its own transcript and its own
+ending. Nothing on the Run path learned a new question -- `FRunner` is untouched
+and `ActionList1Update`'s `Busy := FRunner.Running` is deliberately left alone,
+so Run stays available for the whole life of a prompt.
+
+The old paragraph's premises are worth keeping, because three of the four were
+true and one was load-bearing in a way nobody had noticed:
+
+- *"A REPL never exits."* True, and the editor did not have the one thing that
+  ends one. `TPhosphorRunner.CloseInput` called `RequestClose` on the writer
+  thread, which ends that thread's LOOP and touches no handle -- so the child's
+  stdin stayed open for the life of the runner and end-of-input never arrived.
+  Repaired here, and it had to wait a tick: the writer blocks inside
+  `WriteBuffer` and does not look at its flag again until the write returns, so
+  the handle is closed from `DrainTimer` once that thread is `Finished`.
+- *"`Running` stays true forever."* True, and harmless once it is never asked as
+  a global question. `FRunner.Running` still means "is a RUN live"; `FReplLive`
+  means "is a prompt live"; nothing asks "is any child live".
+- *"Its own 'is this output or is this a prompt' problem."* Already answered, by
+  the `ACompleteLine` flag the runner has carried since 2026-09-10 for `LINE
+  INPUT`. The prompt arrives as an unterminated tail after two idle drains --
+  about 80 ms, invisible -- and `uphosphorrepl` splits the run-together prompts
+  a silent line leaves behind.
+- *"Locks its own executable."* Still true, and it is why the child is started
+  only when the user asks and why `--selftest` reports the transcript's line
+  count: zero proves that constructing the window starts nothing.
+
+`src/core/uphosphorrepl.pas` holds the part that is a decision about a string --
+where a prompt ends, and how Up and Down walk what was typed -- so
+`phosphoridetest` pins it without a window or a child process. The prompt
+literals are CITED rather than extracted, which is the documented fallback when
+there is no registry to read: they are two string literals inside a `Writeln` in
+another repository (`host/console/phosphor.lpr:3017`).
 
 ---
 
@@ -856,7 +881,7 @@ not at all.
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 409 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 456 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

@@ -1,0 +1,113 @@
+# The REPL pane. This is the case the two-tick prompt threshold in
+# uphosphorrun.pas has never had: `phosphor> ` is written before every read and
+# carries no newline, so it reaches the pane only after FlushPrompt gives up on
+# a newline arriving -- two idle drains, about 80 ms. Nothing in this repository
+# had ever driven a child that prompts.
+#
+# `memo` reads the TMemo of whichever output tab is SHOWING, so every read below
+# is MemoRepl rather than MemoOutput.
+key ^+r
+wait 2500
+shot 150-the-prompt-arrived
+memo
+
+# 42, which is the whole of what a REPL is for.
+type println 6*7
+key {ENTER}
+wait 1200
+shot 151-six-times-seven
+memo
+
+# AND THE PERSISTENCE THAT JUSTIFIES THE PANE. Run hands the host a FILE and
+# every run starts from nothing; these two lines are one session.
+type x = 1
+key {ENTER}
+wait 900
+type println x
+key {ENTER}
+wait 1200
+shot 152-a-variable-survives-the-line
+memo
+
+# A multi-line block waits for its terminator, and says so with `     ...> `.
+type for i = 1 to 3
+key {ENTER}
+wait 900
+type println i
+key {ENTER}
+wait 900
+shot 153-the-continuation-prompt
+type next
+key {ENTER}
+wait 1200
+shot 154-the-block-ran
+memo
+
+# An error is `error: <msg>` on stderr with no path and no line. It belongs in
+# the transcript and NOT in the Problems pane as a row that cannot be clicked.
+type nosuchthing(
+key {ENTER}
+wait 1200
+shot 155-an-error-in-the-transcript
+memo
+
+# Up walks what was typed, and the first Up stashes the half-typed line.
+type half typed
+key {UP}
+wait 400
+shot 156-up-recalls-the-last-line
+key {DOWN}
+wait 400
+shot 157-down-gives-the-draft-back
+
+# END closes stdin: the host writes a newline and exits 0. The transcript says
+# which of the two endings it was, and the driver's own `phosphor children`
+# line at the end of this run is the done-when's "leaves no phosphor process
+# behind" -- it must say none.
+key ^a
+key {DEL}
+at 950 712
+wait 2500
+shot 158-ended-by-closing-its-input
+memo
+
+# TWO CHILDREN AT ONCE, which nothing in this repository had ever executed. A
+# REPL is live; F9 runs the file in the editor. Run is an explicit action so it
+# brings the Output pane forward, the run happens, and the prompt is still there
+# afterwards holding everything it held before.
+key ^+r
+wait 2000
+type z = 99
+key {ENTER}
+wait 1000
+key {F9}
+wait 3000
+shot 161-a-run-beside-a-live-repl
+memo
+# Ctrl+Shift+R AGAIN rather than a click on the tab header: with a session
+# already live the action shows the pane and puts the caret back in the box
+# WITHOUT starting a second child, and a click on the header alone leaves the
+# focus wherever Run left it -- which is how the first version of this case
+# typed its next line into the editor instead.
+key ^+r
+wait 900
+type println z
+key {ENTER}
+wait 1200
+shot 162-the-prompt-kept-its-variables
+memo
+
+# AND THE OTHER WAY OUT: a second session, left running, and the window closed
+# with Alt+F4. FormCloseQuery has to notice the REPL and ask about it -- the
+# roadmap says in as many words that it must count one the way it counts a run.
+# No quotes: on an ABNT2 layout `"` is a DEAD KEY and SendKeys composes it with
+# whatever follows. The fixtures in this directory all avoid it for that reason.
+type println 2+2
+key {ENTER}
+wait 1200
+shot 159-a-second-session
+key %{F4}
+wait 1200
+shot 160-closing-asks-about-it
+key {ENTER}
+wait 2000

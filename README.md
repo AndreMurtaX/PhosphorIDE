@@ -103,6 +103,7 @@ on line 1 of an otherwise perfect program, and every Windows editor and
 | `Ctrl+G`   | Go to Line; `Ctrl+F` / `F3` / `Ctrl+R` find, find next, replace  |
 | `Ctrl+Shift+F` | Find in Files -- searches a directory tree, not the buffer  |
 | `F12` `Ctrl+Shift+O` | Go to Definition; Outline -- the functions in this buffer |
+| `Ctrl+Shift+R` | REPL -- a prompt whose variables persist across lines      |
 | `Ctrl+N` `Ctrl+O` `Ctrl+S` `Ctrl+Shift+S` `Ctrl+W` `Ctrl+Q` | new, open, save, save as, close tab, exit |
 
 Compile to Bytecode and Pack Executable sit in the Run menu without shortcuts. Pack
@@ -343,6 +344,49 @@ Labels and `gosub` targets are deliberately absent. They are a second table in
 the compiler that never consults the function table, and an absence that is
 written down beats a jump that is wrong and looks right.
 
+## The REPL
+
+`Ctrl+Shift+R`, or **Run > REPL**, starts `phosphor` with no arguments and feeds
+it a line at a time. That is the one thing Run cannot offer: Run hands the host
+a **file** and every run starts from nothing, while a REPL keeps its variables
+and its functions between lines.
+
+```
+phosphor> println 6*7
+42
+phosphor> x = 1
+phosphor> println x
+1
+phosphor> for i = 1 to 3
+     ...> println i
+     ...> next
+1
+2
+3
+phosphor>
+```
+
+That transcript is a real one, read back out of the pane. What you type is
+echoed onto the prompt's own line, so the record afterwards reads the way the
+session happened; `     ...> ` is the host asking for the rest of a block; and an
+`error:` line lands in the transcript where it happened rather than in the
+Problems pane, because a REPL error carries no file and no line and a row you
+cannot click is worse than no row. **Up** and **Down** walk what you have typed,
+and the first Up keeps your half-finished line so Down brings it back.
+
+**It is a second child, and the editor is careful about it** -- a REPL never
+exits on its own, and on Windows it holds a lock on `phosphor.exe`. So: nothing
+is started until you ask; **End** closes its input, which is how a REPL is meant
+to end (it answers with exit code 0), and pressing End again stops a child that
+is not listening; closing the window asks about it by name and kills it; and
+changing the host in Preferences ends the session, because a prompt answering
+from a binary the settings no longer name is a prompt lying about what it is.
+
+A Run and a REPL may be live at the same time, and the panes stay out of each
+other's way: pressing Run brings the Output pane forward because you just asked
+for it, but the automatic switch to Problems that follows a failed run does not
+fire over a REPL you are typing into.
+
 ## Debugging
 
 **Stepping works.** Set a breakpoint in the gutter or with F5, press **Shift+F9**,
@@ -424,7 +468,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 409 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 456 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

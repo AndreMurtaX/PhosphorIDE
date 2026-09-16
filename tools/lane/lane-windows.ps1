@@ -96,19 +96,29 @@ function ClickAt($dx, $dy, $double) {
     Start-Sleep -Milliseconds 400
 }
 
-# The Output pane's TMemo: the widest Edit-class child with text in it.
-# GetWindowText does not cross a process boundary for a control -- it is
+# The TMemo of whichever output tab is SHOWING: the longest VISIBLE Edit-class
+# child with text in it.
+#
+# VISIBLE is the word that earns its keep. There are two TMemos in this window
+# now -- MemoOutput on the Output tab and MemoRepl on the REPL tab -- and a
+# helper that took the longest of ALL Edit-class children would quietly start
+# reading the REPL transcript the moment it grew past the run's, in every
+# existing `memo` step, with no error anywhere. Only the active tab's controls
+# are visible, so visibility is the discriminator the LCL already provides; the
+# component names do not cross the process boundary.
+#
+# GetWindowText does not cross that boundary for a control either -- it is
 # documented and it fails by returning "" -- so WM_GETTEXT is sent explicitly.
 function Memo() {
     $best = ''
     foreach ($row in [Wnd]::Kids($form)) {
         $f = $row -split "`t"
-        if ($f[1] -eq 'Edit') {
+        if (($f[1] -eq 'Edit') -and ($f[3] -eq '1')) {
             $t = [LaneWin]::Text([IntPtr][long]$f[0])
             if ($t.Length -gt $best.Length) { $best = $t }
         }
     }
-    if ($best) { Write-Output $best } else { Write-Output '(the output pane is empty)' }
+    if ($best) { Write-Output $best } else { Write-Output '(the pane is empty)' }
 }
 
 Focus

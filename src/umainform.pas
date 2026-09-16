@@ -27,7 +27,7 @@ uses
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
   usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
-  uphosphorcomplete, uphosphoroutline, ufindinfiles, SynCompletion;
+  uphosphorcomplete, uphosphoroutline, uphosphorrepl, ufindinfiles, SynCompletion;
 
 type
 
@@ -41,6 +41,10 @@ type
     ActFindInFiles: TAction;
     ActGotoDefinition: TAction;
     ActOutline: TAction;
+    ActRepl: TAction;
+    BtnReplEnd: TButton;
+    BtnReplSend: TButton;
+    EditRepl: TEdit;
     BtnFindBrowse: TButton;
     BtnFindGo: TButton;
     BtnFindStop: TButton;
@@ -54,12 +58,17 @@ type
     ListFind: TListBox;
     ListOutline: TListBox;
     MnuFindInFiles: TMenuItem;
+    MemoRepl: TMemo;
     MnuGotoDefinition: TMenuItem;
     MnuOutline: TMenuItem;
+    MnuRepl: TMenuItem;
+    PanelRepl: TPanel;
+    SepR2: TMenuItem;
     PanelFind: TPanel;
     SelectDirectoryDialog1: TSelectDirectoryDialog;
     TabFind: TTabSheet;
     TabOutline: TTabSheet;
+    TabRepl: TTabSheet;
     ActCloseTab: TAction;
     ActCompile: TAction;
     ActContinue: TAction;
@@ -183,6 +192,11 @@ type
     procedure ActFindInFilesExecute(Sender: TObject);
     procedure ActGotoDefinitionExecute(Sender: TObject);
     procedure ActOutlineExecute(Sender: TObject);
+    procedure ActReplExecute(Sender: TObject);
+    procedure BtnReplEndClick(Sender: TObject);
+    procedure BtnReplSendClick(Sender: TObject);
+    procedure EditReplKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
     procedure BtnFindBrowseClick(Sender: TObject);
     procedure BtnFindGoClick(Sender: TObject);
     procedure BtnFindStopClick(Sender: TObject);
@@ -325,6 +339,32 @@ type
     FCompletionStart: Integer;
     FCompletionLine: Integer;
 
+    { THE SECOND CHILD, and the second execution model this program has.
+
+      A REPL is not a run. A run is handed a FILE and ends; a REPL is handed
+      nothing, keeps its variables between lines, and ends only when its input
+      does. So it gets its own runner rather than sharing FRunner's slot, and
+      the two are told apart by WHICH RUNNER IS BOUND TO WHICH HANDLERS --
+      FRepl's events go to ReplOutput/ReplFinished/ReplFailed and never to the
+      three the run path uses. Nothing downstream of FRunner learns a new
+      question, and ActionList1Update's `Busy := FRunner.Running` is deliberately
+      left alone so that Run stays available for the whole life of a prompt.
+
+      FReplOpen mirrors FOutputOpen for the REPL's own transcript: the prompt
+      arrives without a newline, and whatever comes next continues its line. }
+    FRepl: TPhosphorRunner;
+    FReplLive: Boolean;
+    FReplOpen: Boolean;
+    FReplOpenKind: TRunStream;
+    { The window is closing, so a 40 ms tick that fires between the Kill in
+      FormCloseQuery and FormDestroy must not touch a pane that is going away. }
+    FReplClosing: Boolean;
+    { Which host this REPL was started with. Changing it in Preferences ends the
+      session, because a prompt that answers from a binary the settings no
+      longer name is a prompt lying about what it is. }
+    FReplHostPath: String;
+    FReplHistory: TReplHistory;
+
     { The outline of the active buffer, what it was scanned from, and the
       debounce that keeps it from being rescanned between keystrokes.
 
@@ -415,6 +455,17 @@ type
       AX, AY: Integer; ASelected: Boolean; AIndex: Integer): Boolean;
     procedure RefreshSignatureHint;
     procedure HideSignatureHint;
+    procedure StartRepl;
+    procedure EndRepl(const AWhy: String; AForce: Boolean);
+    procedure SendReplLine;
+    procedure AddReplText(AKind: TRunStream; const AText: String;
+      ACompleteLine: Boolean);
+    procedure AddReplNote(const AText: String);
+    procedure TrimRepl;
+    procedure ReplOutput(Sender: TObject; AKind: TRunStream; const AText: String;
+      ACompleteLine: Boolean);
+    procedure ReplFinished(Sender: TObject; AExitCode: Integer; AKilled: Boolean);
+    procedure ReplFailed(Sender: TObject; const AReason: String);
     procedure ScheduleOutline;
     procedure OutlineTimerTick(Sender: TObject);
     procedure RebuildOutline;
@@ -551,6 +602,18 @@ begin
   FSigHint := THintWindow.Create(Self);
   FSigHint.AutoHide := False;
 
+  { NOT STARTED HERE. A child the user did not ask for is a child holding a
+    lock on phosphor.exe that they cannot explain, and Phosphor's own rules
+    record that a REPL nobody closes never exits. It starts on ActRepl and on
+    nothing else. }
+  FRepl := TPhosphorRunner.Create(Self);
+  FRepl.OnOutput := @ReplOutput;
+  FRepl.OnFinished := @ReplFinished;
+  FRepl.OnStartFailed := @ReplFailed;
+  FReplHistory := TReplHistory.Create;
+  FReplLive := False;
+  FReplClosing := False;
+
   FOutlineRows := TStringList.Create;
   { 250 ms, and NOT the 40 ms this program uses everywhere else. That one is a
     DRAIN cadence for things arriving from outside -- a pipe, a socket, a walker
@@ -673,6 +736,10 @@ begin
     thread deposits into a buffer this object owns. Freeing the rows out from
     under a thread that is still walking is the one ordering mistake available
     here, and closing a window during a search is how it would be found. }
+  FReplClosing := True;
+  if (FRepl <> nil) and FRepl.Running then
+    FRepl.Kill;
+  FReplHistory.Free;
   if FOutlineTimer <> nil then
     FOutlineTimer.Enabled := False;
   FOutlineRows.Free;
@@ -693,6 +760,7 @@ end;
 procedure TFrmMain.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 var
   I: Integer;
+  Busy: String;
 begin
   CanClose := True;
 
@@ -709,16 +777,37 @@ begin
       Exit;
     end;
 
-  if FRunner.Running then
+  { ONE QUESTION FOR BOTH CHILDREN, asked before either is touched. The rule
+    above is that nothing is ended until everything has agreed to end, and with
+    two children it is easy to break by accident: killing the run and then
+    asking about the REPL leaves somebody who answers No with their program
+    already dead. }
+  Busy := '';
+  if FRunner.Running and FReplLive then
+    Busy := Format('%s and the REPL are still running. Stop them and close?',
+                   [FRunLabel])
+  else if FRunner.Running then
+    Busy := Format('%s is still running. Stop it and close?', [FRunLabel])
+  else if FReplLive then
+    Busy := 'The REPL is still running. Stop it and close?';
+
+  if Busy <> '' then
   begin
-    if MessageDlg('PhosphorIDE',
-      Format('%s is still running. Stop it and close?', [FRunLabel]),
-      mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    if MessageDlg('PhosphorIDE', Busy, mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
     begin
       CanClose := False;
       Exit;
     end;
-    FRunner.Kill;
+    { THE REPL FIRST. FRunner may be a debuggee, and RunnerFinished's tail polls
+      the debug session and empties the stack and variables panes; the longer
+      teardown goes last and undisturbed. Kill and not CloseInput: a close path
+      may not wait for a child to notice end-of-input, and the user has already
+      said end it. }
+    FReplClosing := True;
+    if FReplLive then
+      FRepl.Kill;
+    if FRunner.Running then
+      FRunner.Kill;
   end;
 end;
 
@@ -1235,6 +1324,11 @@ begin
     FRunPath := Doc.FileName
   else
     FRunPath := '';
+  { AND THIS ONE STILL SWITCHES, even with the REPL on screen. Run is something
+    the user just asked for, like Find in Files or the Outline, and every one of
+    those brings its own pane forward; refusing to would be the one explicit
+    action in the program that answers somewhere you cannot see. The switch that
+    must NOT happen is the AUTOMATIC one in RunnerFinished. }
   PagesOutput.ActivePage := TabOutput;
   AddOutput(Format('> %s', [AWhat]));
   Result := FRunner.Start(FHostPath, AArgs, WorkDir);
@@ -1417,7 +1511,12 @@ begin
     ListProblems.ItemIndex := 0;
     ListProblemsDblClick(nil);
   end
-  else if ListProblems.Items.Count > 0 then
+  else if (ListProblems.Items.Count > 0) and (PagesOutput.ActivePage <> TabRepl) then
+    { NOT OVER THE REPL. This switch is the editor's own idea rather than the
+      user's -- a run failed, so the diagnostics are probably what they want --
+      and taking the pane away from somebody mid-sentence at a prompt is a
+      guess that costs them their place. The Problems tab is one click away and
+      the status bar already says the run failed. }
     PagesOutput.ActivePage := TabProblems;
 
   RefreshStatus;
@@ -1949,6 +2048,236 @@ begin
   if (Code <> 0) or (Line <= 0) then
     Exit;
   GotoSource(Copy(Entry, Sep + 1, MaxInt), Line);
+end;
+
+{ ----------------------------------------------------------------- REPL ---- }
+
+procedure TFrmMain.ActReplExecute(Sender: TObject);
+begin
+  PagesOutput.ActivePage := TabRepl;
+  if not FReplLive then
+    StartRepl;
+  if EditRepl.CanFocus then
+    EditRepl.SetFocus;
+end;
+
+procedure TFrmMain.StartRepl;
+var
+  Doc: TEditorDoc;
+  WorkDir: String;
+begin
+  if FReplLive then
+    Exit;
+  if not RequireHost then
+    Exit;
+
+  { NOT THROUGH StartHost. That method is FRunner's single spawn point and it
+    carries FRunLabel, FRunPath, the armed pack and the clearing of the Problems
+    pane -- none of which a REPL has. A bare `phosphor` with no arguments IS the
+    REPL; there is no subcommand and, for the same reason, no --sandbox: the CLI
+    contract attaches that flag to `phosphor [run] <file>`. }
+  Doc := ActiveDoc;
+  if (Doc <> nil) and (not Doc.IsUntitled) then
+    WorkDir := ExtractFileDir(Doc.FileName)
+  else
+    WorkDir := '';
+
+  MemoRepl.Lines.Clear;
+  FReplOpen := False;
+  FReplHistory.Clear;
+  FReplHostPath := FHostPath;
+
+  if not FRepl.Start(FHostPath, [], WorkDir) then
+    Exit;                        { ReplFailed has already said why }
+  FReplLive := True;
+  RefreshStatus;
+end;
+
+procedure TFrmMain.EndRepl(const AWhy: String; AForce: Boolean);
+begin
+  if not FReplLive then
+    Exit;
+  if AWhy <> '' then
+    AddReplNote('> ' + AWhy);
+
+  { PRESS ONCE FOR END-OF-INPUT, PRESS AGAIN TO STOP IT. Closing stdin is how a
+    REPL is meant to end -- it writes a newline and exits 0, measured -- and it
+    is the polite ending: a block half-typed at the prompt is reported rather
+    than discarded. But a child that is not reading its input will not notice,
+    so InputOpen going False makes the second press mean something stronger.
+
+    A forced end has no second press available: the window is closing, or the
+    host changed under it. }
+  if AForce or (not FRepl.InputOpen) then
+  begin
+    AddReplNote('> stopping it');
+    FRepl.Kill;
+  end
+  else
+  begin
+    AddReplNote('> end of input');
+    FRepl.CloseInput;
+  end;
+  RefreshStatus;
+end;
+
+procedure TFrmMain.SendReplLine;
+var
+  Line: String;
+begin
+  if not FReplLive then
+  begin
+    StatusBar1.Panels[3].Text := 'no REPL is running -- press Ctrl+Shift+R';
+    Exit;
+  end;
+  Line := EditRepl.Text;
+
+  { THE ECHO, AND IT CLOSES THE PROMPT'S LINE. The prompt arrived without a
+    newline and the transcript left its line open, so the typed line belongs on
+    the end of it -- which is what a terminal shows and what makes the record
+    readable afterwards. Closing it matters: without that, the answer the child
+    prints would be appended to the same line and `phosphor> println 6*742` is
+    what somebody would read. }
+  AddReplText(rsStdOut, Line, True);
+  FReplHistory.Add(Line);
+  FReplHistory.Reset;
+  EditRepl.Text := '';
+  FRepl.SendInput(Line);
+end;
+
+procedure TFrmMain.BtnReplSendClick(Sender: TObject);
+begin
+  SendReplLine;
+end;
+
+procedure TFrmMain.BtnReplEndClick(Sender: TObject);
+begin
+  EndRepl('', False);
+end;
+
+procedure TFrmMain.EditReplKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if (Key = VK_RETURN) and (Shift = []) then
+  begin
+    Key := 0;
+    SendReplLine;
+    Exit;
+  end;
+  { UP AND DOWN WALK WHAT HAS BEEN TYPED, and the first Up stashes the
+    half-typed line so Down brings it back -- see TReplHistory. A one-line edit
+    has nothing else to do with these two keys. }
+  if (Key = VK_UP) and (Shift = []) then
+  begin
+    Key := 0;
+    EditRepl.Text := FReplHistory.Older(EditRepl.Text);
+    EditRepl.SelStart := Length(EditRepl.Text);
+    Exit;
+  end;
+  if (Key = VK_DOWN) and (Shift = []) then
+  begin
+    Key := 0;
+    EditRepl.Text := FReplHistory.Newer;
+    EditRepl.SelStart := Length(EditRepl.Text);
+  end;
+end;
+
+procedure TFrmMain.AddReplText(AKind: TRunStream; const AText: String;
+  ACompleteLine: Boolean);
+var
+  Last: Integer;
+begin
+  if FReplClosing then
+    Exit;
+  Last := MemoRepl.Lines.Count - 1;
+  { The same rule AppendOutput follows, on the REPL's own transcript: an open
+    line is continued, and only a complete one closes it. The prompt is the
+    reason the rule exists here at all. }
+  if FReplOpen and (FReplOpenKind = AKind) and (Last >= 0) then
+    MemoRepl.Lines[Last] := MemoRepl.Lines[Last] + AText
+  else
+    MemoRepl.Lines.Add(AText);
+
+  FReplOpen := not ACompleteLine;
+  FReplOpenKind := AKind;
+  TrimRepl;
+end;
+
+procedure TFrmMain.AddReplNote(const AText: String);
+begin
+  { A note is the EDITOR speaking, not the child, so it always starts its own
+    line and never continues the child's. }
+  if FReplClosing then
+    Exit;
+  FReplOpen := False;
+  MemoRepl.Lines.Add(AText);
+  TrimRepl;
+end;
+
+procedure TFrmMain.TrimRepl;
+begin
+  { MaxReplLines, for the reason MaxOutputLines exists: a program printing
+    without end must not make the editor its memory problem. The oldest go
+    first, and the caret is left alone -- see ScrollOutputToEnd for what reading
+    SelStart on a long memo costs. }
+  while MemoRepl.Lines.Count > MaxReplLines do
+    MemoRepl.Lines.Delete(0);
+  if MemoRepl.Lines.Count > 0 then
+    MemoRepl.SelStart := MemoRepl.GetTextLen;
+end;
+
+procedure TFrmMain.ReplOutput(Sender: TObject; AKind: TRunStream;
+  const AText: String; ACompleteLine: Boolean);
+var
+  Segs: TReplSegments;
+  I: Integer;
+begin
+  if FReplClosing then
+    Exit;
+
+  { A LINE THAT PRINTED NOTHING PUTS TWO PROMPTS TOGETHER, and a block puts a
+    prompt and its continuations together -- both measured. Split them so each
+    one starts its own line and the transcript reads the way the session
+    happened rather than the way the bytes arrived.
+
+    Only on stdout: a prompt is never written to stderr, and running the splitter
+    over a diagnostic would be looking for something that cannot be there. }
+  if AKind = rsStdOut then
+  begin
+    Segs := SplitReplPrompts(AText);
+    if Length(Segs) > 1 then
+    begin
+      for I := 0 to High(Segs) do
+        AddReplText(AKind, Segs[I].Text,
+                    (I < High(Segs)) or ACompleteLine);
+      Exit;
+    end;
+  end;
+
+  AddReplText(AKind, AText, ACompleteLine);
+end;
+
+procedure TFrmMain.ReplFinished(Sender: TObject; AExitCode: Integer;
+  AKilled: Boolean);
+begin
+  FReplLive := False;
+  if FReplClosing or (csDestroying in ComponentState) then
+    Exit;
+  FReplOpen := False;
+  if AKilled then
+    AddReplNote('> the REPL was stopped')
+  else
+    AddReplNote(Format('> the REPL ended, exit code %d', [AExitCode]));
+  RefreshStatus;
+end;
+
+procedure TFrmMain.ReplFailed(Sender: TObject; const AReason: String);
+begin
+  FReplLive := False;
+  if FReplClosing then
+    Exit;
+  AddReplNote('> could not start the REPL: ' + AReason);
+  StatusBar1.Panels[3].Text := 'the REPL could not start';
 end;
 
 { ------------------------------------------------------------ the outline --- }
@@ -3012,6 +3341,14 @@ end;
 
 procedure TFrmMain.SettingsChanged;
 begin
+  { A PROMPT THAT ANSWERS FROM A BINARY THE SETTINGS NO LONGER NAME is a prompt
+    lying about what it is, and the variables it is holding belong to the old
+    one. Forced, because there is nobody to press End a second time. }
+  if FReplLive and (FReplHostPath <> '') and
+     (CompareFilenames(FReplHostPath, FSettings.HostPath) <> 0) and
+     (FSettings.HostPath <> '') then
+    EndRepl('the host changed', True);
+
   FHighlighter.ApplyTheme(FSettings.DarkTheme);
   ApplyAllEditorSettings;
   ResolveHost;
@@ -3294,6 +3631,11 @@ begin
   ActReplace.Enabled := Doc <> nil;
   ActGotoLine.Enabled := Doc <> nil;
   ActGotoDefinition.Enabled := Doc <> nil;
+  { Enabled whether or not one is live: the action shows the pane as well as
+    starting a session, and a menu item that greys out once you are using it is
+    a menu item nobody finds again. }
+  BtnReplSend.Enabled := FReplLive;
+  BtnReplEnd.Enabled := FReplLive;
 
   ActRun.Enabled := (Doc <> nil) and not Busy;
   ActCheck.Enabled := ActRun.Enabled;

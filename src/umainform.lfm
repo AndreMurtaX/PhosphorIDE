@@ -399,6 +399,65 @@ object FrmMain: TFrmMain
         ViewStyle = vsReport
       end
     end
+    object TabRepl: TTabSheet
+      Caption = 'REPL'
+      ClientHeight = 152
+      ClientWidth = 992
+      object PanelRepl: TPanel
+        Left = 0
+        Height = 30
+        Top = 122
+        Width = 992
+        Align = alBottom
+        BevelOuter = bvNone
+        ClientHeight = 30
+        ClientWidth = 992
+        TabOrder = 0
+        object BtnReplEnd: TButton
+          Left = 902
+          Height = 30
+          Top = 0
+          Width = 90
+          Align = alRight
+          Caption = 'End'
+          Hint = 'Close the REPL''s input; press again to stop it'
+          OnClick = BtnReplEndClick
+          TabOrder = 0
+        end
+        object BtnReplSend: TButton
+          Left = 812
+          Height = 30
+          Top = 0
+          Width = 90
+          Align = alRight
+          Caption = 'Send'
+          Hint = 'Send this line to the REPL'
+          OnClick = BtnReplSendClick
+          TabOrder = 1
+        end
+        object EditRepl: TEdit
+          Left = 0
+          Height = 30
+          Top = 0
+          Width = 812
+          Align = alClient
+          Hint = 'A line of Phosphor BASIC. Up and Down walk what you have typed.'
+          OnKeyDown = EditReplKeyDown
+          TabOrder = 2
+        end
+      end
+      object MemoRepl: TMemo
+        Left = 0
+        Height = 122
+        Top = 0
+        Width = 992
+        Align = alClient
+        ReadOnly = True
+        ScrollBars = ssAutoBoth
+        TabOrder = 1
+        WordWrap = False
+      end
+    end
   end
   object SplitterOutput: TSplitter
     Cursor = crVSplit
@@ -527,6 +586,12 @@ object FrmMain: TFrmMain
       end
       object MnuStop: TMenuItem
         Action = ActStop
+      end
+      object SepR2: TMenuItem
+        Caption = '-'
+      end
+      object MnuRepl: TMenuItem
+        Action = ActRepl
       end
     end
     object MnuDebug: TMenuItem
@@ -680,6 +745,12 @@ object FrmMain: TFrmMain
       Hint = 'Jump to the function this name defines, in this file'
       OnExecute = ActGotoDefinitionExecute
       ShortCut = 123
+    end
+    object ActRepl: TAction
+      Caption = '&REPL'
+      Hint = 'A Phosphor prompt whose variables persist across lines'
+      OnExecute = ActReplExecute
+      ShortCut = 24658
     end
     object ActOutline: TAction
       Caption = '&Outline'

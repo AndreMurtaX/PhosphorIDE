@@ -129,6 +129,13 @@ begin
       Report.Add(Format('outline: F12 %d, pane %d, rows %d',
         [FrmMain.ActGotoDefinition.ShortCut, FrmMain.ActOutline.ShortCut,
          FrmMain.ListOutline.Items.Count]));
+      { THE TRANSCRIPT MUST BE EMPTY HERE, and that is the interesting half. A
+        REPL is a child that never exits on its own and, on Windows, holds a
+        lock on phosphor.exe; one started at form creation would be a process
+        the user did not ask for and cannot explain. Zero lines is the proof
+        that constructing the window starts nothing. 24658 is Ctrl+Shift+R. }
+      Report.Add(Format('repl: shortcut %d, transcript %d lines',
+        [FrmMain.ActRepl.ShortCut, FrmMain.MemoRepl.Lines.Count]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

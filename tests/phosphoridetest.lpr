@@ -55,7 +55,10 @@ uses
     TPhosphorRunner cannot be constructed here -- Create builds a TTimer and this
     program deliberately never makes a widgetset -- and it does not need to be:
     a pipe this program opens itself asks the same question. }
-  uphosphorrun, Pipes;
+  uphosphorrun, Pipes,
+  { The REPL transcript and its history: strings and an index, every one of them
+    checkable without a child process. }
+  uphosphorrepl;
 
 var
   Checks: Integer = 0;
@@ -1102,6 +1105,157 @@ begin
             Word('println', I));
 end;
 
+{ ------------------------------------------------------------------ REPL --- }
+
+procedure TestRepl;
+var
+  Segs: TReplSegments;
+  H: TReplHistory;
+
+  function Joined(const AText: String): String;
+  var
+    J: Integer;
+  begin
+    Result := '';
+    Segs := SplitReplPrompts(AText);
+    for J := 0 to High(Segs) do
+      Result := Result + Segs[J].Text;
+  end;
+
+  function Prompts(const AText: String): Integer;
+  var
+    J: Integer;
+  begin
+    Result := 0;
+    Segs := SplitReplPrompts(AText);
+    for J := 0 to High(Segs) do
+      if Segs[J].IsPrompt then
+        Inc(Result);
+  end;
+
+  function Body(const AText: String): String;
+  var
+    J: Integer;
+  begin
+    Result := '';
+    Segs := SplitReplPrompts(AText);
+    for J := 0 to High(Segs) do
+      if not Segs[J].IsPrompt then
+        Result := Result + Segs[J].Text;
+  end;
+
+begin
+  Group('uphosphorrepl: the prompt, and what was typed at it');
+
+  { --- the prompts, exactly as the host writes them ------------------------ }
+  { Phosphor host/console/phosphor.lpr:3017 writes both on one line, and the
+    trailing space is part of each. The five spaces before `...>` are the
+    difference between a continuation that lines up under the first prompt and
+    one that does not. }
+  CheckEqInt('the prompt is ten characters', 10, Length(ReplPrompt));
+  CheckEqInt('and so is the continuation', 10, Length(ReplContinuation));
+  CheckEq('the prompt', 'phosphor> ', ReplPrompt);
+  CheckEq('the continuation', '     ...> ', ReplContinuation);
+
+  { --- splitting one off the front ----------------------------------------- }
+  CheckEqInt('a bare prompt is one segment', 1, Length(SplitReplPrompts(ReplPrompt)));
+  Check('  and it is a prompt', SplitReplPrompts(ReplPrompt)[0].IsPrompt);
+  CheckEqInt('a prompt with an answer after it is two', 2,
+             Length(SplitReplPrompts(ReplPrompt + '42')));
+  CheckEq('  and the answer is the second', '42', Body(ReplPrompt + '42'));
+
+  { THE CASE THE UNIT EXISTS FOR, measured: `x = 1` prints nothing, so the next
+    prompt lands against the previous one and the pair arrives glued to whatever
+    is printed after them. }
+  CheckEqInt('two prompts on one line are two segments', 2,
+             Prompts(ReplPrompt + ReplPrompt + '1'));
+  CheckEq('  with the answer kept whole', '1', Body(ReplPrompt + ReplPrompt + '1'));
+  { And the measured three-prompt line from a block: one prompt then two
+    continuations, then the block's first line of output. }
+  CheckEqInt('a prompt and two continuations', 3,
+             Prompts(ReplPrompt + ReplContinuation + ReplContinuation + '1'));
+  CheckEq('  and the output after them', '1',
+          Body(ReplPrompt + ReplContinuation + ReplContinuation + '1'));
+
+  { --- what must NOT be split ---------------------------------------------- }
+  { A PROMPT CAN ONLY BE AT THE START. The host writes it before the read, so
+    anything that looks like one further along is a string somebody printed --
+    and splitting it would take somebody's own text apart. }
+  CheckEqInt('a prompt in the middle of a line is text', 0,
+             Prompts('the answer is phosphor> now'));
+  CheckEq('  and survives whole', 'the answer is phosphor> now',
+          Body('the answer is phosphor> now'));
+  CheckEqInt('a prompt after real output is text too', 1,
+             Prompts(ReplPrompt + 'x' + ReplPrompt));
+  CheckEqInt('almost a prompt is not one', 0, Prompts('phosphor>'));
+  CheckEqInt('nor is the continuation with four spaces', 0, Prompts('    ...> '));
+  CheckEqInt('an empty fragment is no segments', 0, Length(SplitReplPrompts('')));
+
+  { THE INVARIANT: the caller may paint the segments differently, it may not
+    lose one. }
+  CheckEq('the segments rebuild the input', ReplPrompt + ReplPrompt + '1',
+          Joined(ReplPrompt + ReplPrompt + '1'));
+  CheckEq('and so for ordinary text', 'hello, world', Joined('hello, world'));
+  CheckEq('and for the measured block line',
+          ReplPrompt + ReplContinuation + ReplContinuation + '1',
+          Joined(ReplPrompt + ReplContinuation + ReplContinuation + '1'));
+
+  Check('a bare prompt is all prompt', IsAllPrompt(ReplPrompt));
+  Check('two of them too', IsAllPrompt(ReplPrompt + ReplContinuation));
+  Check('a prompt with an answer is not', not IsAllPrompt(ReplPrompt + '42'));
+  Check('and neither is nothing', not IsAllPrompt(''));
+
+  { --- the history ---------------------------------------------------------- }
+  H := TReplHistory.Create;
+  try
+    CheckEqInt('a new history is empty', 0, H.Count);
+    CheckEq('and Up on it changes nothing', 'half typed', H.Older('half typed'));
+
+    H.Add('println 1');
+    H.Add('println 2');
+    CheckEqInt('two lines remembered', 2, H.Count);
+    { An empty line is not a thought anybody wants back. }
+    H.Add('   ');
+    CheckEqInt('whitespace is not remembered', 2, H.Count);
+    H.Add('println 2');
+    CheckEqInt('nor is the same line twice running', 2, H.Count);
+    H.Add('println 1');
+    CheckEqInt('but the same line after another one is', 3, H.Count);
+
+    H.Clear;
+    H.Add('one');
+    H.Add('two');
+    H.Add('three');
+    Check('not walking to start with', not H.Walking);
+    CheckEq('Up gives the newest', 'three', H.Older('draft'));
+    Check('and now it is walking', H.Walking);
+    CheckEq('Up again gives the one before', 'two', H.Older('ignored'));
+    CheckEq('and again', 'one', H.Older('ignored'));
+    CheckEq('past the oldest it stays there', 'one', H.Older('ignored'));
+    CheckEq('Down comes back', 'two', H.Newer);
+    CheckEq('and again', 'three', H.Newer);
+    { THE DRAFT, which is the rule that is not obvious: the half-typed line the
+      FIRST Up replaced comes back, because one keystroke may not silently
+      destroy what somebody was writing. }
+    CheckEq('past the newest is the draft again', 'draft', H.Newer);
+    Check('and walking has stopped', not H.Walking);
+    CheckEq('Down past the draft stays on it', 'draft', H.Newer);
+
+    { Sending a line starts the walk over, and forgets the draft with it. }
+    H.Older('second draft');
+    H.Reset;
+    Check('a send stops the walk', not H.Walking);
+    CheckEq('and Up starts from the newest again', 'three', H.Older('third draft'));
+    CheckEq('with the new draft stashed', 'third draft', H.Newer);
+
+    H.Clear;
+    CheckEqInt('clearing empties it', 0, H.Count);
+    Check('and stops any walk', not H.Walking);
+  finally
+    H.Free;
+  end;
+end;
+
 { ------------------------------------------ handles a later child inherits -- }
 
 procedure TestHandlePrivacy;
@@ -1596,6 +1750,7 @@ begin
   TestOutline;
   TestFindInFiles;
   TestHandlePrivacy;
+  TestRepl;
   TestProtocol;
   TestTransport;
   TestSession;
