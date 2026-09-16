@@ -63,6 +63,13 @@ type
   TDebugNoteEvent = procedure(Sender: TObject; const AText: String) of object;
   TDebugLinesEvent = procedure(Sender: TObject; const APath: String;
     const AInstalled: TPdbpLines) of object;
+  { AFrame is the frame the answer belongs to, carried alongside the request
+    rather than remembered in a single field: two reads in flight at once would
+    otherwise both be labelled with the second one's frame. }
+  TDebugVariablesEvent = procedure(Sender: TObject; AFrame: Integer;
+    const AVars: TPdbpVariables) of object;
+  TDebugStackEvent = procedure(Sender: TObject;
+    const AFrames: TPdbpFrames) of object;
 
   { TDebugSession }
 
@@ -80,6 +87,10 @@ type
     FSeq: Integer;
     FPendingSeq: array of Integer;          // seq -> which command it asked
     FPendingCmd: array of TPdbpCommand;
+    { ...and with what argument. Only `variables` has one today -- the frame --
+      and the answer does not repeat it, so an editor that asked for frame 1 and
+      frame 0 in quick succession could not tell the replies apart. }
+    FPendingArg: array of Integer;
     FProgramPath: String;
     FWantLines: TPdbpLines;
     FWantEntry: Boolean;
@@ -90,11 +101,14 @@ type
     FOnExited: TDebugExitEvent;
     FOnNote: TDebugNoteEvent;
     FOnLinesInstalled: TDebugLinesEvent;
+    FOnVariables: TDebugVariablesEvent;
+    FOnStackTrace: TDebugStackEvent;
 
     procedure SetUnavailable(const AReason: String);
     procedure SetState(AState: TDebugState);
-    function NextSeq(ACommand: TPdbpCommand): Integer;
-    function TakePending(ASeq: Integer; out ACommand: TPdbpCommand): Boolean;
+    function NextSeq(ACommand: TPdbpCommand; AArg: Integer = 0): Integer;
+    function TakePending(ASeq: Integer; out ACommand: TPdbpCommand;
+      out AArg: Integer): Boolean;
     function SendRaw(const AFrame: String): Boolean;
     procedure HandleFrame(Sender: TObject; const AFrame: String);
     procedure HandleConnect(Sender: TObject);
@@ -156,6 +170,10 @@ type
     property OnNote: TDebugNoteEvent read FOnNote write FOnNote;
     property OnLinesInstalled: TDebugLinesEvent read FOnLinesInstalled
       write FOnLinesInstalled;
+    property OnVariables: TDebugVariablesEvent read FOnVariables
+      write FOnVariables;
+    property OnStackTrace: TDebugStackEvent read FOnStackTrace
+      write FOnStackTrace;
   end;
 
 implementation
@@ -228,7 +246,7 @@ begin
   if Assigned(FOnNote) then FOnNote(Self, AText);
 end;
 
-function TDebugSession.NextSeq(ACommand: TPdbpCommand): Integer;
+function TDebugSession.NextSeq(ACommand: TPdbpCommand; AArg: Integer): Integer;
 var
   n: Integer;
 begin
@@ -237,26 +255,32 @@ begin
   n := Length(FPendingSeq);
   SetLength(FPendingSeq, n + 1);
   SetLength(FPendingCmd, n + 1);
+  SetLength(FPendingArg, n + 1);
   FPendingSeq[n] := Result;
   FPendingCmd[n] := ACommand;
+  FPendingArg[n] := AArg;
 end;
 
 function TDebugSession.TakePending(ASeq: Integer;
-  out ACommand: TPdbpCommand): Boolean;
+  out ACommand: TPdbpCommand; out AArg: Integer): Boolean;
 var
   i, last: Integer;
 begin
   Result := False;
   ACommand := pcInitialize;
+  AArg := 0;
   for i := 0 to High(FPendingSeq) do
     if FPendingSeq[i] = ASeq then
     begin
       ACommand := FPendingCmd[i];
+      AArg := FPendingArg[i];
       last := High(FPendingSeq);
       FPendingSeq[i] := FPendingSeq[last];
       FPendingCmd[i] := FPendingCmd[last];
+      FPendingArg[i] := FPendingArg[last];
       SetLength(FPendingSeq, last);
       SetLength(FPendingCmd, last);
+      SetLength(FPendingArg, last);
       Exit(True);
     end;
 end;
@@ -454,8 +478,9 @@ end;
 procedure TDebugSession.HandleResponse(const AMsg: TPdbpMessage);
 var
   cmd: TPdbpCommand;
+  arg: Integer;
 begin
-  if not TakePending(AMsg.Seq, cmd) then
+  if not TakePending(AMsg.Seq, cmd, arg) then
   begin
     { An answer to something nobody asked. Not fatal on its own -- a late reply
       to a request abandoned by a disconnect looks exactly like this -- so it is
@@ -518,9 +543,19 @@ begin
         program actually came to rest, and it arrives at the next statement
         boundary. }
       ;
+    pcVariables:
+      { Data, not state. It is handed straight on: the editor formats NOTHING --
+        the host has already rendered each value the way PRINT would, and a second
+        renderer here would be a second set of rules to keep in step. }
+      if Assigned(FOnVariables) then
+        FOnVariables(Self, arg, AMsg.Variables);
+
+    pcStackTrace:
+      if Assigned(FOnStackTrace) then
+        FOnStackTrace(Self, AMsg.Frames);
   else
-    { stackTrace, variables and evaluate answer with data the caller asked for;
-      they change no state. }
+    { evaluate is refused by every host that reports evaluate:false, which is
+      every host today, so its answer is a refusal handled above. }
     ;
   end;
 end;
@@ -660,7 +695,7 @@ begin
     Note('variables are only readable while the program is stopped');
     Exit;
   end;
-  Result := SendRaw(EncodeVariables(NextSeq(pcVariables), AFrame));
+  Result := SendRaw(EncodeVariables(NextSeq(pcVariables, AFrame), AFrame));
 end;
 
 procedure TDebugSession.Stop(ATerminate: Boolean);

@@ -77,6 +77,12 @@ begin
         [FrmMain.StatusBar1.Panels.Count,
          BoolToStr(FrmMain.StatusBar1.SimplePanel, True),
          FrmMain.PagesEditors.PageCount]));
+      { The same reason the panels are counted. A TListView whose Columns
+        collection failed to stream is a pane that is present, sized, and shows
+        nothing -- and no screenshot distinguishes that from a pane with no rows
+        in it yet. }
+      Report.Add(Format('variables pane: %d columns, %d output tabs',
+        [FrmMain.ListVariables.Columns.Count, FrmMain.PagesOutput.PageCount]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

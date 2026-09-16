@@ -133,6 +133,8 @@ type
     StatusBar1: TStatusBar;
     TabOutput: TTabSheet;
     TabProblems: TTabSheet;
+    TabVariables: TTabSheet;
+    ListVariables: TListView;
     TbCheck: TToolButton;
     TbNew: TToolButton;
     TbOpen: TToolButton;
@@ -231,6 +233,11 @@ type
       is what clears the current-line paint. }
     FDebugPath: String;
     FDebugLine: Integer;
+    { Shown once per session, on the first stop. Switching to the pane on EVERY
+      stop would take the output tab away from someone who chose it, and never
+      switching leaves the first-time user reading an empty Output pane wondering
+      what Debug did. }
+    FVarShown: Boolean;
 
     function ActiveDoc: TEditorDoc;
     function DocOfPage(APage: TTabSheet): TEditorDoc;
@@ -258,6 +265,9 @@ type
     procedure DebugNote(Sender: TObject; const AText: String);
     procedure DebugLinesInstalled(Sender: TObject; const APath: String;
       const AInstalled: TPdbpLines);
+    procedure DebugVariables(Sender: TObject; AFrame: Integer;
+      const AVars: TPdbpVariables);
+    procedure ClearVariables;
 
     procedure OpenPath(const APath: String);
     procedure RecentClick(Sender: TObject);
@@ -347,6 +357,7 @@ begin
   FDebug.OnExited := @DebugExited;
   FDebug.OnNote := @DebugNote;
   FDebug.OnLinesInstalled := @DebugLinesInstalled;
+  FDebug.OnVariables := @DebugVariables;
 
   FDebugTimer := TTimer.Create(Self);
   FDebugTimer.Enabled := False;
@@ -1446,6 +1457,8 @@ begin
 
   FDebugPath := Path;
   FDebugLine := 0;
+  FVarShown := False;
+  ClearVariables;
   FDebugTimer.Enabled := True;
   RefreshDebugActions;
   Result := True;
@@ -1456,6 +1469,10 @@ begin
   FDebugTimer.Enabled := False;
   FDebugLine := 0;
   FDebugPath := '';
+  { The values were true at a moment that has passed. Leaving them on screen after
+    the program is gone is the same defect as the stale hint on an action. }
+  ClearVariables;
+  TabVariables.Caption := 'Variables';
   if AWhy <> '' then
     AddOutput('> ' + AWhy);
   RepaintEditors;
@@ -1488,6 +1505,17 @@ begin
 
   AddOutput(Format('> stopped at line %d (%s)',
     [ALine, PdbpStopReasonName(AReason)]));
+
+  { Frame 0 is the only one there is today. Asking BY INDEX anyway is what stops
+    this pane being rewritten when a call-stack pane arrives and frame 1 becomes
+    selectable -- the answer already carries the frame it belongs to. }
+  FDebug.RequestVariables(0);
+  if not FVarShown then
+  begin
+    FVarShown := True;
+    PagesOutput.ActivePage := TabVariables;
+  end;
+
   GotoSource(FDebugPath, ALine);
   RepaintEditors;
   RefreshDebugActions;
@@ -1521,6 +1549,53 @@ begin
     AddOutput(Format('  debug: %d of %d breakpoints installed; the rest are on ' +
       'lines with no statement to stop at',
       [Length(AInstalled), Doc.BreakpointCount]));
+end;
+
+procedure TFrmMain.ClearVariables;
+begin
+  ListVariables.Items.Clear;
+end;
+
+procedure TFrmMain.DebugVariables(Sender: TObject; AFrame: Integer;
+  const AVars: TPdbpVariables);
+
+  procedure AddRow(const AVar: TPdbpVariable);
+  var
+    Item: TListItem;
+  begin
+    Item := ListVariables.Items.Add;
+    { THE EDITOR FORMATS NOTHING. Every one of these four strings was rendered by
+      the host, which rendered the value exactly as PRINT would. A second renderer
+      here would be a second set of rules to keep in step with a language whose
+      own rules are frozen elsewhere. }
+    Item.Caption := AVar.Name;
+    Item.SubItems.Add(AVar.Value);
+    Item.SubItems.Add(AVar.Kind);
+    Item.SubItems.Add(AVar.Scope);
+  end;
+
+var
+  I: Integer;
+begin
+  ListVariables.Items.BeginUpdate;
+  try
+    ListVariables.Items.Clear;
+
+    { LOCALS ABOVE GLOBALS, AND BOTH LABELLED. Not cosmetic: in this language an
+      undeclared name inside a function IS a global (Phosphor's frozen decision,
+      not an accident), so a pane that blurred the two would teach the reader
+      something false about where their value lives. }
+    for I := 0 to High(AVars) do
+      if AVars[I].Scope = 'local' then
+        AddRow(AVars[I]);
+    for I := 0 to High(AVars) do
+      if AVars[I].Scope <> 'local' then
+        AddRow(AVars[I]);
+  finally
+    ListVariables.Items.EndUpdate;
+  end;
+
+  TabVariables.Caption := Format('Variables (%d)', [Length(AVars)]);
 end;
 
 procedure TFrmMain.ActDebugStartExecute(Sender: TObject);
