@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 147 checks, exit code 0.
+- `bin\phosphoridetest` green: 183 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -184,6 +184,8 @@ coming soon, without saying that it needs work in the Phosphor repository first.
 
 ## 3. Phosphor: a debug seam that is allowed to block
 
+**DONE in the Phosphor repository on 2026-09-15**, and the lead time this item was placed for turned out to be a day. The handoff is `docs/debugger-lane.md`.
+
 **What.** A second seam beside `OnBreakpoint` whose installed procedure may block, nil by
 default, and a return value that tells the VM what to do next.
 
@@ -219,6 +221,8 @@ that can be told to stop.
 
 ## 4. Phosphor: a step/resume state machine
 
+**DONE in the Phosphor repository on 2026-09-15**, and the lead time this item was placed for turned out to be a day. The handoff is `docs/debugger-lane.md`.
+
 **What.** `stepOver`, `stepInto` and `stepOut` are not three traps. They are one trap plus a
 comparison against the frame depth recorded when the step was requested: step into stops at
 the next statement whatever the depth; step over stops at the next statement whose depth is
@@ -248,6 +252,8 @@ request it cannot honour.
 ---
 
 ## 5. Phosphor: accessors for globals and frames
+
+**DONE in the Phosphor repository on 2026-09-15**, and the lead time this item was placed for turned out to be a day. The handoff is `docs/debugger-lane.md`.
 
 **What.** Read-only access to the current frame stack -- a count, and per frame the
 function's name, the source line, and the local slot names with their values -- and to the
@@ -280,6 +286,8 @@ Three Phosphor facts shape the shape of it, and none may be papered over:
 ---
 
 ## 6. Phosphor: a `phosphor debug` subcommand speaking PDBP
+
+**DONE in the Phosphor repository on 2026-09-15**, and the lead time this item was placed for turned out to be a day. The handoff is `docs/debugger-lane.md`.
 
 **What.** The subcommand. It listens on a loopback socket, accepts one client, speaks the
 line-delimited JSON specified in `docs/debug-protocol.md`, and runs the program under items
@@ -321,6 +329,8 @@ shape.
 ## The debugger, second half: this repository
 
 ## 7. The socket transport and the handshake
+
+**DONE 2026-09-16**, driven against the real host and recorded in `docs/debugger-lane.md` — including what the first cut got wrong.
 
 **What.** The piece `src/core/udebugsession.pas:211` names as "the next piece of work":
 connect to the socket a `phosphor debug` child is listening on, send the frame
@@ -366,6 +376,8 @@ Two things must be right or the session will fail in ways that look like host bu
 
 ## 8. The session state machine, the step actions, and the current-line marker
 
+**DONE 2026-09-16**, driven against the real host and recorded in `docs/debugger-lane.md` — including what the first cut got wrong.
+
 **What.** Drive `TDebugState` (`src/core/udebugsession.pas:52-59`) from the inbound events;
 wire the six actions that already exist and are greyed out -- `ActDebugStart`, `ActStepOver`,
 `ActStepInto`, `ActStepOut`, `ActContinue`, `ActDebugStop`, all handled in
@@ -410,6 +422,8 @@ says so -- not a request the other end will refuse. That is the entire reason
 
 ## 9. A variables pane
 
+**DONE 2026-09-16**, driven against the real host and recorded in `docs/debugger-lane.md` — including what the first cut got wrong.
+
 **What.** A tab beside Output and Problems in `PagesOutput`: Name, Value, Scope, filled from
 the `variables` response for the selected frame.
 
@@ -431,6 +445,18 @@ stopped; no code path in the pane formats a number.
 ---
 
 ## 10. A call-stack pane
+
+**Next, and reachable today** — items 3 to 9 are done, so nothing is waiting on the
+other repository any more. Two things found on 2026-09-16 belong with it:
+
+- **Phosphor owes a fix**: a breakpoint on the **first statement** is answered as
+  installed by `setBreakpoints` and then never fires. The editor cannot detect this —
+  the installed set is the protocol's only verified/unverified marker — so the gutter
+  draws line 1 armed and the program runs past it. Reproduce by speaking PDBP directly:
+  `setBreakpoints lines:[1]` on any file answers `lines:[1]`.
+- **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
+  because a mark needs the `TImageList` of item 13.
+
 
 **What.** A list of frames. The decoding is already written and tested: `TPdbpFrames`
 carries `Index`, `Name` (the function's name, or `(main)`), `Path` and `Line`

@@ -232,26 +232,32 @@ and `mod`, are the exception and are treated as absolute.
 
 ## Debugging
 
-**Breakpoints work as marks. Stepping does not exist.** The Debug menu's Step Over,
-Step Into, Step Out, Continue and Start Debugging are greyed out with an explanation
-attached to each as its hint, and **Debug > Why is stepping unavailable?** shows it in
-full. Greyed-out items with a reason are more honest than a hidden menu and more useful
-than a Step that silently does nothing.
+**Stepping works.** Set a breakpoint in the gutter or with F5, press **Shift+F9**,
+and the program stops there with the line highlighted and its variables listed. Then
+**F8** steps over, **F7** steps into, **Shift+F8** steps out and **F6** continues.
+A breakpoint the host could not arm -- on a blank line, a comment, an `endfunction` --
+is drawn grey instead of red, because the host answers `setBreakpoints` with the set it
+actually installed and a mark that will never fire should not look like one that will.
 
-THAT REASON IS NOW OUT OF DATE, and the paragraphs that used to stand here said so
-with four citations. They claimed the engine's `BREAKPOINT` seam must never block,
-that the VM had no step API, that the frame stack was private with no accessor, and
-that the console host installed no seam at all. All four were true when written and
-none is true now. Phosphor has `TPhosphorDebugProc`, which **returns** an action and
-may block; `ArmDebug`, `DebugVM` and four step actions; `DbgFrameDepth`,
-`DbgFrameFunc`, `DbgLocal` and `DbgGlobal`; and `phosphor debug --port <n> <file.bas>`
-speaks PDBP end to end, pinned by a 43-assertion contract test in that repository.
+The editor still does not contain an interpreter. A debug session is
+`phosphor debug --port <n> <file.bas>` as a child process, talking back over a loopback
+socket in a line-delimited JSON protocol called PDBP; the program's own stdout, stderr
+and stdin stay on the ordinary pipes where the output pane already reads them.
 
-What remains unbuilt is the MENU, here: six Debug actions in `umainform.lfm` carry no
-`OnExecute` at all, so enabling them would give live shortcuts that do nothing. The two
-layers beneath them are built and tested -- `src/core/udebugtransport.pas` is the
-loopback listener and framing, `src/core/udebugsession.pas` drives the session -- and
-`docs/debugger-lane.md` says what is left and in what order.
+Three sentences of history, because they are the reason the design is shaped this way.
+Until 2026-09-15 the Debug menu's Step items were greyed out with an explanation
+attached, and that explanation had four citations: the engine's `BREAKPOINT` seam had
+to be report-and-continue, the VM had no step API, the frame stack was private, and the
+console host installed no seam. All four were true when written and none is true now.
+Phosphor gained `TPhosphorDebugProc`, `ArmDebug`, four step actions and the `Dbg*`
+accessors; this editor's end of the protocol had been written first, on purpose, and
+the menu followed on 2026-09-16.
+
+What is **not** built: no call-stack pane (the protocol and codec have `stackTrace`;
+nothing asks yet), no watches, no evaluate -- `capabilities.evaluate` is false on every
+host, and an expression evaluator in here would be an interpreter in here.
+`docs/debugger-lane.md` records what each step was verified against, and what the first
+cut got wrong.
 
 Two decisions in that specification are worth stating here because they constrain the
 Phosphor side. It is **not DAP**: the Debug Adapter Protocol is the right answer if
@@ -293,7 +299,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 147 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 183 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

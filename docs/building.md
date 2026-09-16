@@ -89,7 +89,7 @@ Each script does the same six things in the same order:
    The script checks that the binary exists and is executable before it says a word about
    success. This is Phosphor's rule and it is here for the same reason.
 4. **Run the unit checks** -- `bin/phosphoridetest`, which prints
-   `147 checks, all green.` and exits 0. A non-zero exit is the number of failures, each
+   `183 checks, all green.` and exits 0. A non-zero exit is the number of failures, each
    already printed with what it expected and what it got.
 5. **Run `--selftest`, under a timeout.** `bin/phosphoride --selftest <report>` builds
    every form once and exits 0 or 1. The timeout is not caution, it is the fix for a
@@ -170,7 +170,7 @@ program and already exercises the units where a leak would be worth finding.
 
 Three of them. They cover different things and none of them covers what the other two do.
 
-### `bin/phosphoridetest` -- 147 checks
+### `bin/phosphoridetest` -- 183 checks
 
 ```
 bin\phosphoridetest.exe          # Windows
@@ -272,14 +272,14 @@ that adds a keyword is invisible to every gate in this repository until somebody
 
 No check here runs a BASIC program. Run, Check Syntax, Compile to `.pbc`, Pack, Stop, the
 stdin box and the output pane are exercised by driving the editor against a real
-`phosphor` binary by hand. And there is nothing to build or test behind the Debug menu's
-Step items: they are greyed out with the reason attached, because the phosphor host
-could not pause a running program when this was written -- its `BREAKPOINT` seam was
-report-and-continue and "must never block". That changed on 2026-09-15: the engine has
-a debug seam that returns an action, and `phosphor debug --port` can be paused mid-run.
-What is still unbuilt is the editor's Debug menu; see `docs/debugger-lane.md`.
-`docs/debug-protocol.md` specifies what would close that gap, and closing it is work in
-the *Phosphor* repository, not this one.
+`phosphor` binary by hand. **And no check here debugs one.** The Debug menu works as of 2026-09-16 -- start,
+breakpoints, the three steps, continue, the variables pane -- and every one of those is
+a conversation with a live `phosphor debug --port` child over a socket, which none of
+the three gates can stand in for. The protocol CODEC is pinned headless in
+`bin/phosphoridetest`; the session is not. It was verified by driving the editor from a
+script against the real host, with the transcripts read out of the Output pane rather
+than photographed, and `docs/debugger-lane.md` says what each step was checked against.
+Roadmap item 2a is the contract test that would turn that into a gate.
 
 ---
 

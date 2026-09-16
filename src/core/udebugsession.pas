@@ -57,8 +57,13 @@ type
     dsTerminating
   );
 
+  { AText is the engine's own message when AReason is psrException -- `division
+    by zero` and the like. It is empty for every other reason, and it is the only
+    place that sentence appears: the run ends after an exception stop, so there is
+    no later diagnostic on stderr to read it from. Dropping it here loses the one
+    thing the user needs to know. }
   TDebugStopEvent = procedure(Sender: TObject; const APath: String;
-    ALine: Integer; AReason: TPdbpStopReason) of object;
+    ALine: Integer; AReason: TPdbpStopReason; const AText: String) of object;
   TDebugExitEvent = procedure(Sender: TObject; AExitCode: Integer) of object;
   TDebugNoteEvent = procedure(Sender: TObject; const AText: String) of object;
   TDebugLinesEvent = procedure(Sender: TObject; const APath: String;
@@ -95,6 +100,9 @@ type
     FWantLines: TPdbpLines;
     FWantEntry: Boolean;
     FHandshakeDone: Boolean;
+    { A transport that must be torn down, but not from where the request came.
+      See CloseTransport. }
+    FClosePending: Boolean;
 
     FOnStateChange: TNotifyEvent;
     FOnStopped: TDebugStopEvent;
@@ -118,6 +126,7 @@ type
     procedure Desync(const AWhy: String);
     procedure Note(const AText: String);
     procedure SendSetBreakpoints;
+    procedure CloseTransport;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -215,12 +224,23 @@ end;
 
 destructor TDebugSession.Destroy;
 begin
-  if FTransport <> nil then
-  begin
-    FTransport.Stop();
-    FreeAndNil(FTransport);
-  end;
+  CloseTransport;
   inherited Destroy;
+end;
+
+procedure TDebugSession.CloseTransport;
+begin
+  { THE ONLY PLACE A TRANSPORT IS FREED. It is called directly by everything that
+    runs on the caller's stack -- BeginListen, AbandonListen, Stop, the destructor
+    -- and asked for, through FClosePending, by the two callbacks that do not:
+    HandleDisconnect and Desync both run inside TDebugTransport.Drain, which goes
+    on reading its own fields after the callback returns. Freeing it from there
+    was a leak in one case and a use-after-free in the other. }
+  FClosePending := False;
+  if FTransport = nil then
+    Exit;
+  FTransport.Stop();
+  FreeAndNil(FTransport);
 end;
 
 procedure TDebugSession.SetUnavailable(const AReason: String);
@@ -300,6 +320,25 @@ var
   I: Integer;
   Advertises: Boolean;
 begin
+  { A PROBE DURING A SESSION IS AN ANSWER THAT STRANDS THE DEBUGGEE. Every path
+    out of this method ends at dsIdle or dsUnavailable, so asking the question
+    while a program is stopped at a breakpoint answers it by declaring that no
+    session is running: Stop Debugging greys out, the poll timer keeps ticking,
+    the stripe stays painted, and the child is left alive with nothing able to
+    reach it. Measured on 2026-09-16 -- Tools > Preferences > OK does exactly
+    this, because accepting the dialog re-resolves the host.
+
+    The new setting is not forgotten, it is just not acted on yet. It could not
+    be anyway: the session that is running is bound to the binary that started
+    it, and a host path only means anything at the next spawn. }
+  if FState in [dsStarting, dsRunning, dsStopped, dsTerminating] then
+  begin
+    if CompareFilenames(AHostPath, FHostPath) <> 0 then
+      Note('the phosphor host was changed during a debug session; the change ' +
+           'takes effect on the next one');
+    Exit;
+  end;
+
   FHostPath := AHostPath;
 
   if AHostPath = '' then
@@ -372,11 +411,7 @@ begin
     Note('this host cannot be debugged; nothing was started');
     Exit;
   end;
-  if FTransport <> nil then
-  begin
-    FTransport.Stop();
-    FreeAndNil(FTransport);
-  end;
+  CloseTransport;
 
   FProgramPath := AProgramPath;
   SetLength(FWantLines, Length(ALines));
@@ -405,11 +440,7 @@ end;
 
 procedure TDebugSession.AbandonListen(const AWhy: String);
 begin
-  if FTransport <> nil then
-  begin
-    FTransport.Stop();
-    FreeAndNil(FTransport);
-  end;
+  CloseTransport;
   FHandshakeDone := False;
   Note(AWhy);
   SetState(dsIdle);
@@ -418,6 +449,9 @@ end;
 procedure TDebugSession.Poll;
 begin
   if FTransport <> nil then FTransport.Poll();
+  { Deferred teardown, collected here because this is the first moment the
+    transport's own Drain is off the stack. }
+  if FClosePending then CloseTransport;
 end;
 
 procedure TDebugSession.HandleConnect(Sender: TObject);
@@ -441,6 +475,12 @@ begin
   FHandshakeDone := False;
   FCurrentPath := '';
   FCurrentLine := 0;
+  { AND THE LISTENER GOES WITH IT. Leaving it open leaked a bound loopback port
+    per session -- a LISTENING socket with no peer in netstat, with the accept
+    thread parked in fpAccept behind it -- for every program that merely finished
+    normally, which is the ordinary case rather than an edge one. Asked for
+    rather than done: see CloseTransport. }
+  FClosePending := True;
   if FState <> dsUnavailable then SetState(dsIdle);
 end;
 
@@ -452,11 +492,11 @@ begin
     describing something else. }
   Note('the debug connection went out of step (' + AWhy + '); disconnecting');
   SetState(dsTerminating);
-  if FTransport <> nil then
-  begin
-    FTransport.Stop();
-    FreeAndNil(FTransport);
-  end;
+  { Deferred for the reason CloseTransport gives, and here the cost of not
+    deferring is worse than a leak: Desync is reached from inside the loop that
+    hands frames out one at a time, and that loop reads the transport's fields
+    again on its next turn. }
+  FClosePending := True;
   FHandshakeDone := False;
   SetState(dsIdle);
 end;
@@ -569,7 +609,7 @@ begin
         FCurrentLine := AMsg.Line;
         SetState(dsStopped);
         if Assigned(FOnStopped) then
-          FOnStopped(Self, AMsg.Path, AMsg.Line, AMsg.StopReason);
+          FOnStopped(Self, AMsg.Path, AMsg.Line, AMsg.StopReason, AMsg.Text);
       end;
     peContinued:
       begin
@@ -700,14 +740,17 @@ end;
 
 procedure TDebugSession.Stop(ATerminate: Boolean);
 begin
-  if FTransport = nil then Exit;
+  if FTransport = nil then
+  begin
+    FClosePending := False;
+    Exit;
+  end;
   SetState(dsTerminating);
   { Sent best-effort. `disconnect` while the program RUNS is never answered --
     the caller kills the process instead -- so this neither waits nor cares. }
   if FHandshakeDone then
     SendRaw(EncodeDisconnect(NextSeq(pcDisconnect), ATerminate));
-  FTransport.Stop();
-  FreeAndNil(FTransport);
+  CloseTransport;
   FHandshakeDone := False;
   FCurrentPath := '';
   FCurrentLine := 0;

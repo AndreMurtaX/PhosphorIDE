@@ -23,16 +23,19 @@ object FrmMain: TFrmMain
       Left = 1
       Top = 2
       Action = ActNew
+      Caption = 'New'
     end
     object TbOpen: TToolButton
       Left = 45
       Top = 2
       Action = ActOpen
+      Caption = 'Open...'
     end
     object TbSave: TToolButton
       Left = 96
       Top = 2
       Action = ActSave
+      Caption = 'Save'
     end
     object TbSep1: TToolButton
       Left = 141
@@ -45,11 +48,13 @@ object FrmMain: TFrmMain
       Left = 146
       Top = 2
       Action = ActRun
+      Caption = 'Run'
     end
     object TbStop: TToolButton
       Left = 187
       Top = 2
       Action = ActStop
+      Caption = 'Stop'
     end
     object TbSep2: TToolButton
       Left = 233
@@ -62,6 +67,7 @@ object FrmMain: TFrmMain
       Left = 238
       Top = 2
       Action = ActCheck
+      Caption = 'Check Syntax'
     end
     object TbSep3: TToolButton
       Left = 300
@@ -74,16 +80,19 @@ object FrmMain: TFrmMain
       Left = 305
       Top = 2
       Action = ActToggleBreakpoint
+      Caption = 'Toggle Breakpoint'
     end
     object TbStepOver: TToolButton
       Left = 407
       Top = 2
       Action = ActStepOver
+      Caption = 'Step Over'
     end
     object TbStepInto: TToolButton
       Left = 478
       Top = 2
       Action = ActStepInto
+      Caption = 'Step Into'
     end
   end
   object StatusBar1: TStatusBar
@@ -516,21 +525,25 @@ object FrmMain: TFrmMain
       Caption = 'Step &Over'
       Enabled = False
       ShortCut = 119
+      OnExecute = ActStepOverExecute
     end
     object ActStepInto: TAction
       Caption = 'Step &Into'
       Enabled = False
       ShortCut = 118
+      OnExecute = ActStepIntoExecute
     end
     object ActStepOut: TAction
       Caption = 'Step O&ut'
       Enabled = False
       ShortCut = 8311
+      OnExecute = ActStepOutExecute
     end
     object ActContinue: TAction
-      Caption = 'C&ontinue'
+      Caption = '&Continue'
       Enabled = False
       OnExecute = ActContinueExecute
+      ShortCut = 117
     end
     object ActDebugStop: TAction
       Caption = 'Stop Debu&gging'

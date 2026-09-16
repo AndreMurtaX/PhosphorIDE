@@ -66,6 +66,86 @@ passes, exit 0, back to idle.
 
 ---
 
+## What happened — all five steps, 2026-09-16
+
+Every step below is built and was **driven against the real `phosphor debug --port`
+host on Windows**, not reasoned about. The five bar conditions hold: `lazbuild -B`
+clean at `-vewn`, `bin\phosphoridetest` 183 checks green, `--selftest` exit 0 under a
+timeout, `gen-keywords.py --check` clean. Linux is the gap, and it is named at the end.
+
+| step | verified by |
+| --- | --- |
+| 1. Start Debugging, one breakpoint, one stop | stop on line 10 of a 14-line fixture, navy stripe, `GotoSource`, status bar `debug lane345.bas ...` |
+| 2. The variables pane | `a=5 b=10 s=0` local, `total=5` global, locals above globals, four columns streamed |
+| 3. Hollow marks | a breakpoint on a blank line came back absent from the installed set and is drawn **grey**; the armed one stays maroon |
+| 4. Step over / into / out | 10 → 11 → 12 by F8, into `add` at line 5 by F7, back out by Shift+F8 |
+| 5. Leaving a session honestly | `> stopped at line 4 (exception): division by zero`, then one ending line, no listening socket and no orphan child left behind |
+
+The prediction in step 4 held exactly: stepping does land on the `function add(a, b)
+local s` header line, and it is not a bug.
+
+### What the first cut got wrong, and a critic found
+
+Four adversarial reviews of step 1 ran before step 3 was verified; three of the four
+independently named the same defect, and it was the worst one on the list.
+
+- **The stripe was a memory, not a state.** `FDebugLine` was written on every stop and
+  cleared only when the session ended, so from the moment the user pressed Continue the
+  editor painted "execution is here" on a line the program had already left —
+  indefinitely, on a program blocked at `line input`, and after *every step* once step 4
+  landed. It now clears in `DebugStateChanged` whenever the state is not `dsStopped`,
+  and the screenshot of a program blocked at `input` with no stripe anywhere is the
+  proof.
+- **Tools > Preferences > OK stranded the debuggee.** Accepting the dialog re-resolves
+  the host, which called `TDebugSession.Probe`, every path of which ends at `dsIdle` —
+  so the editor declared there was no session while the child was still alive and
+  stopped. `Probe` now refuses while a session is in flight and says so.
+- **The session ended in three places and none of them knew about the others.**
+  `EndDebugSession` is now idempotent and driven from the state; `RunnerFinished` reads
+  a `FDebugLive` flag instead of asking whether a timer is enabled.
+- **The loopback listener leaked** — one bound port and one parked accept thread per
+  session, for programs that merely finished. `HandleDisconnect` now asks for the
+  teardown, and `TDebugSession.Poll` performs it, because both callbacks run inside the
+  transport's own `Drain`. The same deferral fixes a use-after-free in `Desync`.
+- **A breakpoint set during a session was never re-sent**, though both ends support
+  re-arming. The same defect as `TrackEdit` having no caller, found the same way.
+- **The stop was announced above the output that produced it.** Two timers, no ordering.
+  The debug tick now drains the child's pipes before it reads the socket.
+- **`Continue` had no shortcut and its mnemonic collided with Step Over's.** It is
+  `&Continue` on **F6** — not F9, which runs without the debugger here, and one key
+  cannot do two things.
+- **"Why is stepping unavailable?" answered with an empty dialog** on a host where it
+  *is* available. The menu item is hidden when the answer would be nothing.
+
+Two more were found by driving rather than by reading, and are recorded as traps in
+`CLAUDE.md`: a toolbar button's caption is a real Alt accelerator that shadowed the
+menu bar (**Alt+T killed the running program** instead of opening Tools), and
+`Process.MainWindowHandle` is not the form.
+
+### What the host still owes
+
+Measured on 2026-09-16 by speaking PDBP to `phosphor debug --port` directly, with no
+editor involved:
+
+- **A breakpoint on the first statement is reported installed and never fires.**
+  `setBreakpoints lines:[1]` answers `lines:[1]`; the program runs to completion. This
+  undercuts step 3 in the one case the editor cannot detect — the installed set is the
+  only marker the protocol has, so line 1 is drawn armed and behaves dead.
+- **An exception stop does not linger.** The `stopped/exception` event and the socket
+  close arrive together, so the editor's read-only gating around a terminal stop is
+  correct and unobservable. It was also, before this commit, being thrown away:
+  `RunnerFinished` tore the session down before the last frame was read, and the editor
+  never said the program had stopped at all. It now polls once more first.
+
+### Still unmeasured
+
+**Linux.** Nothing in this lane has been run under gtk2. The transport is `fpSocket`
+and portable, the timers are LCL, and the one platform-specific thing in the new code
+is `CompareFilenames` — which is there precisely because it knows the difference. That
+is an argument, not a measurement, and this file does not treat the two as the same.
+
+---
+
 ## What is next, in order
 
 ### 1. Start Debugging, one breakpoint, one stop

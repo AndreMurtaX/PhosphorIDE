@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 147 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 183 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -612,15 +612,24 @@ scanned (`engine/PhosphorLexer.pas:392`), so `PrintLn` and `println` are one wor
 - **`udebugsession.pas`**: the availability probe and the state machine.
 - **`docs/debug-protocol.md`**: the specification, written so the *other* end can
   be implemented from the document alone without reading this code.
-- **A Debug menu whose Step items are greyed out**, each carrying the reason as
-  its hint, plus **Debug > Why is stepping unavailable?** which shows it in full.
+- **A Debug menu that steps.** Start Debugging (Shift+F9), Step Over (F8), Step
+  Into (F7), Step Out (Shift+F8), Continue (F6) and Stop Debugging, each enabled
+  from the session STATE rather than from a capability flag alone, plus a
+  variables pane fed by `variables` requests keyed by frame index.
+  **Debug > Why is stepping unavailable?** is hidden on a host that can step,
+  because a question with no answer left should not be asked.
 
 ### What does not exist
 
-**Step debugging.** There is no session, no stopping, no stack, no variable
-inspection, and no way to add one from this repository.
+**A call-stack pane, watches, and evaluate.** `stackTrace` is specified, decoded
+and sendable; nothing asks for it yet, and every `variables` request is for frame
+0 -- by index, so the pane survives the day frame 1 becomes selectable. Watches
+and evaluate need `capabilities.evaluate`, which is false on every host today,
+and they must never be closed in-process: an expression evaluator here would be
+an interpreter here.
 
-The obstruction is in Phosphor, and it is structural rather than a missing flag:
+**Step debugging** was in this list until 2026-09-16, with four citations, and is
+now the section above. The obstruction was in Phosphor and was structural:
 
 > **STALE AS OF 2026-09-15.** The four bullets below describe an engine that has since
 > gained everything they say it lacks: a blocking debug seam that returns an action,
@@ -639,10 +648,11 @@ The obstruction is in Phosphor, and it is structural rather than a missing flag:
   exemption in Phosphor's `scripts/check-seams.py`: "BREAKPOINT is
   report-and-continue; there is nowhere for a host to pause to".
 
-A step debugger therefore needs work **in the Phosphor repository**, and
-`docs/debug-protocol.md` says what work, in the order it has to happen. Nothing
-in this editor is one release away from stepping, and nothing here should be
-described as "coming soon" without that sentence attached.
+That work landed in the Phosphor repository on 2026-09-15 and the editor's half
+on 2026-09-16. The bullets are kept because they explain why the protocol is
+shaped the way it is -- and because "it cannot be done" written in the present
+tense is a claim with an expiry date that nobody set. `docs/debugger-lane.md`
+records what each step was verified against.
 
 ### Where the line is drawn
 
@@ -791,7 +801,7 @@ not at all.
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 147 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 183 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

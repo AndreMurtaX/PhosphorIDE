@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 147 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 183 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -183,7 +183,8 @@ the bar.
 
 ## Traps that have already cost real time
 
-All nine were paid for on **2026-09-10**, building this repository.
+The first nine were paid for on **2026-09-10**, building this repository; the three
+marked 2026-09-16 were paid for driving it.
 
 - **A Windows GUI-subsystem binary has no console.** `WriteLn` hits an invalid handle,
   and the RTL's I/O error surfaces as a **modal dialog with nobody there to dismiss
@@ -227,6 +228,25 @@ All nine were paid for on **2026-09-10**, building this repository.
   platforms, with no error anywhere. It survived a screenshot on each OS before
   anyone counted the panels; `--selftest` now reports the count and the flag, because
   "present but blank" is not a thing a screenshot can diagnose.
+- **A toolbar button's caption is a REAL Alt accelerator, and it shadows the menu
+  bar.** A `TToolButton` takes its caption from its action, ampersand included, so
+  `S&top` on the toolbar answered **Alt+T** -- the Tools menu's key -- and killed the
+  program being debugged instead of opening Preferences. `&Run` did the same to the Run
+  menu. Found on 2026-09-16 by driving the editor from a script, which is the only way
+  it could be found: the accelerator is invisible unless Alt is held. Every toolbar
+  button now carries its own `Caption` **after** its `Action` in the `.lfm`, with no
+  mark in it. A button is clicked, not typed.
+- **`Process.MainWindowHandle` is not the form.** The LCL creates a hidden top-level
+  window holding `Application.Title`, and Windows hands that one back as the main
+  window. `MoveWindow` moved something invisible, `GetWindowRect` described it, and
+  `EnumChildWindows` found it childless -- and every one of those succeeded. Any script
+  that drives this program has to enumerate the process's **visible** top-level windows
+  instead. (`scratchpad win.ps1` does; the technique is worth keeping.)
+- **`GetWindowText` does not cross a process boundary for a control.** It is documented
+  and it fails quietly: the Output memo reads back as the empty string from outside, so
+  a pane full of text looks blank to a test. `SendMessage(WM_GETTEXT)` sent explicitly
+  does marshal the string, and reading the transcript as TEXT is a far better witness to
+  the ORDER of its lines than a photograph of it.
 - **A changed `.lfm` needs `lazbuild -B`.** Without it the old form resource is kept
   and the binary streams the previous version of the form -- so the fix above appeared
   not to work, twice, until the rebuild was made a clean one. Both build scripts pass
@@ -235,46 +255,58 @@ All nine were paid for on **2026-09-10**, building this repository.
 
 ---
 
-## What is NOT built, and must never be described as built
+## Stepping: what is built, and the two things that are not
 
-**There is no step debugging, and it cannot be added from this repository alone.**
-Breakpoints can be set from the gutter or with F5 and are kept in the document; the
-Debug menu's Step items are **greyed out with an explanation attached**, and
-`Debug > Why is stepping unavailable?` shows it in full. That is deliberate: an
-explained absence beats a hidden menu, and beats a Step button that silently does
-nothing.
+**Step debugging works.** As of 2026-09-16 the editor starts a session, stops at
+breakpoints, steps over, into and out, shows the variables in scope, and ends the
+session honestly -- driven against the real `phosphor debug --port` host on Windows,
+with the transcripts and screenshots in the commit that landed it. `docs/debugger-lane.md`
+records the five steps and what each one was verified against.
 
-The reason is a property of the engine, not an oversight a flag would fix
-(`udebugsession.pas:12-30`):
+This paragraph replaces one that said, for a year and in the present tense, that
+stepping was impossible. It was true when written -- the `BREAKPOINT` seam could not
+block and returned void, the VM had no step API, the frame stack was private, the
+console host installed no seam -- and every one of those four facts stopped being true
+on 2026-09-15, in the **Phosphor** repository. The lesson worth keeping is not about
+debugging: **a limitation recorded in the present tense is a claim with an expiry date
+nobody set.** When one of these files says something cannot be done, say who would have
+to change it, so the reader knows where to check.
 
-- the `BREAKPOINT` seam "must not block: the engine treats it as a report, never a
-  wait" (`Phosphor engine/PhosphorValue.pas:73-74`), and it returns **void**, so there
-  is nothing for a debugger to answer with;
-- ~~`TPhosphorEngine` has **no step API at all**~~ -- FALSE SINCE 2026-09-15, and left
-  struck rather than deleted because it was load-bearing for a year. The engine now has
-  `TPhosphorDebugProc` (which returns an action and may block), `ArmDebug`, `DebugVM`,
-  the four step actions and the `Dbg*` frame accessors, and `phosphor debug --port`
-  speaks PDBP. `src/core/udebugtransport.pas` and `src/core/udebugsession.pas` are this
-  side of it; `docs/debugger-lane.md` has what is left. The original claim read:
-  no `Step`, `OnStep`, `OnLine` or
-  `Continue`, and no opcode-level trap;
-- the frame stack is **private with no accessor**, so there is no call stack to report
-  and no way to name a variable and read it;
-- the console host **does not install the seam**, with a recorded exemption in
-  `Phosphor scripts/check-seams.py`.
+What is still absent, and must not be described otherwise:
 
-`docs/debug-protocol.md` specifies **PDBP**, the line-delimited JSON protocol that
-would close the gap, and `src/core/udebugproto.pas` is its editor end -- written first
-on purpose, because the wire format is the half two implementations must agree on.
-Two decisions there are load-bearing: it is **not DAP** (whose header framing and large
-message set would be paid for in Free Pascal inside the host; PDBP borrows DAP's
-message names so a bridge is a rename), and it is **not carried on the child's
-stdout** -- a language whose entire observable behaviour is `PRINT` can forge a frame,
-and one `println` of an exited-event would end the session from inside the program
-being debugged. The protocol gets its own socket.
+- **No call stack pane.** `stackTrace` is in the protocol, the codec decodes it and
+  `TDebugSession.RequestStackTrace` sends it; nothing asks. Every variables request is
+  for frame 0 -- *by index*, so the pane does not have to be rewritten when frame 1
+  becomes selectable.
+- **No watches and no evaluate.** `capabilities.evaluate` is `false` on every host
+  today, and the editor must never close that gap in-process: an expression evaluator
+  here would be an interpreter here. See the invariant at the top.
+- **No conditional breakpoints, and no hollow gutter ICON.** A breakpoint the host
+  could not arm is shown as a **grey row** rather than a hollow mark, because a mark
+  needs a `TImageList` and the gtk2 image-list work is roadmap item 13.
 
-Never write "coming soon" or "supported" about stepping without saying, in the same
-sentence, that it requires work in the **Phosphor** repository.
+Two engine-side facts that the editor cannot paper over, both measured on 2026-09-16
+by speaking PDBP to the host directly:
+
+- **A breakpoint on the first statement is reported installed and never fires.**
+  `setBreakpoints` with `lines:[1]` answers `lines:[1]`; the program then runs to
+  completion. The editor believes the host, because the installed set is the only
+  verified/unverified marker the protocol has -- so line 1 is drawn armed and behaves
+  dead. This belongs in Phosphor.
+- **An exception stop does not linger.** The host emits
+  `{"event":"stopped","reason":"exception","line":4,"text":"division by zero"}` and
+  closes the socket in the same breath, so the read-only gating around a terminal stop
+  is correct but never observable for more than a tick. It is kept because the protocol
+  permits a host that waits.
+
+`docs/debug-protocol.md` specifies **PDBP** and `src/core/udebugproto.pas` is its editor
+end -- written before the host end existed, on purpose, because the wire format is the
+half two implementations must agree on. Two decisions there are load-bearing: it is
+**not DAP** (whose header framing and large message set would be paid for in Free Pascal
+inside the host; PDBP borrows DAP's message names so a bridge is a rename), and it is
+**not carried on the child's stdout** -- a language whose entire observable behaviour is
+`PRINT` can forge a frame, and one `println` of an exited-event would end the session
+from inside the program being debugged. The protocol gets its own socket.
 
 ---
 

@@ -150,6 +150,19 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    { Drain the child's output NOW rather than at the next tick.
+
+      There are two timers in this program and nothing orders them. Measured on
+      2026-09-16: a breakpoint stop arrived on the debug socket and was printed
+      ABOVE the PRINT output of the lines that led to it, because the socket tick
+      fell between the child writing and this timer reading. The debug tick
+      therefore drains here first and the transcript reads in the order the
+      program produced it.
+
+      Does nothing when no run is in flight, so a caller cannot manufacture an
+      OnFinished for a child that was never started. }
+    procedure Drain;
+
     { Spawn AExe with AArgs. Answers False and fires OnStartFailed when the child
       could not be started at all -- a missing binary, a directory, no permission.
       A child that starts and then fails is not a start failure: that is an exit
@@ -580,6 +593,16 @@ begin
 
   if Assigned(FOnFinished) then
     FOnFinished(Self, FExitCode, FKilled);
+end;
+
+procedure TPhosphorRunner.Drain;
+begin
+  { FTimer.Enabled is the run's own liveness flag -- Start sets it, the final
+    tick clears it -- so guarding on it is what keeps this from reaching the tail
+    of DrainTimer (Cleanup, then OnFinished) on a runner that has already
+    finished, which would deliver a second exit code for one run. }
+  if FTimer.Enabled then
+    DrainTimer(nil);
 end;
 
 procedure TPhosphorRunner.SendInput(const ALine: String);
