@@ -25,12 +25,12 @@ dblclick 100 582
 wait 800
 shot 133-a-double-click-hands-over-the-keyboard
 
-# F12 on a call. Line 41 is `println second(2, 3)`; nine rights from the start
-# of it puts the caret inside `second`, which is defined on line 10 after a `:`.
+# F12 on a call. Line 42 is `println second(2, 3)`; nine rights from the start
+# of it puts the caret inside `second`, which is defined on line 11 after a `:`.
 key ^g
 wait 500
 key ^a
-type 41
+type 42
 key {ENTER}
 wait 600
 key {HOME}
@@ -51,7 +51,7 @@ shot 135-f12-on-the-definition-itself
 key ^g
 wait 500
 key ^a
-type 40
+type 41
 key {ENTER}
 wait 600
 key {HOME}
@@ -66,7 +66,7 @@ shot 136-f12-on-a-statement-keyword
 key ^g
 wait 500
 key ^a
-type 49
+type 50
 key {ENTER}
 wait 600
 key {HOME}
@@ -85,7 +85,7 @@ shot 139-and-the-offer-can-be-declined
 key ^g
 wait 500
 key ^a
-type 10
+type 11
 key {ENTER}
 wait 600
 key {HOME}

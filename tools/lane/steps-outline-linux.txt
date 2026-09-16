@@ -23,12 +23,12 @@ bot2 100 158
 wait 1000
 shot 133-a-double-click-hands-over-the-keyboard
 
-# F12 on a call. Line 41 is `println second(2, 3)`; nine rights from its start
-# put the caret inside `second`, which is defined on line 10 after a `:`.
+# F12 on a call. Line 42 is `println second(2, 3)`; nine rights from its start
+# put the caret inside `second`, which is defined on line 11 after a `:`.
 key ctrl+g
 wait 800
 key ctrl+a
-type 41
+type 42
 key Return
 wait 900
 key Home
@@ -57,7 +57,7 @@ shot 135-f12-on-the-definition-itself
 key ctrl+g
 wait 800
 key ctrl+a
-type 49
+type 50
 key Return
 wait 900
 key Home
@@ -82,7 +82,7 @@ shot 139-and-the-offer-can-be-declined
 key ctrl+g
 wait 800
 key ctrl+a
-type 10
+type 11
 key Return
 wait 900
 key Home
@@ -90,3 +90,34 @@ wait 400
 key F12
 wait 1000
 shot 137-f12-finds-nothing-and-says-so
+
+# A JUMP INTO ANOTHER FILE REBUILDS THE PANE. Search for a word that lives in
+# deep.bas, double-click the row, then reach the Outline tab BY CLICKING ITS
+# HEADER rather than with Ctrl+Shift+O -- the action rebuilds, the header does
+# not, so what is on screen is whatever GotoSource left behind.
+key ctrl+shift+f
+wait 900
+key ctrl+a
+type bottom
+key Return
+wait 1800
+bot2 200 97
+wait 1200
+bot 264 184
+wait 900
+shot 140-the-pane-follows-the-file
+
+# AND A PARAMETER IS NOT A FUNCTION. deep.bas is `function down(n) local r`, so
+# inside it `r` is a local. Home is a SMART home and lands on the first
+# non-blank, which is the `r` itself.
+key ctrl+g
+wait 800
+key ctrl+a
+type 7
+key Return
+wait 900
+key Home
+wait 400
+key F12
+wait 1000
+shot 141-a-parameter-is-not-a-function
