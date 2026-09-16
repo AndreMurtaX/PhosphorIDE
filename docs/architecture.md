@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 384 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 400 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -779,10 +779,10 @@ TIER, and by nothing else.
 `phosphoridetest` pins every one without a window. The popup is
 `TSynCompletion` in `umainform`.
 
-**The outline** is `src/core/uphosphoroutline.pas`, and it is the fourth LCL-free
-unit here for the third distinct reason: not because it must run on a thread, and
-not because it must run headless in CI, but because it is the piece most likely to
-be WRONG and the only way to argue about it is to write the argument down as
+**The outline** is `src/core/uphosphoroutline.pas`, and it is LCL-free for a
+third distinct reason -- not because it must run on a thread, and not because it
+must run headless in CI, but because it is the piece most likely to be WRONG, and
+the only way to argue about a thing like that is to write the argument down as
 checks. It scans a buffer for `function` definitions and answers where a name is
 defined; `tests/phosphoridetest.lpr` pins it against ten definitions and every
 legal spelling that breaks the obvious scanner.
@@ -856,7 +856,7 @@ not at all.
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 384 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 400 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

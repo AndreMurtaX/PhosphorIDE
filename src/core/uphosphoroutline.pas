@@ -37,13 +37,24 @@ unit uphosphoroutline;
   scanner -- the one that takes the first word of a line:
 
     - `x = 1 : function f()` is legal. A definition begins a STATEMENT, not a
-      line, and `:` separates statements (engine/PhosphorCompiler.pas:2359).
+      line (engine/PhosphorCompiler.pas:2359 dispatches it from ParseStatement),
+      and `:` is what separates two of them (:3009-3010).
     - `if x > 0 then function f()` and `... else function f()` are legal too, so
       `then` and `else` open a statement as surely as `:` does.
     - `head: function a%() return 1 : end function : function b%() return 2 :
       end function` is ONE legal line holding TWO complete definitions, and it
       runs. A scanner that stops at the first match per line finds half of it.
-    - `10 function h()` is legal: a leading integer is a label.
+    - `10 function h()` is legal, and so are `x = 1 : 20 function h()` and
+      `setup: 30 function pick$(a$)`: an integer is a label wherever a statement
+      may begin AT PROGRAM LEVEL, which the compiler's own comment enumerates as
+      a line's start, after a `:`, after a numeric label and after a named one
+      (engine/PhosphorCompiler.pas:2939-2948 and the note at :2962-2972). The
+      first version of this unit asked the narrower question -- is this the first
+      token of the line -- and lost both of those definitions.
+      But `if x > 0 then 20 function f()` is REFUSED (`expected end of line`),
+      because `then` opens a statement and not a program-level one. That is the
+      whole reason this scanner tracks WHY it is at a statement position and not
+      merely that it is.
     - `end function`, two words, is the same token as `endfunction` -- the lexer
       merges them, but ONLY when they are adjacent, so an `end` at the end of one
       line and a `function` at the start of the next is not a terminator
@@ -100,6 +111,13 @@ type
     Display: String;
     { The text between the parentheses, exactly as written, or '' for none. }
     Params: String;
+    { The `local` clause, exactly as written, or '' -- and it is on the HEADER
+      line or it does not exist: `local` is read only when it is the token right
+      after the closing parenthesis (engine/PhosphorCompiler.pas:634-645), and a
+      `local i` on a line of its own is a compile error rather than a
+      declaration. It is here so that F12 can tell a function's own parameter
+      from a function of the same name somewhere else in the file. }
+    Locals: String;
     { How many names are in it: 0 for `()`, and -1 when there is no parameter
       list on the line at all -- which is what `function f` looks like for the
       second it takes to type the rest, and which the compiler refuses. }
@@ -145,6 +163,19 @@ function CountOutlineFunc(const AFuncs: TOutlineFuncs; const AName: String): Int
   why a call did not resolve. '' when there are none. }
 function OutlineArities(const AFuncs: TOutlineFuncs; const AName: String): String;
 
+{ Is AName one of AFunc's own parameters or locals?
+
+  It is what tells a name that is a VARIABLE HERE from a function of the same
+  name elsewhere in the file. `function g(n)` with a `function n()` further down
+  is legal, and inside g the word `n` is the parameter -- so a go-to-definition
+  that jumped to `function n()` would be a confident wrong answer about the one
+  thing it is supposed to be right about.
+
+  It does NOT decide calls. A parameter shadows a name as a VALUE; a call is
+  resolved against the function tables and never against the locals, so `len(s)`
+  inside a function whose parameter is called `len` still calls the built-in. }
+function IsParamOrLocal(const AFunc: TOutlineFunc; const AName: String): Boolean;
+
 { The innermost definition whose body contains ALine, or -1. An unterminated
   definition runs to the end of the buffer, which is what it looks like on
   screen. }
@@ -159,7 +190,13 @@ function FuncAtLine(const AFuncs: TOutlineFuncs; ALine: Integer): Integer;
   and that second one is not a limitation worth removing: a call cannot span
   lines in Phosphor (`println f(1,` then `2)` is `unexpected token in
   expression`, measured), so an unclosed paren means the line is still being
-  typed and the arity is genuinely not known yet. }
+  typed and the arity is genuinely not known yet.
+
+  WHITESPACE BEFORE THE PARENTHESIS IS SKIPPED, and the first version of this did
+  not skip it, on a rule the language does not have. `FLex.Peek().Kind = tkLParen`
+  (engine/PhosphorCompiler.pas:996) is a test on the TOKEN STREAM, and the lexer
+  has already thrown the spaces away: `println f (7)` prints 70. Measured on
+  2026-09-16, after a review said so and the host agreed with the review. }
 function CallArgCount(const ALine: String; ANameEnd: Integer): Integer;
 
 implementation
@@ -184,6 +221,11 @@ type
     Len: Integer;
     Depth: Integer;      // open ( [ {
     AtStatement: Boolean;
+    { And WHY: a statement that begins a line, or follows a `:`, is at PROGRAM
+      LEVEL and may be labelled by an integer; one that follows `then` or `else`
+      is not, and `if x > 0 then 20 function f()` is a compile error. Two flags
+      because the difference is only ever visible to the digit branch. }
+    AtProgramLevel: Boolean;
   end;
 
 { Step over whitespace. }
@@ -292,7 +334,7 @@ var
     compiles and then reads as a mistake to everybody who meets it. }
   W, Nm: String;
   F: TOutlineFunc;
-  PendingEnd, FirstTok: Boolean;
+  PendingEnd: Boolean;
 begin
   Result := nil;
   if ALines = nil then
@@ -306,11 +348,11 @@ begin
     S.Pos := 1;
     S.Depth := 0;
     S.AtStatement := True;
+    S.AtProgramLevel := True;
     { `end` seen as the previous token, waiting for a `function` NEXT TO IT. The
       lexer's merge pass requires the two to be adjacent in the token stream, so
       this is cleared by any other token and does not survive the line. }
     PendingEnd := False;
-    FirstTok := True;
 
     while S.Pos <= S.Len do
     begin
@@ -329,14 +371,12 @@ begin
         SkipString(S);
         S.AtStatement := False;
         PendingEnd := False;
-        FirstTok := False;
         Continue;
       end;
 
       if S.Line[S.Pos] in IdentStart then
       begin
         W := LowerCase(TakeIdent(S, IdentAt));
-        FirstTok := False;
 
         if W = 'rem' then
           Break;
@@ -389,7 +429,21 @@ begin
             F.Nested := Open > 0;
             SkipSpace(S);
             if (S.Pos <= S.Len) and (S.Line[S.Pos] = '(') then
-              F.Params := TakeParams(S, F.ParamCount)
+            begin
+              F.Params := TakeParams(S, F.ParamCount);
+              SkipSpace(S);
+              if LowerCase(Copy(S.Line, S.Pos, 5)) = 'local' then
+              begin
+                Inc(S.Pos, 5);
+                { To the end of the line, or to the `:` that ends the header's
+                  statement. Whatever is here is a list of names. }
+                IdentAt := S.Pos;
+                while (S.Pos <= S.Len) and (S.Line[S.Pos] <> ':') and
+                      (S.Line[S.Pos] <> '''') do
+                  Inc(S.Pos);
+                F.Locals := Trim(Copy(S.Line, IdentAt, S.Pos - IdentAt));
+              end;
+            end
             else
               F.ParamCount := -1;
             AddFunc(Result, F);
@@ -401,19 +455,22 @@ begin
 
         { --- the words that open a statement ------------------------------ }
         S.AtStatement := (W = 'then') or (W = 'else');
+        S.AtProgramLevel := False;
         Continue;
       end;
 
       if S.Line[S.Pos] in DigitChar then
       begin
-        { A LEADING INTEGER IS A LABEL -- `10 function h()` is a definition, and
-          the number does not close the statement it labels. Only the FIRST
-          token of a line can be one; a number anywhere else is an ordinary
-          token and ends the statement position like any other. }
+        { AN INTEGER AT A PROGRAM-LEVEL STATEMENT POSITION IS A LABEL, so it
+          does not close the statement it labels: `10 function h()`,
+          `x = 1 : 20 function h()` and `setup: 30 function pick$(a$)` all
+          define a function and all compile. After `then` it is not a label and
+          the whole line is refused, so the position does not survive there; and
+          a number anywhere else is an ordinary token, where AtStatement is
+          already False. }
         while (S.Pos <= S.Len) and (S.Line[S.Pos] in DigitChar) do
           Inc(S.Pos);
-        S.AtStatement := S.AtStatement and FirstTok;
-        FirstTok := False;
+        S.AtStatement := S.AtStatement and S.AtProgramLevel;
         PendingEnd := False;
         Continue;
       end;
@@ -426,11 +483,13 @@ begin
         scanner back at a statement after a label: `head: function a%()` reaches
         the definition through this line and not through a label rule. }
       if (S.Line[S.Pos] = ':') and (S.Depth = 0) then
-        S.AtStatement := True
+      begin
+        S.AtStatement := True;
+        S.AtProgramLevel := True;
+      end
       else
         S.AtStatement := False;
       PendingEnd := False;
-      FirstTok := False;
       Inc(S.Pos);
     end;
   end;
@@ -524,6 +583,29 @@ begin
     Result := Copy(Result, 1, I - 1) + ' or' + Copy(Result, I + 1, MaxInt);
 end;
 
+function IsParamOrLocal(const AFunc: TOutlineFunc; const AName: String): Boolean;
+var
+  L: TStringList;
+  I: Integer;
+  Want: String;
+begin
+  Result := False;
+  Want := LowerCase(Trim(AName));
+  if (Want = '') or ((AFunc.Params = '') and (AFunc.Locals = '')) then
+    Exit;
+  L := TStringList.Create;
+  try
+    L.Delimiter := ',';
+    L.StrictDelimiter := True;
+    L.DelimitedText := AFunc.Params + ',' + AFunc.Locals;
+    for I := 0 to L.Count - 1 do
+      if LowerCase(Trim(L[I])) = Want then
+        Exit(True);
+  finally
+    L.Free;
+  end;
+end;
+
 function FuncAtLine(const AFuncs: TOutlineFuncs; ALine: Integer): Integer;
 var
   I, Last: Integer;
@@ -555,11 +637,14 @@ begin
   S.Pos := ANameEnd;
   if (S.Pos < 1) or (S.Pos > S.Len) then
     Exit;
-  { NO SPACE IS SKIPPED BEFORE THE PARENTHESIS. A call is an identifier whose
-    VERY NEXT token is `(` (engine/PhosphorCompiler.pas:996); `f (1)` is not one,
-    and neither is `x = y (z)`. Being strict here is what keeps a name merely
-    mentioned from being reported as a call. }
-  if S.Line[S.Pos] <> '(' then
+  { A CALL IS AN IDENTIFIER WHOSE NEXT TOKEN IS `(`, and "token" is the word that
+    matters: the lexer has already dropped the whitespace, so `f (7)` is a call
+    and prints 70. Measured. The first version of this required the parenthesis
+    to be the very next BYTE, which is a rule Phosphor does not have and which
+    cost the arity of every call written with a space. }
+  while (S.Pos <= S.Len) and (S.Line[S.Pos] in Space) do
+    Inc(S.Pos);
+  if (S.Pos > S.Len) or (S.Line[S.Pos] <> '(') then
     Exit;
 
   Inc(S.Pos);

@@ -1,5 +1,6 @@
-rem Ten definitions, and four of them sit where a first-word scanner will not
-rem look. This one is a comment: rem function ghost()
+rem Ten definitions, and FIVE of them sit where a first-word scanner will not
+rem look: second, third, fourth$, and both fifth% and sixth% on one line.
+rem This one is a comment, and it defines nothing: rem function ghost()
 ' function alsoghost()
 println "function stringghost()"
 

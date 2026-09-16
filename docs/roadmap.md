@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 384 checks, exit code 0.
+- `bin\phosphoridetest` green: 400 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -741,7 +741,7 @@ so the matching is testable headless.
 
 **DONE 2026-09-16.** The **Outline** tab is the sixth in the output pane and
 `F12` is Go to Definition; `src/core/uphosphoroutline.pas` is the scanner and has
-no LCL in it, with 90 headless checks of its own.
+no LCL in it, with 106 headless checks of its own.
 
 The item's own warning is the whole of it, so it is answered first. A scanner
 that treats a word as structural IS wrong about some legal program, because

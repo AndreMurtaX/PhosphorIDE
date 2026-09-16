@@ -982,6 +982,58 @@ begin
   CheckEqInt('and an unterminated one runs to the end', 9,
              FuncAtLine(Funcs, 999));
 
+  { --- a label is a statement position, not a line's first token ------------ }
+
+  { AN INTEGER IS A LABEL WHEREVER A STATEMENT MAY BEGIN AT PROGRAM LEVEL, and
+    the compiler's own comment enumerates the four places
+    (engine/PhosphorCompiler.pas:2962-2972). All three below compile and run;
+    the first version of this scanner asked the narrower question -- is this the
+    first token of the line -- and lost two of them. }
+  Funcs := ScanOutlineText('x = 1 : 20 function h()' + LE + 'endfunction' + LE);
+  CheckEqInt('a numeric label after a separator still labels a statement',
+             1, Length(Funcs));
+  CheckEq('  and the definition after it is found', 'h', NameOf(0));
+  Funcs := ScanOutlineText('setup: 30 function pick$(a$)' + LE +
+                           'endfunction' + LE);
+  CheckEqInt('a numeric label after a NAMED label, the same', 1, Length(Funcs));
+  CheckEq('  and that definition too', 'pick$', NameOf(0));
+  Funcs := ScanOutlineText('10 function j()' + LE + 'endfunction' + LE);
+  CheckEqInt('a numeric label at the start of a line, the same', 1, Length(Funcs));
+  { AND NOT AFTER `then`, which opens a statement but not a program-level one:
+    `if x > 0 then 20 function f()` is refused with `expected end of line`, so a
+    scanner that found a definition there would be inventing one. }
+  Funcs := ScanOutlineText('if x > 0 then 20 function f()' + LE +
+                           'endfunction' + LE);
+  CheckEqInt('but a number after then is not a label', 0, Length(Funcs));
+  Funcs := ScanOutlineText('if x > 0 then function f()' + LE +
+                           'endfunction' + LE);
+  CheckEqInt('  while the definition without one is still found',
+             1, Length(Funcs));
+
+  { --- a parameter is not a function ---------------------------------------- }
+
+  { `function g(n)` with a `function n()` further down is legal, and inside g
+    the word `n` is the parameter. A go-to-definition that jumped to
+    `function n()` would be confidently wrong about the one thing it exists to
+    be right about. }
+  Funcs := ScanOutlineText('function g(n) local acc, i' + LE +
+                           '  return n' + LE +
+                           'endfunction' + LE);
+  CheckEq('the local clause is kept', 'acc, i', Funcs[0].Locals);
+  Check('a parameter is one of its own names', IsParamOrLocal(Funcs[0], 'n'));
+  Check('so is a local', IsParamOrLocal(Funcs[0], 'acc'));
+  Check('and the second local too', IsParamOrLocal(Funcs[0], 'i'));
+  Check('case does not matter', IsParamOrLocal(Funcs[0], 'ACC'));
+  Check('and a name that is neither is neither',
+        not IsParamOrLocal(Funcs[0], 'other'));
+  Check('nor is the function own name', not IsParamOrLocal(Funcs[0], 'g'));
+  { `local` is read only as the token after the closing parenthesis, so a
+    `local i` on a line of its own is a compile error and not a declaration. }
+  Funcs := ScanOutlineText('function k()' + LE + '  local i' + LE +
+                           'endfunction' + LE);
+  CheckEq('a local on a line of its own is not a declaration', '',
+          Funcs[0].Locals);
+
   { --- the corners that only happen while typing ---------------------------- }
   Funcs := ScanOutlineText('function half' + LE);
   CheckEqInt('a header with no parameter list is still a definition',
@@ -1013,13 +1065,16 @@ begin
              CallArgCount('f(g(1, 2))', 2));
   CheckEqInt('nor one inside a string', 1, CallArgCount('f("a, b")', 2));
   CheckEqInt('whitespace only is no arguments', 0, CallArgCount('f(  )', 2));
-  { A CALL IS AN IDENTIFIER WHOSE VERY NEXT TOKEN IS `(`. Anything else is a
-    name merely mentioned, and reporting an arity for it would make F12 answer
-    a question nobody asked. }
-  CheckEqInt('a space before the parenthesis is not a call', -1,
+  { A CALL IS AN IDENTIFIER WHOSE NEXT TOKEN IS `(`, and TOKEN is the load-
+    bearing word: the lexer has already dropped the whitespace. `println f (7)`
+    prints 70. Measured 2026-09-16, after this check asserted the opposite and
+    the host disagreed with it. }
+  CheckEqInt('a space before the parenthesis is still a call', 1,
              CallArgCount('f (1)', 2));
   CheckEqInt('a name with nothing after it is not a call', -1,
              CallArgCount('f', 2));
+  CheckEqInt('nor is a name followed by something else', -1,
+             CallArgCount('f + 1', 2));
   CheckEqInt('and an unclosed one is not decidable', -1,
              CallArgCount('f(1,', 2));
 

@@ -1540,8 +1540,11 @@ procedure TFrmMain.GotoSource(const APath: String; ALine: Integer;
   AColumn: Integer; AFocus: Boolean);
 var
   I, Line: Integer;
-  Doc: TEditorDoc;
+  Doc, Was: TEditorDoc;
 begin
+  { WHICH DOCUMENT WAS ACTIVE BEFORE, because this is the one place in the
+    program that changes it without the user touching a tab. }
+  Was := ActiveDoc;
   Doc := nil;
   for I := 0 to FDocs.Count - 1 do
     if CompareFilenames(TEditorDoc(FDocs[I]).FullDisplayName, APath) = 0 then
@@ -1584,7 +1587,12 @@ begin
     is one legal line) and column 1 would be the wrong one of them. }
   if AColumn < 1 then
     AColumn := 1;
-  Doc.Edit.CaretXY := Point(AColumn, Line);
+  { LOGICALCARETXY AND NOT CARETXY, for the third time in this file and the same
+    reason: CaretXY is FCaret.LineCharPos, a DISPLAY position, and AColumn came
+    from a scan over BYTES. They agree on column 1, which is what every caller
+    but the outline passes -- and the outline's column is measured in an editor
+    where a line may hold an accent, which is where they stop agreeing. }
+  Doc.Edit.LogicalCaretXY := Point(AColumn, Line);
   Doc.Edit.EnsureCursorPosVisible;
   { AND THE FOCUS IS THE CALLER'S DECISION. A double-click in a results list is
     "take me there"; a single click in the outline is "show me", and moving the
@@ -1593,6 +1601,18 @@ begin
   if AFocus then
     FocusEditor(Doc);
   RefreshStatus;
+
+  { AND THE OUTLINE FOLLOWS THE FILE, not the tab strip. A jump from the
+    Problems pane, the Find pane or F12 into ANOTHER file switches the active
+    page programmatically, and TPageControl fires OnChange for that on some
+    widgetsets and not others -- so without this the pane would keep describing
+    the file just left, and clicking one of its rows would jump back into it.
+
+    Only when the document actually changed: the outline's own rows call this,
+    and rebuilding there would clear the list and the selection out from under
+    somebody walking it with the arrow keys. }
+  if Doc <> Was then
+    RebuildOutline;
 end;
 
 { ------------------------------------------------------------------ stdin --- }
@@ -2091,7 +2111,7 @@ var
   Doc: TEditorDoc;
   Funcs: TOutlineFuncs;
   Line, Nm, Extra, TierName: String;
-  Col, Start, Idx, Args, Defined, I: Integer;
+  Col, Start, Idx, Args, Defined, I, Enclosing: Integer;
   Tier: TPhosphorTier;
 begin
   Doc := ActiveDoc;
@@ -2137,6 +2157,26 @@ begin
     the BUILT-IN and prints 4. Measured. -1 means the site does not say, and
     then any arity will do. }
   Args := CallArgCount(Line, Start + Length(Nm));
+
+  { A NAME THAT IS NOT A CALL AND IS THIS FUNCTION'S OWN PARAMETER IS A
+    VARIABLE, whatever else the file defines. `function g(n)` with a
+    `function n()` further down is legal, and inside g the word `n` is the
+    parameter -- so jumping to `function n()` would be a confident wrong answer
+    about the one thing this action exists to be right about.
+
+    Only when it is NOT a call: a parameter shadows a name as a VALUE, and a
+    call is resolved against the function tables and never against the locals,
+    so `len(s)` inside a function whose parameter is called `len` still reaches
+    the built-in. }
+  Enclosing := FuncAtLine(Funcs, Doc.Edit.CaretY);
+  if (Args < 0) and (Enclosing >= 0) and
+     IsParamOrLocal(Funcs[Enclosing], Nm) then
+  begin
+    StatusBar1.Panels[3].Text := Format('%s is a name inside %s, not a function',
+      [Nm, Funcs[Enclosing].Display]);
+    Exit;
+  end;
+
   Idx := FindOutlineFunc(Funcs, Nm, Args);
   if Idx >= 0 then
   begin
@@ -2147,6 +2187,21 @@ begin
   end;
 
   Defined := CountOutlineFunc(Funcs, Nm);
+
+  { THE KEYWORD TEST COMES FIRST because a few words are both. `error` is a
+    statement word (`on error ...`) and a registered built-in, and at a statement
+    position it is the statement -- so offering a function reference for it would
+    be answering about the wrong one of the two. }
+  if IsPhosphorKeyword(Nm) or IsPhosphorOperatorWord(Nm) or
+     IsPhosphorLiteralWord(Nm) then
+  begin
+    { And it may still have been a function name -- Phosphor has no keyword
+      table, so `function if(a)` is legal and would have been found above.
+      Reaching here means nobody defined one. }
+    StatusBar1.Panels[3].Text :=
+      Format('%s is a keyword here, not a function', [Nm]);
+    Exit;
+  end;
 
   if PhosphorBuiltinTier(Nm, Tier) then
   begin
@@ -2161,14 +2216,20 @@ begin
       Extra := Format(' -- the %s in this file takes %s', [Nm, OutlineArities(Funcs, Nm)]);
     StatusBar1.Panels[3].Text :=
       Format('%s is a %s built-in%s', [Nm, TierName, Extra]);
-    { THE ONE DIALOG THIS ACTION MAY OPEN, and it is an OFFER rather than a jump:
-      a keypress that launches a browser unasked is a keypress people stop
-      pressing. The shape is ActDebugWhyExecute's, for the same kind of answer --
-      "the thing you want is a document, shall I open it". }
-    if MessageDlg('PhosphorIDE',
+    { THE ONE DIALOG THIS ACTION MAY OPEN, and only over a CALL. A bare mention
+      of a word that happens to be a built-in name is usually a variable -- `len
+      = 5` is legal Phosphor, and the caret on that `len` is not a question
+      about the standard library. A window over somebody's text is too loud an
+      answer to a guess, so a mention gets the status-bar line above and nothing
+      else, and only `len(...)` gets the offer.
+
+      It is an OFFER rather than a jump because a keypress that launches a
+      browser unasked is a keypress people stop pressing. The shape is
+      ActDebugWhyExecute's, for the same kind of answer. }
+    if (Args >= 0) and (MessageDlg('PhosphorIDE',
       Format('%s is a %s built-in, not a function defined in this file.'#10#10 +
              'Open the function reference on GitHub?', [Nm, TierName]),
-      mtInformation, [mbYes, mbNo], 0) = mrYes then
+      mtInformation, [mbYes, mbNo], 0) = mrYes) then
       OpenURL(UrlFunctionReference);
     Exit;
   end;
@@ -2179,20 +2240,17 @@ begin
     is the answer to the question actually being asked. }
   if Defined > 0 then
   begin
-    StatusBar1.Panels[3].Text := Format(
-      'no %s taking %d argument(s) in this file -- it is defined taking %s',
-      [Nm, Args, OutlineArities(Funcs, Nm)]);
-    Exit;
-  end;
-
-  if IsPhosphorKeyword(Nm) or IsPhosphorOperatorWord(Nm) or
-     IsPhosphorLiteralWord(Nm) then
-  begin
-    { And it may still be a function name -- Phosphor has no keyword table, so
-      `function if(a)` is legal and would have been found above. Reaching here
-      means nobody defined one. }
-    StatusBar1.Panels[3].Text :=
-      Format('%s is a keyword here, not a function', [Nm]);
+    Extra := OutlineArities(Funcs, Nm);
+    { EVERY definition of it may still be a half-typed header with no parameter
+      list, and then there is no arity to name. Saying "it is defined taking"
+      and stopping is worse than not saying it. }
+    if Extra = '' then
+      StatusBar1.Panels[3].Text := Format(
+        'the %s in this file has no parameter list yet', [Nm])
+    else
+      StatusBar1.Panels[3].Text := Format(
+        'no %s taking %d argument(s) in this file -- it is defined taking %s',
+        [Nm, Args, Extra]);
     Exit;
   end;
 

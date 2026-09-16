@@ -117,12 +117,15 @@ begin
         pane that looks exactly right. 24646 is Ctrl+Shift+F. }
       Report.Add(Format('find in files: shortcut %d, default mask %s',
         [FrmMain.ActFindInFiles.ShortCut, FrmMain.EditFindMask.Text]));
-      { THE TWO SHORTCUTS AND NOTHING ELSE. The tab itself is already counted by
-        the `output tabs` number above, and duplicating it here would be a second
-        thing to keep in step; what nothing else covers is a TAction whose
-        ShortCut streamed as 0, which still draws its menu item, still runs when
-        clicked, and answers F12 with silence. 123 is F12 and 24655 is
-        Ctrl+Shift+O. }
+      { THE TWO SHORTCUTS, AND THE ROW COUNT THAT PROVES THE LIST STREAMED. The
+        TAB is not reported here because the `output tabs` number above already
+        counts it, and a second copy would be a second thing to keep in step.
+        What nothing else covers is a TAction whose ShortCut streamed as 0 --
+        which still draws its menu item, still runs when clicked, and answers
+        F12 with silence -- and a ListOutline that streamed but was never
+        filled, which is the "present but blank" defect class this report line
+        exists for. 123 is F12, 24655 is Ctrl+Shift+O, and one row is the
+        "no function definitions" line of an empty untitled buffer. }
       Report.Add(Format('outline: F12 %d, pane %d, rows %d',
         [FrmMain.ActGotoDefinition.ShortCut, FrmMain.ActOutline.ShortCut,
          FrmMain.ListOutline.Items.Count]));

@@ -1,7 +1,9 @@
-# The outline pane and F12, on outline.bas -- ten definitions, four of them
+# The outline pane and F12, on outline.bas -- ten definitions, FIVE of them
 # where a first-word scanner will not look: after a `:`, after `then`, after a
 # numeric label, and TWO on one line after a named label. All ten compile and
-# run; `phosphor run tools/lane/outline.bas` prints 1 5 3 4 5 6 7 true 42.
+# run; `phosphor run tools/lane/outline.bas` prints, in order,
+# `function stringghost()` 1 5 3 4 5 6 7 true 42 3 -- eleven lines, the first
+# from the string literal on line 4 and the last from the built-in call on 49.
 key ^+o
 wait 900
 shot 130-ten-definitions
@@ -91,3 +93,41 @@ wait 300
 key {F12}
 wait 900
 shot 137-f12-finds-nothing-and-says-so
+
+# A JUMP INTO ANOTHER FILE REBUILDS THE PANE, and this is the case that shows
+# it: search for a word that lives in deep.bas, double-click the row, then reach
+# the Outline tab BY CLICKING ITS HEADER rather than by pressing Ctrl+Shift+O --
+# the action rebuilds, the tab header does not, so what is on screen is whatever
+# GotoSource left behind. Without that rebuild the pane would still list
+# outline.bas's ten functions while deep.bas is on screen, and clicking one
+# would jump back into the file just left.
+key ^+f
+wait 700
+key ^a
+type bottom
+key {ENTER}
+wait 1600
+dblclick 200 643
+wait 1000
+at 222 561
+wait 700
+shot 140-the-pane-follows-the-file
+
+# AND A PARAMETER IS NOT A FUNCTION. deep.bas is `function down(n) local r`, so
+# inside it the words `n` and `r` are variables -- and if a `function r()`
+# existed elsewhere in the file, a name-only F12 would jump into it. Line 7 is
+# `  r = down(n - 1)`, and SynEdit's Home is a SMART home -- it lands on the
+# first non-blank, which is the `r` itself, so no arrow key is needed. Measured:
+# Home plus three rights landed on the `=` and F12 correctly answered "no name
+# under the caret", which is a true answer to a question nobody meant to ask.
+key ^g
+wait 500
+key ^a
+type 7
+key {ENTER}
+wait 600
+key {HOME}
+wait 300
+key {F12}
+wait 900
+shot 141-a-parameter-is-not-a-function
