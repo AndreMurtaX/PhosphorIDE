@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 185 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 222 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -765,14 +765,19 @@ right means writing enough of Phosphor's parser to be sure -- in this repository
 in a second implementation, kept in step with the first. That is a large piece of
 work whose payoff is a triangle in the gutter, so it is not v1.
 
-**Code completion.** The word tables are already here, tiered and indexed, so a
-list of candidates is cheap. A *useful* completion is not: it needs to know
-whether the caret is in a string, in a comment, after a `.`, in an argument
-position, and which of the 1145 tabled names are plausible there -- and again the answer
-depends on a parser this repository does not have. A completion box that offers
-`endfunction` inside a string literal is worse than no completion box. The tables
-are exposed (`PhosphorBuiltins(ATier)`, sorted, with suffixes) so that whoever
-builds this starts from facts rather than from a hand-typed list.
+**Code completion** was in this list until 2026-09-16, and the paragraph it
+replaces said a useful one needs a parser this repository does not have. Half of
+that was right and the half that mattered was not. Two of the four questions it
+named — is the caret in a string, is it in a comment — are decidable from the
+current line with no parser at all, for the same reason the highlighter has no
+range state; and those are the two that make a completion box worse than nothing
+when they are wrong. The other two — after a `.`, in an argument position —
+really do need one, and are still not here: the list is filtered by PREFIX and by
+TIER, and by nothing else.
+
+`src/core/uphosphorcomplete.pas` is where the rules live, with no LCL in it, so
+`phosphoridetest` pins every one without a window. The popup is
+`TSynCompletion` in `umainform`.
 
 **Project files.** There is no `.phosphorproj`, no build configuration, no
 dependency graph. A Phosphor program is a file; the host takes a file; `pack`
@@ -805,7 +810,7 @@ not at all.
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 185 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 222 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

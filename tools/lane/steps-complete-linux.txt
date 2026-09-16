@@ -1,0 +1,36 @@
+# Completion under gtk2. Same three cases as steps-complete.txt; the keys are
+# spelled the X way, and ctrl+space needs no trick here because xdrive names its
+# keys by keysym.
+raise
+key ctrl+End
+wait 400
+key Return
+wait 300
+type prin
+wait 400
+key ctrl+space
+wait 1200
+shot 91-popup-open
+key Return
+wait 600
+key Return
+wait 300
+type PRIN
+wait 400
+key ctrl+space
+wait 1200
+key Return
+wait 600
+shot 92-case-preserved
+key Return
+wait 300
+type s
+key space
+key equal
+key space
+key quotedbl
+type pri
+wait 400
+key ctrl+space
+wait 1000
+shot 93-silent-in-a-string

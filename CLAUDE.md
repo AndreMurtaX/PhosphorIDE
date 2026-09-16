@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 185 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 222 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -225,6 +225,24 @@ the bar.
   reports one owning PID. `TDebugTransport.HandlesArePrivate` is the invariant
   as a boolean, and `phosphoridetest` pins it -- because deleting one line in
   `Listen` is otherwise a silent regression with a symptom only `ss` can see.
+- **Completion reads the word tables, never the highlighter.** `usynphosphor`
+  colours keywords by word and not by position, deliberately and wrongly, and its
+  own header says nothing downstream may assume a coloured keyword IS a keyword.
+  `uphosphorcomplete` therefore reads `uphosphorlang` directly. It has **no LCL in
+  it**, for the same reason `ubreakpoints` does not: every decision it makes is
+  about a string and a column, and `phosphoridetest` pins all of them without a
+  window. The popup, the shortcut and the painting are the form's.
+
+  Three rules in it are load-bearing. **A type suffix is part of the name**, so the
+  prefix under the caret is scanned by the highlighter's own character sets and
+  `OnCodeCompletion` replaces the range THAT measured rather than the one
+  `TSynCompletion` derives from SynEdit's identifier characters — the two agree
+  today, and depending on that is one change away from writing `left$$`.
+  **Nothing is offered inside a string or a comment**, which is decidable from the
+  current line alone because `'` and `rem` run to end of line and an unterminated
+  string is a hard error rather than a continuation. And **the tier is a cut**: a
+  core-only list may not contain a package or GUI name, or the editor is
+  recommending a program that works on its author's desktop and stops on a server.
 - **Every path comparison goes through `CompareFilenames`** (`LazFileUtils`). It
   already knows that Windows is case-insensitive and Linux is not, which is one fewer
   platform rule spelled out by hand. Three sites depend on it:

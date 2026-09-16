@@ -230,6 +230,21 @@ downstream may assume a coloured keyword is a keyword, so no folding and no
 auto-indentation are built on top of it. The two words the lexer itself owns, `rem`
 and `mod`, are the exception and are treated as absolute.
 
+## Completion
+
+**Ctrl+Space**, or **Edit > Complete Word**, offers every name this host knows — 53 keywords, 538 core built-ins, 181 from packages, 426 GUI — filtered by
+what you have typed, each row showing which tier it came from.
+
+The tier matters and is not decoration. Core is always there. A package name runs
+only because the console host links every package, and another host need not. A
+GUI name exists only where a graphical session was reachable when the program
+started. **Preferences > Completion offers** sets the ceiling, and it defaults to
+core and package: offering `form@` as confidently as `println` is how a program
+that works on its author's desktop reaches a server and stops.
+
+It stays quiet inside a string or a comment, and says so in the status bar rather
+than appearing broken.
+
 ## Debugging
 
 **Stepping works.** Set a breakpoint in the gutter or with F5, press **Shift+F9**,
@@ -311,7 +326,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 185 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 222 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

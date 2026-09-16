@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 185 checks, exit code 0.
+- `bin\phosphoridetest` green: 222 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -496,6 +496,20 @@ Items 11 to 17 depend on nothing in the Phosphor repository. They are what an ag
 while items 3 to 6 are out of reach.
 
 ## 11. Code completion from the generated tables
+
+**DONE 2026-09-16.** Ctrl+Space over all 1198 names, tier-aware and suffix-aware,
+silent inside a string or a comment, case-preserving on insertion. The rules are
+`src/core/uphosphorcomplete.pas`, which has no LCL in it and is pinned by 37
+headless checks; the popup is `TSynCompletion`. A preference sets the tier
+ceiling and every row shows its own.
+
+Driven on both platforms. The one thing worth adding to what the item asked for:
+`OnCodeCompletion` replaces the range THIS unit measured rather than the one
+`TSynCompletion` derives from SynEdit's identifier characters — they agree
+today, and a completion that depends on two scanners agreeing is one change away
+from writing `left$$`.
+
+**Was:**
 
 **What.** A completion box over all 1198 names -- 53 keywords, 538 core built-ins, 181 from
 host packages, 426 GUI -- served from `uphosphorlang`, which was built for this. The lists

@@ -22,6 +22,10 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-exception.txt` | a breakpoint on line 1, then the exception stop |
 | `steps-stack.txt`, `steps-stack-linux.txt` | the call stack pane: the frames, a selection driving the variables pane, a double-click, and both panes emptying on resume |
 | `steps-stack-running.txt` | the same panes, empty, while a program runs |
+| `steps-gutter.txt`, `steps-gutter-linux.txt` | the hollow ring beside the solid dot, and both solid before any session |
+| `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
+| `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
+| `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
 | `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, same commands as the Linux one |
 | `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the earlier, single-purpose Windows drivers |
@@ -56,6 +60,12 @@ Four things cost real time on 2026-09-16 and are worth not rediscovering:
   invocation and every invocation is `nofocus` unless the script says `raise`.
 - **A background GUI holding ssh's stdout keeps ssh from returning** even after
   the script ends. `setsid` plus a redirect.
+
+**A GTK popup cannot be photographed either.** The completion list, like a menu,
+is an override-redirect window of its own, so `xwd -id <win>` shows the editor
+with no popup over it. The Linux completion case therefore asserts the RESULT --
+what the line says after Return -- rather than the picture, which is the same
+lesson as reading the transcript as text.
 
 **Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
 not down from the top. mutter gives this window a different height on different
