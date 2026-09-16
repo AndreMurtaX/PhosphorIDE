@@ -19,7 +19,8 @@ uses
   Interfaces, Forms, Classes, SysUtils,
   umainform, uaboutform, upreferencesform,
   uphosphorlang, uphosphormsg, uphosphorhost, uphosphorsettings,
-  uphosphorrun, usynphosphor, udebugproto, udebugsession;
+  uphosphorrun, usynphosphor, udebugproto, udebugsession, uphosphorcomplete,
+  uphosphoricons;
 
 {$IFDEF WINDOWS}
 { A Windows GUI subsystem binary has no console, so WriteLn hits an invalid handle

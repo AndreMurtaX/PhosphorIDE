@@ -26,7 +26,8 @@ uses
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
-  usynphosphor, udebugproto, udebugsession, uphosphoricons;
+  usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
+  uphosphorcomplete, SynCompletion;
 
 type
 
@@ -36,6 +37,7 @@ type
     ActAbout: TAction;
     ActCheck: TAction;
     ActClearBreakpoints: TAction;
+    ActComplete: TAction;
     ActCloseTab: TAction;
     ActCompile: TAction;
     ActContinue: TAction;
@@ -155,6 +157,7 @@ type
     procedure ActAboutExecute(Sender: TObject);
     procedure ActCheckExecute(Sender: TObject);
     procedure ActClearBreakpointsExecute(Sender: TObject);
+    procedure ActCompleteExecute(Sender: TObject);
     procedure ActCloseTabExecute(Sender: TObject);
     procedure ActCompileExecute(Sender: TObject);
     procedure ActCopyExecute(Sender: TObject);
@@ -269,6 +272,23 @@ type
       dsStopped, which is true and is not the whole truth: nothing may be sent. }
     FDebugTerminal: Boolean;
 
+    { The completion popup, built in code for the same reason FDebugTimer is:
+      it needs an Editor, and the editors are created per tab at run time.
+      One popup serves every tab -- TSynCompletion is a multi-editor plugin. }
+    FCompletion: TSynCompletion;
+    { What is in FCompletion.ItemList, in the same order, so that OnPaintItem can
+      name a row's tier and OnCodeCompletion can find the word behind a row. The
+      popup FILTERS BY MOVING ITS SELECTION rather than by removing rows, so an
+      index into one is an index into the other for as long as the popup is up. }
+    FCompletionItems: TCompletionItems;
+    { What the user had typed when the popup opened, and where it began. The
+      popup's own idea of the token uses SynEdit's identifier characters; this
+      uses the highlighter's rule, which is the one that knows a suffix is part
+      of the name. They agree today and this does not depend on it. }
+    FCompletionTyped: String;
+    FCompletionStart: Integer;
+    FCompletionLine: Integer;
+
     { An edit moved the breakpoint set and the gutter has not caught up yet.
       See DocBreakpointsChanged for why it cannot catch up immediately. }
     FMarksDirty: Boolean;
@@ -317,6 +337,12 @@ type
     procedure RepaintEditors;
     procedure SyncGutterMarks(ADoc: TEditorDoc);
     procedure DocBreakpointsChanged(Sender: TObject; AFromEdit: Boolean);
+    function CompletionTier: TPhosphorTier;
+    procedure CompletionAccepted(var AValue: String; ASourceValue: String;
+      var ASourceStart, ASourceEnd: TPoint; AKeyChar: TUTF8Char;
+      AShift: TShiftState);
+    function CompletionPaintItem(const AKey: String; ACanvas: TCanvas;
+      AX, AY: Integer; ASelected: Boolean; AIndex: Integer): Boolean;
     function StartDebugSession: Boolean;
     procedure EndDebugSession(const AWhy: String);
     procedure DebugTimerTick(Sender: TObject);
@@ -425,6 +451,20 @@ begin
     First, so that nothing drawn before this has an empty list to draw from. }
   InstallToolbarIcons(ImagesToolbar);
   InstallGutterMarks(ImagesGutter);
+
+  { THE POPUP IS OURS TO OPEN. TSynCompletion can bind its own shortcut, and it
+    is left unbound on purpose: the trigger is an ACTION, so it appears in the
+    Edit menu with its key beside it, and so that the one rule the popup cannot
+    know -- do not offer anything inside a string or a comment -- is asked
+    before anything appears rather than after. }
+  FCompletion := TSynCompletion.Create(Self);
+  FCompletion.ShortCut := 0;
+  FCompletion.OnCodeCompletion := @CompletionAccepted;
+  FCompletion.OnPaintItem := @CompletionPaintItem;
+  { On the FORM, not on the plugin: the plugin's property of the same name is
+    deprecated, and this project treats a hint as a defect until proven
+    cosmetic. The form exists from the constructor (syncompletion.pas:1397). }
+  FCompletion.TheForm.NbLinesInWindow := 12;
 
   FDocs := TList.Create;
   FProblemLines := TStringList.Create;
@@ -623,6 +663,8 @@ begin
     without one it falls back to its built-in bookmark glyphs -- which are the
     numbered bookmarks 0..9, not anything this program means. }
   Result.Edit.BookMarkOptions.BookmarkImages := ImagesGutter;
+  { One popup, every tab. }
+  FCompletion.AddEditor(Result.Edit);
   { AND THE GUTTER FOLLOWS THE SET, WHATEVER MOVED IT. Subscribed rather than
     called after each toggle, because the case that needs it is the one nobody
     calls: typing above a breakpoint moves it, and a mark left on the old line
@@ -1458,6 +1500,108 @@ begin
   SyncBreakpoints(Doc);
   Doc.Edit.Invalidate;
   RefreshStatus;
+end;
+
+function TFrmMain.CompletionTier: TPhosphorTier;
+begin
+  { The setting is an ordinal so that uphosphorsettings needs nothing from
+    uphosphorlang; this is the one place that turns it back into the type. }
+  case FSettings.CompletionTier of
+    0: Result := ptCore;
+    1: Result := ptPackage;
+  else
+    Result := ptGui;
+  end;
+end;
+
+procedure TFrmMain.ActCompleteExecute(Sender: TObject);
+var
+  Doc: TEditorDoc;
+  Line: String;
+  I: Integer;
+  P: TPoint;
+begin
+  Doc := ActiveDoc;
+  if (Doc = nil) or (Doc.Edit = nil) then
+    Exit;
+
+  Line := Doc.Edit.LineText;
+  { NOT INSIDE A STRING OR A COMMENT, and said out loud rather than ignored. A
+    shortcut that silently does nothing is indistinguishable from one that is
+    broken, and this is the only place in the editor where the right answer to a
+    keypress is "no list". }
+  if InLiteralOrComment(Line, Doc.Edit.CaretX) then
+  begin
+    StatusBar1.Panels[3].Text := 'no completion inside a string or a comment';
+    Exit;
+  end;
+
+  FCompletionTyped := PrefixAtCaret(Line, Doc.Edit.CaretX, FCompletionStart);
+  FCompletionLine := Doc.Edit.CaretY;
+  FCompletionItems := CompletionCandidates(FCompletionTyped, CompletionTier);
+  if Length(FCompletionItems) = 0 then
+  begin
+    StatusBar1.Panels[3].Text :=
+      Format('nothing this host knows begins with %s', [FCompletionTyped]);
+    Exit;
+  end;
+
+  FCompletion.ItemList.BeginUpdate;
+  try
+    FCompletion.ItemList.Clear;
+    for I := 0 to High(FCompletionItems) do
+      FCompletion.ItemList.Add(FCompletionItems[I].Word);
+  finally
+    FCompletion.ItemList.EndUpdate;
+  end;
+
+  FCompletion.Editor := Doc.Edit;
+  { Under the caret and one line down, so the popup does not cover the word
+    being typed. }
+  P := Doc.Edit.ClientToScreen(
+    Point(Doc.Edit.CaretXPix, Doc.Edit.CaretYPix + Doc.Edit.LineHeight));
+  FCompletion.Execute(FCompletionTyped, P.X, P.Y);
+end;
+
+procedure TFrmMain.CompletionAccepted(var AValue: String;
+  ASourceValue: String; var ASourceStart, ASourceEnd: TPoint;
+  AKeyChar: TUTF8Char; AShift: TShiftState);
+begin
+  { THE RANGE IS OURS, NOT THE POPUP'S. TSynCompletion works out what to replace
+    from SynEdit's identifier characters; this replaces exactly what
+    PrefixAtCaret measured, by the highlighter's rule. They agree today -- the
+    highlighter publishes the suffixes through GetIdentChars -- and a completion
+    that quietly depends on two scanners agreeing is one bad day from writing
+    `left$$`. }
+  if (FCompletionLine > 0) and (FCompletionStart > 0) then
+  begin
+    ASourceStart := Point(FCompletionStart, FCompletionLine);
+    ASourceEnd := Point(FCompletionStart + Length(FCompletionTyped),
+                        FCompletionLine);
+  end;
+  AValue := CompletionInsertion(FCompletionTyped, AValue);
+end;
+
+function TFrmMain.CompletionPaintItem(const AKey: String; ACanvas: TCanvas;
+  AX, AY: Integer; ASelected: Boolean; AIndex: Integer): Boolean;
+var
+  Badge: String;
+  W: Integer;
+begin
+  Result := True;
+  ACanvas.TextOut(AX + 2, AY, AKey);
+  if (AIndex < 0) or (AIndex > High(FCompletionItems)) then
+    Exit;
+
+  { THE TIER, ON EVERY ROW. Core is always there; a package name runs only where
+    the host linked the package and a GUI name only where a graphical session was
+    reachable when the program started. A list that does not say which is a list
+    that recommends `form@` as confidently as `println`. }
+  Badge := CompletionKindName(FCompletionItems[AIndex].Kind);
+  W := ACanvas.TextWidth(Badge);
+  if not ASelected then
+    ACanvas.Font.Color := clGray;
+  ACanvas.TextOut(FCompletion.TheForm.ClientWidth - W - 8, AY, Badge);
 end;
 
 procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);

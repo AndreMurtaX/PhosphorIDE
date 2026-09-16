@@ -202,6 +202,27 @@ object FrmPreferences: TFrmPreferences
         Caption = 'Dark colours'
         TabOrder = 7
       end
+      object LblCompletion: TLabel
+        Left = 16
+        Height = 15
+        Top = 224
+        Width = 140
+        Caption = 'Completion offers'
+      end
+      object CmbCompletion: TComboBox
+        Left = 170
+        Height = 23
+        Top = 220
+        Width = 300
+        ItemHeight = 15
+        Items.Strings = (
+          'core built-ins only'
+          'core and package built-ins'
+          'everything, including GUI'
+        )
+        Style = csDropDownList
+        TabOrder = 8
+      end
     end
   end
   object BtnOK: TButton

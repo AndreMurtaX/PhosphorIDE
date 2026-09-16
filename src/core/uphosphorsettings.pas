@@ -50,6 +50,22 @@ type
     RightMargin: Integer;
     DarkTheme: Boolean;
 
+    { HOW FAR UP THE TIERS COMPLETION MAY REACH, as the ordinal of
+      TPhosphorTier: 0 core only, 1 core and package, 2 everything.
+
+      Stored as an integer rather than as the enum so that this unit stays free
+      of uphosphorlang -- settings are strings and numbers in an .ini, and a
+      setting that needs a type from another unit to be read is a setting that
+      cannot be read by anything else.
+
+      THE DEFAULT IS PACKAGE, NOT EVERYTHING. The console host links every
+      package, so those names run wherever `phosphor` does; a GUI name needs a
+      graphical session to have been reachable when the program STARTED, and
+      offering it with the same weight as `println` is how a program that works
+      on its author's desktop reaches a server and stops. Someone writing a GUI
+      program turns it up once. }
+    CompletionTier: Integer;
+
     { Behaviour. }
     SaveBeforeRun: Boolean;
     ClearOutputOnRun: Boolean;
@@ -135,6 +151,7 @@ begin
   HighlightCurrentLine := True;
   RightMargin := 0;         // off: Phosphor has no line-length convention
   DarkTheme := False;
+  CompletionTier := 1;      // core + package; see the field's note
 
   SaveBeforeRun := True;
   ClearOutputOnRun := True;
@@ -172,6 +189,13 @@ begin
       HighlightCurrentLine := Ini.ReadBool('editor', 'currentline', HighlightCurrentLine);
       RightMargin := Ini.ReadInteger('editor', 'rightmargin', RightMargin);
       DarkTheme := Ini.ReadBool('editor', 'dark', DarkTheme);
+      CompletionTier := Ini.ReadInteger('editor', 'completiontier', CompletionTier);
+      { An .ini is a file a person can edit, so the value that comes back is an
+        input and not a promise. }
+      if CompletionTier < 0 then
+        CompletionTier := 0;
+      if CompletionTier > 2 then
+        CompletionTier := 2;
 
       SaveBeforeRun := Ini.ReadBool('run', 'savefirst', SaveBeforeRun);
       ClearOutputOnRun := Ini.ReadBool('run', 'clearoutput', ClearOutputOnRun);
@@ -223,6 +247,7 @@ begin
       Ini.WriteBool('editor', 'currentline', HighlightCurrentLine);
       Ini.WriteInteger('editor', 'rightmargin', RightMargin);
       Ini.WriteBool('editor', 'dark', DarkTheme);
+      Ini.WriteInteger('editor', 'completiontier', CompletionTier);
 
       Ini.WriteBool('run', 'savefirst', SaveBeforeRun);
       Ini.WriteBool('run', 'clearoutput', ClearOutputOnRun);

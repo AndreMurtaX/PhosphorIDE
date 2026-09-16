@@ -38,6 +38,7 @@ uses
   {$IFDEF WINDOWS}Win32Int,{$ELSE}Gtk2Int,{$ENDIF}
   SysUtils, Classes,
   uphosphorlang, uphosphormsg, usynphosphor, udebugproto, ubreakpoints,
+  uphosphorcomplete,
   { The transport is exercised against a socket this program opens itself:
     no host is started, nothing is spawned, and the test runs the same on a
     headless machine as on a desktop. Sockets and ExtCtrls come with it. }
@@ -344,6 +345,132 @@ begin
     Texts.Free;
     Hl.Free;
   end;
+end;
+
+{ ------------------------------------------------------------- completion --- }
+
+procedure TestCompletion;
+var
+  Items: TCompletionItems;
+  CoreN, PkgN, GuiN, I: Integer;
+  Sorted, Cut: Boolean;
+
+  function Pre(const ALine: String; ACol: Integer): String;
+  var
+    Ignored: Integer;
+  begin
+    Result := PrefixAtCaret(ALine, ACol, Ignored);
+  end;
+
+  function Start(const ALine: String; ACol: Integer): Integer;
+  begin
+    PrefixAtCaret(ALine, ACol, Result);
+  end;
+
+  function Has(const AItems: TCompletionItems; const AWord: String): Boolean;
+  var
+    J: Integer;
+  begin
+    Result := False;
+    for J := 0 to High(AItems) do
+      if AItems[J].Word = AWord then
+        Exit(True);
+  end;
+
+begin
+  Group('uphosphorcomplete: the word at the caret, and what to offer');
+
+  { --- the prefix, by the highlighter's rule ------------------------------- }
+  CheckEq('a partial name is the prefix', 'lef', Pre('  lef', 6));
+  CheckEqInt('and it starts where it starts', 3, Start('  lef', 6));
+  { THE SUFFIX IS PART OF THE NAME. Miss this and accepting `left$` after `lef`
+    writes four characters over three, leaving a second $ behind. }
+  CheckEq('a suffix belongs to the word', 'x$', Pre('x$', 3));
+  CheckEq('so does a percent', 'count%', Pre('count%', 7));
+  CheckEq('a whole name is its own prefix', 'println', Pre('println', 8));
+  CheckEq('mid-word, only what is behind the caret', 'pri', Pre('println', 4));
+  { A number is not a name, and a suffix with nothing in front of it is not
+    either -- both are what the scanner decides, and this has to agree. }
+  CheckEq('a number is not a prefix', '', Pre('123', 4));
+  CheckEq('nor is a name that starts with one', '', Pre('1abc', 5));
+  CheckEq('nor a bare suffix', '', Pre('= $', 4));
+  CheckEq('nothing at the start of a line', '', Pre('abc', 1));
+  CheckEq('nothing after a space', '', Pre('abc ', 5));
+  { A suffix can only be LAST: `a$b` is two words here and two words to the
+    scanner. }
+  CheckEq('a suffix does not glue two names', 'b', Pre('a$b', 4));
+
+  { --- where completion must stay quiet ------------------------------------ }
+  Check('open code is not a literal', not InLiteralOrComment('x = 1', 6));
+  Check('inside a string it is', InLiteralOrComment('x = "abc', 8));
+  Check('after the closing quote it is not',
+        not InLiteralOrComment('x = "abc" + y', 14));
+  { Both sides of the opening quote, because an off-by-one here is a popup that
+    will not open on the character after a string. }
+  Check('the opening quote itself is outside', not InLiteralOrComment('x = "ab', 5));
+  Check('one past it is inside', InLiteralOrComment('x = "ab', 6));
+  { A backslash eats whatever follows, including a quote -- the same rule the
+    highlighter paints a bad escape by. }
+  Check('an escaped quote does not close the string',
+        InLiteralOrComment('s = "a\" + b', 12));
+  Check('an apostrophe comment silences it',
+        InLiteralOrComment('x = 1 '' why', 12));
+  { `rem` is the LEXER's word; `remark` is an ordinary identifier. }
+  Check('rem silences it', InLiteralOrComment('rem a note', 8));
+  Check('remark does not', not InLiteralOrComment('remark = 1', 10));
+  Check('and a rem inside a string is just text',
+        not InLiteralOrComment('s = "rem" + t', 13));
+
+  { --- the candidates ------------------------------------------------------ }
+  Items := CompletionCandidates('lef', ptGui);
+  Check('lef offers something', Length(Items) > 0);
+  Check('and left$ is in it', Has(Items, 'left$'));
+  Check('printl finds println',
+        Has(CompletionCandidates('printl', ptCore), 'println'));
+  Check('an unknown prefix offers nothing',
+        Length(CompletionCandidates('zzq', ptGui)) = 0);
+  Check('lookup is case-insensitive like the lexer',
+        Has(CompletionCandidates('PRINTL', ptCore), 'println'));
+
+  CoreN := Length(CompletionCandidates('', ptCore));
+  PkgN := Length(CompletionCandidates('', ptPackage));
+  GuiN := Length(CompletionCandidates('', ptGui));
+  Check('core is the smallest list', CoreN < PkgN);
+  Check('package is smaller than gui', PkgN < GuiN);
+  Check('core is at least the core built-ins',
+        CoreN >= PhosphorBuiltinCoreCount);
+
+  { THE TIER IS A CUT, NOT A LABEL. A core-only list carrying a GUI name is the
+    editor recommending a program that runs on its author's desktop and fails on
+    a server -- which is the whole reason uphosphorlang keeps three lists. }
+  Items := CompletionCandidates('', ptCore);
+  Cut := True;
+  for I := 0 to High(Items) do
+    if Items[I].Kind in [ckBuiltinPackage, ckBuiltinGui] then
+      Cut := False;
+  Check('a core list holds nothing above core', Cut);
+
+  { Sorted and unique, because the popup shows them in order and one name twice
+    is a choice with no difference in it. }
+  Items := CompletionCandidates('a', ptGui);
+  Sorted := Length(Items) > 0;
+  for I := 1 to High(Items) do
+    if Items[I - 1].Word >= Items[I].Word then
+      Sorted := False;
+  Check('the list is sorted and has no repeats', Sorted);
+
+  { --- the insertion keeps the user's case --------------------------------- }
+  CheckEq('lower stays lower', 'println', CompletionInsertion('prin', 'println'));
+  CheckEq('Capitalised stays capitalised', 'Println',
+          CompletionInsertion('Prin', 'println'));
+  CheckEq('SHOUTED stays shouted', 'PRINTLN',
+          CompletionInsertion('PRIN', 'println'));
+  { A prefix with no letters has no case to preserve, and reading one into
+    punctuation would answer LEFT$ to a lone dollar sign. }
+  CheckEq('punctuation is not a shout', 'left$',
+          CompletionInsertion('$', 'left$'));
+  CheckEq('nothing typed, nothing imposed', 'println',
+          CompletionInsertion('', 'println'));
 end;
 
 { ------------------------------------------------------------ breakpoints --- }
@@ -778,6 +905,7 @@ begin
   TestLanguage;
   TestHighlighter;
   TestBreakpoints;
+  TestCompletion;
   TestProtocol;
   TestTransport;
   TestSession;

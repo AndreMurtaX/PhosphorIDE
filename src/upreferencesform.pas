@@ -30,6 +30,8 @@ type
     ChkClearOutput: TCheckBox;
     ChkCurrentLine: TCheckBox;
     ChkDark: TCheckBox;
+    CmbCompletion: TComboBox;
+    LblCompletion: TLabel;
     ChkLineNumbers: TCheckBox;
     ChkSandbox: TCheckBox;
     ChkSaveBeforeRun: TCheckBox;
@@ -98,6 +100,14 @@ begin
   ChkCurrentLine.Checked := FSettings.HighlightCurrentLine;
   SpinRightMargin.Value := FSettings.RightMargin;
   ChkDark.Checked := FSettings.DarkTheme;
+  { CLAMPED ON THE WAY IN AS WELL AS ON THE WAY OUT OF THE FILE. The settings
+    unit already refuses a value outside 0..2, and a combo box with three items
+    refuses one too -- but ItemIndex := 7 is silently -1, which would then be
+    written back as -1 and clamped to 0. Two small guards beat one clever one. }
+  if (FSettings.CompletionTier >= 0) and (FSettings.CompletionTier <= 2) then
+    CmbCompletion.ItemIndex := FSettings.CompletionTier
+  else
+    CmbCompletion.ItemIndex := 1;
 
   ChkSandboxChange(nil);
   RefreshHostResolution;
@@ -122,6 +132,9 @@ begin
   FSettings.HighlightCurrentLine := ChkCurrentLine.Checked;
   FSettings.RightMargin := SpinRightMargin.Value;
   FSettings.DarkTheme := ChkDark.Checked;
+  { -1 is what a combo answers when nothing is chosen, and it is not a tier. }
+  if CmbCompletion.ItemIndex >= 0 then
+    FSettings.CompletionTier := CmbCompletion.ItemIndex;
 end;
 
 procedure TFrmPreferences.RefreshHostResolution;

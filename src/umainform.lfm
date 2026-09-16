@@ -365,6 +365,12 @@ object FrmMain: TFrmMain
       object MnuGotoLine: TMenuItem
         Action = ActGotoLine
       end
+      object SepE4: TMenuItem
+        Caption = '-'
+      end
+      object MnuComplete: TMenuItem
+        Action = ActComplete
+      end
     end
     object MnuRunMenu: TMenuItem
       Caption = '&Run'
@@ -526,6 +532,12 @@ object FrmMain: TFrmMain
       Caption = '&Go to Line...'
       OnExecute = ActGotoLineExecute
       ShortCut = 16455
+    end
+    object ActComplete: TAction
+      Caption = 'Complete &Word'
+      Hint = 'Every keyword and built-in this host knows, filtered by what you have typed'
+      OnExecute = ActCompleteExecute
+      ShortCut = 16416
     end
     object ActRun: TAction
       Caption = '&Run'

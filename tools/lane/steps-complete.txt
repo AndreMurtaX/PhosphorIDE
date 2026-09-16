@@ -1,0 +1,38 @@
+# Completion. Three cases, and the third is the one a list cannot be trusted
+# without: a popup that appears inside a string literal is worse than none.
+#
+# The caret starts at the top of lane345.bas; Ctrl+End puts it past the last
+# line, where a new statement can be typed without disturbing the fixture.
+key ^{END}
+wait 400
+key {ENTER}
+wait 300
+type prin
+wait 400
+key ^<space>
+wait 1200
+shot 81-popup-open
+key {ENTER}
+wait 600
+shot 82-accepted
+
+# ...and the case a lower-case table must not flatten.
+key {ENTER}
+wait 300
+type PRIN
+wait 400
+key ^<space>
+wait 1200
+key {ENTER}
+wait 600
+shot 83-case-preserved
+
+# Inside a string there is nothing to offer, and the status bar says so rather
+# than the shortcut appearing to be broken.
+key {ENTER}
+wait 300
+type s = "pri
+wait 400
+key ^<space>
+wait 1000
+shot 84-silent-in-a-string

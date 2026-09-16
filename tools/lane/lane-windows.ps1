@@ -117,7 +117,9 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
     if (-not $line -or $line.StartsWith('#')) { continue }
     $verb, $rest = $line -split '\s+', 2
     switch ($verb) {
-        'key'      { [System.Windows.Forms.SendKeys]::SendWait($rest); Start-Sleep -Milliseconds 120 }
+        # <space> is spelled out because every line is trimmed, and SendKeys has
+        # no {SPACE} of its own -- so "key ^ " would arrive as "key ^".
+        'key'      { [System.Windows.Forms.SendKeys]::SendWait(($rest -replace '<space>', ' ')); Start-Sleep -Milliseconds 120 }
         'type'     { [System.Windows.Forms.SendKeys]::SendWait($rest); Start-Sleep -Milliseconds 120 }
         'wait'     { Start-Sleep -Milliseconds ([int]$rest) }
         'shot'     { Grab $rest }
