@@ -330,7 +330,7 @@ shape.
 
 ## 7. The socket transport and the handshake
 
-**DONE 2026-09-16**, driven against the real host and recorded in `docs/debugger-lane.md` — including what the first cut got wrong.
+**DONE 2026-09-16**, driven against the real host on BOTH platforms (Windows 11, and gtk2 on Ubuntu under a real Xwayland session) and recorded in `docs/debugger-lane.md` — including what the first cut got wrong. The tooling that does the driving is `tools/lane/`.
 
 **What.** The piece `src/core/udebugsession.pas:211` names as "the next piece of work":
 connect to the socket a `phosphor debug` child is listening on, send the frame
@@ -376,7 +376,7 @@ Two things must be right or the session will fail in ways that look like host bu
 
 ## 8. The session state machine, the step actions, and the current-line marker
 
-**DONE 2026-09-16**, driven against the real host and recorded in `docs/debugger-lane.md` — including what the first cut got wrong.
+**DONE 2026-09-16**, driven against the real host on BOTH platforms (Windows 11, and gtk2 on Ubuntu under a real Xwayland session) and recorded in `docs/debugger-lane.md` — including what the first cut got wrong. The tooling that does the driving is `tools/lane/`.
 
 **What.** Drive `TDebugState` (`src/core/udebugsession.pas:52-59`) from the inbound events;
 wire the six actions that already exist and are greyed out -- `ActDebugStart`, `ActStepOver`,
@@ -422,7 +422,7 @@ says so -- not a request the other end will refuse. That is the entire reason
 
 ## 9. A variables pane
 
-**DONE 2026-09-16**, driven against the real host and recorded in `docs/debugger-lane.md` — including what the first cut got wrong.
+**DONE 2026-09-16**, driven against the real host on BOTH platforms (Windows 11, and gtk2 on Ubuntu under a real Xwayland session) and recorded in `docs/debugger-lane.md` — including what the first cut got wrong. The tooling that does the driving is `tools/lane/`.
 
 **What.** A tab beside Output and Problems in `PagesOutput`: Name, Value, Scope, filled from
 the `variables` response for the selected frame.
@@ -456,6 +456,11 @@ other repository any more. Two things found on 2026-09-16 belong with it:
   `setBreakpoints lines:[1]` on any file answers `lines:[1]`.
 - **A hollow gutter icon** for an un-armable breakpoint is still a grey row instead,
   because a mark needs the `TImageList` of item 13.
+- **The debuggee inherits the editor's listening socket.** `ss` on Linux shows both
+  processes holding it while a session is live, because `TProcess` does not set
+  close-on-exec. Harmless today -- the child dies with the session and a Phosphor
+  program cannot reach a file descriptor -- but a listener the debuggee could
+  `accept` on is not the design. One FD_CLOEXEC in `udebugtransport.pas`.
 
 
 **What.** A list of frames. The decoding is already written and tested: `TPdbpFrames`

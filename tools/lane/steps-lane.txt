@@ -1,0 +1,36 @@
+# lane steps 1-5 on lane345.bas
+# line 3 is blank: the host cannot arm it. line 10 is a statement.
+key ctrl+g
+wait 700
+key ctrl+a
+type 3
+key Return
+wait 500
+key F5
+wait 400
+key ctrl+g
+wait 700
+key ctrl+a
+type 10
+key Return
+wait 500
+key F5
+wait 600
+shot 01-two-marks
+key shift+F9
+wait 5000
+shot 02-stopped-at-10
+key F8
+wait 1800
+shot 03-step-over-11
+key F8
+wait 1800
+key F7
+wait 1800
+shot 04-step-into-add
+key shift+F8
+wait 1800
+shot 05-step-out
+key F6
+wait 3000
+shot 06-after-continue

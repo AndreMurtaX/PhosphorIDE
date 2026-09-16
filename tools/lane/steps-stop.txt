@@ -1,0 +1,28 @@
+# End a live session from the PROCESS side: the toolbar's Stop kills the child,
+# and RunnerFinished has to read the socket once more, tear the transport down
+# and end the session exactly once.
+#
+# Debug > Stop Debugging is the other way in, and it is driven on Windows. The
+# gtk2 menu would not open from a synthetic click or from F10 navigation, which
+# is a fact about XTest and GTK rather than about the editor; recorded rather
+# than papered over.
+raise
+key ctrl+g
+wait 700
+key ctrl+a
+type 3
+key Return
+wait 500
+key F5
+wait 600
+key shift+F9
+wait 5000
+key F6
+wait 3000
+shot 61-running-blocked
+at 190 38
+wait 2500
+shot 62-after-toolbar-stop
+outtab
+wait 700
+shot 63-transcript-after-stop

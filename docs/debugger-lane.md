@@ -137,12 +137,42 @@ editor involved:
   `RunnerFinished` tore the session down before the last frame was read, and the editor
   never said the program had stopped at all. It now polls once more first.
 
-### Still unmeasured
+### Linux, measured the same day
 
-**Linux.** Nothing in this lane has been run under gtk2. The transport is `fpSocket`
-and portable, the timers are LCL, and the one platform-specific thing in the new code
-is `CompareFilenames` — which is there precisely because it knows the difference. That
-is an argument, not a measurement, and this file does not treat the two as the same.
+Ubuntu 24 under VirtualBox, Lazarus 4.8 with FPC 3.2.2, **gtk2 on a real Xwayland
+session**. All five gates green there -- `lazbuild -B` clean at `-vewn`, 183 checks,
+`--selftest` 0 under a timeout with every form constructed under gtk2, generated
+tables current -- and then the same lane driven with `tools/lane/`:
+
+| | |
+| --- | --- |
+| steps 1-4 | stop on line 10, stripe, variables `a=5 b=10 s=0` local and `total=5` global, 10 → 11 → 12 by F8, into `add` at line 5 by F7, out by Shift+F8 |
+| step 3 | line 3 grey, line 10 maroon, pixel for pixel what Windows shows |
+| the stripe fix | a program blocked at `line input`, running, with no stripe anywhere |
+| ordering | `before the breakpoint` / `> stopped at line 3 (breakpoint)` / `at the breakpoint` / `type something:` |
+| Preferences during a session | accepted, and the debuggee is still there |
+| step 5 | `> stopped at line 4 (exception): division by zero`, one ending, no listening socket, no orphan child |
+
+Two differences from Windows, both honest rather than defects:
+
+- The exception stop and the host's `phosphor: file:4: division by zero` on stderr
+  arrive in the opposite order on the two platforms. They are two streams and they
+  genuinely race; what does NOT race, and holds on both, is that the program's own
+  output comes before the stop that followed it.
+- **`Debug > Stop Debugging` could not be driven under gtk2 at all** -- the menu bar
+  answers neither a synthetic click nor F10 navigation, and a GTK menu cannot even be
+  photographed because `xwd -root` fails on Xwayland. That is a fact about XTest and
+  GTK, not about the editor. The menu item is driven on Windows; on Linux the same
+  teardown is reached from the process side, and the transcript ends
+  `type something: ` / `> killed` with nothing left listening.
+
+One thing worth a look later, seen only here because `ss` shows it and `netstat` does
+not: while a session is live the **debuggee holds the editor's listening socket too**
+(`users:(("phosphor",pid=...,fd=18),("phosphoride",pid=...,fd=18))`). `TProcess` does
+not set close-on-exec on it, so the child inherits the listener it was supposed to
+connect to. It costs nothing today -- the child dies with the session and a Phosphor
+program cannot reach a file descriptor -- but a listener the debuggee could `accept`
+on is not the design.
 
 ---
 

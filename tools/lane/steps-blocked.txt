@@ -1,0 +1,54 @@
+# blocked.bas: stop on 3, continue into a blocking `line input`.
+# The claim: while the program RUNS there is no "you are here" stripe anywhere.
+key ctrl+g
+wait 700
+key ctrl+a
+type 3
+key Return
+wait 500
+key F5
+wait 600
+key shift+F9
+wait 5000
+shot 11-stopped-at-3
+key F6
+wait 3500
+shot 12-running-blocked
+outtab
+wait 700
+shot 13-transcript-while-blocked
+# Tools > Preferences > OK, by walking the menu bar rather than by Alt+T --
+# the toolbar used to answer that one and killed the program under test.
+key F10
+wait 700
+key Right
+key Right
+key Right
+key Right
+wait 500
+key Down
+wait 400
+key Return
+wait 2000
+shot 14-preferences-open
+key Return
+wait 2000
+shot 15-after-preferences-ok
+# Debug > Stop Debugging, reached with End because it is the last item now that
+# "Why is stepping unavailable?" hides itself on a host that can step.
+key F10
+wait 700
+key Right
+key Right
+key Right
+wait 500
+key Return
+wait 700
+key End
+wait 500
+key Return
+wait 2500
+shot 17-after-stop-debugging
+outtab
+wait 700
+shot 18-transcript-after-stop

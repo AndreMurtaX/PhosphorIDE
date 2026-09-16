@@ -1,0 +1,18 @@
+# boom.bas: a breakpoint on the FIRST statement, then a division by zero.
+# Two claims: line 1 is answered installed and never fires (the host's debt),
+# and the exception stop reaches the transcript before the session is torn down.
+raise
+key ctrl+g
+wait 700
+key ctrl+a
+type 1
+key Return
+wait 500
+key F5
+wait 600
+key shift+F9
+wait 6000
+shot 71-after-start
+outtab
+wait 700
+shot 72-transcript

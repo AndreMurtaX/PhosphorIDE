@@ -86,6 +86,13 @@ exploits in the other direction: the test program names `InterfaceBase` plus
 `Win32Int`/`Gtk2Int` directly and never `Interfaces`, so it links the LCL without
 connecting to anything.
 
+Measured again on 2026-09-16, same VM: all five gates green with the debugger in,
+and the editor **driven** under gtk2 rather than merely constructed -- breakpoints,
+stepping, the variables pane and a clean end, through `tools/lane/`. What is still
+unwatched is narrower than it has ever been: the `xvfb-run` branch of `build.sh`, and
+the gtk2 MENU BAR, which answers neither a synthetic click nor F10 navigation from
+XTest and so could not be driven at all.
+
 Measured on 2026-09-10 on Ubuntu with Lazarus 4.8: `bash scripts/build.sh` builds both
 projects clean, `bin/phosphoridetest` is green, and the selftest constructs all three
 forms under **gtk2** when a display is reachable -- there, through a real Xwayland
@@ -259,9 +266,11 @@ marked 2026-09-16 were paid for driving it.
 
 **Step debugging works.** As of 2026-09-16 the editor starts a session, stops at
 breakpoints, steps over, into and out, shows the variables in scope, and ends the
-session honestly -- driven against the real `phosphor debug --port` host on Windows,
-with the transcripts and screenshots in the commit that landed it. `docs/debugger-lane.md`
-records the five steps and what each one was verified against.
+session honestly -- driven against the real `phosphor debug --port` host **on both
+platforms**: Windows 11, and gtk2 on Ubuntu under a real Xwayland session. The tooling
+that does the driving is `tools/lane/`, and `docs/debugger-lane.md` records the five
+steps, what each one was verified against, and the one thing gtk2 would not let a
+script reach.
 
 This paragraph replaces one that said, for a year and in the present tense, that
 stepping was impossible. It was true when written -- the `BREAKPOINT` seam could not

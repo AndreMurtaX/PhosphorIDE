@@ -277,9 +277,22 @@ breakpoints, the three steps, continue, the variables pane -- and every one of t
 a conversation with a live `phosphor debug --port` child over a socket, which none of
 the three gates can stand in for. The protocol CODEC is pinned headless in
 `bin/phosphoridetest`; the session is not. It was verified by driving the editor from a
-script against the real host, with the transcripts read out of the Output pane rather
-than photographed, and `docs/debugger-lane.md` says what each step was checked against.
-Roadmap item 2a is the contract test that would turn that into a gate.
+script against the real host on both platforms, with the transcripts read out of the
+Output pane as TEXT rather than photographed; `tools/lane/` is that script, with its
+own README, and `docs/debugger-lane.md` says what each step was checked against.
+Roadmap item 2a is the contract test that would turn part of it into a gate.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows-steps.ps1
+```
+
+```bash
+cd tools/lane && fpc -O2 -k-lXtst xdrive.lpr && ./lane-linux.sh ./lane345.bas ./steps-lane.txt
+```
+
+Neither is part of `build.ps1` or `build.sh`, and neither should be: they need a
+window, a display and a `phosphor` that can debug. They are what a person would do,
+written down so the answer is repeatable rather than remembered.
 
 ---
 
