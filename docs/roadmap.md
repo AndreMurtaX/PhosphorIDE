@@ -1579,6 +1579,51 @@ remembered.
 
 ## 23. Send the selection to the REPL
 
+**DONE 2026-09-17.** **Ctrl+Shift+Enter** takes the selected lines -- or, with no selection,
+the one the caret is on -- and feeds them to the prompt.
+
+**ONE LINE PER PROMPT, AND THAT IS THE WHOLE DESIGN.** The REPL reads one line at a time
+and answers each with a prompt. Sending five lines the moment they are queued would put five
+echoes in the transcript before the first prompt arrived, and the record would read nothing
+like the same five lines typed by hand -- which this item's done-when asks for in as many
+words. So the lines go into a queue and one leaves only when a prompt is showing:
+`PumpReplQueue` is called from `ReplOutput`, which is where a prompt lands.
+
+**A line that opens a block needs no special case at all.** The host answers it with
+`     ...> ` instead of `phosphor> `, and a continuation prompt is a prompt: the rest of the
+definition follows it because the queue is waiting for a prompt and not for a particular
+one. `IsAllPrompt` is the test, on an OPEN fragment -- a prompt is written before a read and
+never terminated, so a complete line that happens to read like one is something the program
+printed.
+
+**Measured by driving it**: the five lines of a definition arrive as
+
+```
+phosphor> function twice(n) local r
+   ...>   r = n * 2
+   ...>   println "inside twice"
+   ...>   return r
+   ...> endfunction
+phosphor> println twice(21)
+inside twice
+42
+```
+
+and `twice` is callable from the prompt afterwards, which is the clause that proves the five
+lines were a definition and not five strings.
+
+**Two rules that are not in the item and were worth deciding.** A selection that ends at
+column 1 does NOT include that line -- dragging from 4 to the start of 9 selects four lines,
+which is what every editor draws and what stops a stray `endfunction` being sent that nobody
+highlighted. And what is sent goes into the **history** as though it had been typed, because
+Up should walk what was sent as well.
+
+**Sending with no REPL running starts one first**, and sends nothing until its prompt
+arrives -- the queue is what makes that safe rather than a race.
+
+**Driven on both platforms** by `tools/lane/steps-sendrepl.txt` and
+`steps-sendrepl-linux.txt` over `sendrepl.bas`.
+
 **What.** A shortcut that takes the selected lines -- or the current one -- and feeds them
 to the prompt.
 

@@ -1,0 +1,52 @@
+# Send the selection to the REPL -- roadmap item 23, under gtk2.
+# Same case as steps-sendrepl.txt; the keys are spelled the X way.
+#
+# sendrepl.bas holds a five-line definition on lines 7 to 11. All four of the
+# item's done-when clauses are here:
+#
+#   * five selected lines reach the prompt as FIVE LINES, and `twice` is then
+#     callable from it;
+#   * SENDING WITH NO REPL RUNNING STARTS ONE FIRST -- nothing is started before
+#     this script's first Ctrl+Shift+Enter, and the queue waits for the prompt
+#     rather than racing it;
+#   * the middle three lines are sent while the prompt is MID-BLOCK, so they
+#     follow the `     ...> ` continuation exactly as typing them would;
+#   * and the transcript is indistinguishable from the same lines typed by hand,
+#     which the last shot is for -- a line is sent only when a prompt is
+#     showing, one per prompt.
+raise
+wait 800
+
+# The caret at the top of the definition, then five lines selected with Shift.
+key ctrl+g
+wait 600
+type 7
+key Return
+wait 600
+key shift+Down
+key shift+Down
+key shift+Down
+key shift+Down
+key shift+Down
+wait 500
+shot 440-five-lines-selected
+
+# SEND. No REPL is running yet, so this starts one and waits for its prompt.
+key ctrl+shift+Return
+wait 6000
+shot 441-the-definition-reached-the-prompt
+
+# AND IT IS CALLABLE. Ctrl+Shift+R puts the caret in the prompt's box.
+key ctrl+shift+r
+wait 800
+type println twice(21)
+key Return
+wait 2500
+shot 442-and-twice-is-callable
+
+# One more, to show the transcript keeps reading like a session.
+type println twice(4)
+key Return
+wait 2000
+shot 443-the-transcript-reads-like-typing
+outtab

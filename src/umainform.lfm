@@ -586,6 +586,9 @@ object FrmMain: TFrmMain
       object MnuMatchBlock: TMenuItem
         Action = ActMatchBlock
       end
+      object MnuSendToRepl: TMenuItem
+        Action = ActSendToRepl
+      end
       object MnuFindInFiles: TMenuItem
         Action = ActFindInFiles
       end
@@ -774,6 +777,12 @@ object FrmMain: TFrmMain
       Hint = 'Jump to the function this name defines, in this file'
       OnExecute = ActGotoDefinitionExecute
       ShortCut = 123
+    end
+    object ActSendToRepl: TAction
+      Caption = '&Send to REPL'
+      Hint = 'Feed the selected lines, or this one, to the prompt'
+      OnExecute = ActSendToReplExecute
+      ShortCut = 24589
     end
     object ActMatchBlock: TAction
       Caption = 'Go to &Matching Block'

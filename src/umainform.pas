@@ -43,6 +43,7 @@ type
     ActFindInFiles: TAction;
     ActGotoDefinition: TAction;
     ActMatchBlock: TAction;
+    ActSendToRepl: TAction;
     ActOutline: TAction;
     ActRepl: TAction;
     BtnReplEnd: TButton;
@@ -67,6 +68,7 @@ type
     MemoRepl: TMemo;
     MnuGotoDefinition: TMenuItem;
     MnuMatchBlock: TMenuItem;
+    MnuSendToRepl: TMenuItem;
     MnuOutline: TMenuItem;
     MnuRepl: TMenuItem;
     PanelRepl: TPanel;
@@ -199,6 +201,7 @@ type
     procedure ActFindInFilesExecute(Sender: TObject);
     procedure ActGotoDefinitionExecute(Sender: TObject);
     procedure ActMatchBlockExecute(Sender: TObject);
+    procedure ActSendToReplExecute(Sender: TObject);
     procedure ActOutlineExecute(Sender: TObject);
     procedure ActReplExecute(Sender: TObject);
     procedure BtnReplEndClick(Sender: TObject);
@@ -373,6 +376,8 @@ type
       longer name is a prompt lying about what it is. }
     FReplHostPath: String;
     FReplHistory: TReplHistory;
+    FReplQueue: TStringList;
+    FReplAtPrompt: Boolean;
 
     { The outline of the active buffer, what it was scanned from, and the
       debounce that keeps it from being rescanned between keystrokes.
@@ -468,6 +473,9 @@ type
     procedure StartRepl;
     procedure EndRepl(const AWhy: String; AForce: Boolean);
     procedure SendReplLine;
+    { Lines waiting to go to the prompt, and whether the prompt is showing.
+      Roadmap item 23; see PumpReplQueue for why one at a time. }
+    procedure PumpReplQueue;
     procedure AddReplText(AKind: TRunStream; const AText: String;
       ACompleteLine: Boolean);
     procedure AddReplNote(const AText: String);
@@ -637,6 +645,7 @@ begin
   FRepl.OnFinished := @ReplFinished;
   FRepl.OnStartFailed := @ReplFailed;
   FReplHistory := TReplHistory.Create;
+  FReplQueue := TStringList.Create;
   FReplLive := False;
   FReplClosing := False;
 
@@ -766,6 +775,7 @@ begin
   if (FRepl <> nil) and FRepl.Running then
     FRepl.Kill;
   FReplHistory.Free;
+  FReplQueue.Free;
   if FOutlineTimer <> nil then
     FOutlineTimer.Enabled := False;
   FOutlineRows.Free;
@@ -2290,6 +2300,10 @@ begin
 
   MemoRepl.Lines.Clear;
   FReplOpen := False;
+  FReplAtPrompt := False;
+  { A QUEUE FROM THE LAST SESSION IS NOT FOR THIS ONE. Its variables are gone
+    and half a definition would arrive without its first line. }
+  FReplQueue.Clear;
   FReplHistory.Clear;
   FReplHostPath := FHostPath;
 
@@ -2351,6 +2365,96 @@ begin
   FRepl.SendInput(Line);
 end;
 
+{ THE SELECTED LINES, FED TO THE PROMPT -- roadmap item 23.
+
+  The REPL keeps its variables across lines and Run starts from nothing, which
+  is item 16's whole argument; the missing half was that a person editing a
+  function had no way to try it without retyping it into the prompt. This is
+  that half, and it retypes nothing.
+
+  WHAT IS SENT is the selected lines, or -- with no selection -- the one the
+  caret is on, which is the rule every editor with this feature uses and the one
+  that makes the shortcut worth pressing twice in a row.
+
+  A SELECTION THAT ENDS AT COLUMN 1 DOES NOT INCLUDE THAT LINE. Dragging from
+  line 4 to the start of line 9 selects four lines, not five: the last one has
+  no character in the block. Every editor draws it that way and this reads it
+  the same way, or a stray `endfunction` would be sent that nobody highlighted. }
+procedure TFrmMain.ActSendToReplExecute(Sender: TObject);
+var
+  Doc: TEditorDoc;
+  First, Last, I: Integer;
+begin
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Exit;
+
+  if Doc.Edit.SelAvail then
+  begin
+    First := Doc.Edit.BlockBegin.Y;
+    Last := Doc.Edit.BlockEnd.Y;
+    if (Last > First) and (Doc.Edit.BlockEnd.X = 1) then
+      Dec(Last);
+  end
+  else
+  begin
+    First := Doc.Edit.CaretY;
+    Last := First;
+  end;
+  if (First < 1) or (Last > Doc.Edit.Lines.Count) then
+    Exit;
+
+  PagesOutput.ActivePage := TabRepl;
+  { SENDING WITH NO REPL RUNNING STARTS ONE FIRST, which is item 23's own
+    done-when. Nothing is sent here: the child has not printed its prompt yet,
+    and the queue below waits for it. }
+  if not FReplLive then
+    StartRepl;
+  if not FReplLive then
+    Exit;                        { the host is missing; StartRepl has said so }
+
+  for I := First to Last do
+    FReplQueue.Add(Doc.Edit.Lines[I - 1]);
+  PumpReplQueue;
+end;
+
+{ ONE LINE PER PROMPT, AND THAT IS THE WHOLE DESIGN.
+
+  The REPL reads one line at a time and answers each with a prompt. Sending five
+  lines the moment they are queued would put five echoes in the transcript
+  before the first prompt arrived, and the record would read nothing like the
+  same five lines typed by hand -- which item 23's done-when asks for in as many
+  words.
+
+  So a line leaves only when the prompt is showing: PumpReplQueue is called from
+  ReplOutput, which is where a prompt lands, and the next line goes out in its
+  place. A line that OPENS A BLOCK is answered by the continuation prompt
+  `     ...> ` instead, which is a prompt like any other, so the rest of the
+  definition follows it without a word of special-casing.
+
+  IsAllPrompt is the test, and the fragment has to be an OPEN line: a prompt is
+  written before a read and never terminated, so a complete line that happens to
+  read like one is something the program printed. }
+procedure TFrmMain.PumpReplQueue;
+var
+  Line: String;
+begin
+  if (FReplQueue.Count = 0) or (not FReplLive) or (not FReplAtPrompt) then
+    Exit;
+  Line := FReplQueue[0];
+  FReplQueue.Delete(0);
+
+  { THE SAME TWO ACTS SendReplLine PERFORMS, in the same order, so that the
+    transcript cannot tell the difference: the echo closes the prompt's line,
+    and the history gets it as though it had been typed -- because Up should
+    walk what was sent as well as what was typed. }
+  AddReplText(rsStdOut, Line, True);
+  FReplHistory.Add(Line);
+  FReplHistory.Reset;
+  FReplAtPrompt := False;
+  FRepl.SendInput(Line);
+end;
+
 procedure TFrmMain.BtnReplSendClick(Sender: TObject);
 begin
   SendReplLine;
@@ -2406,6 +2510,11 @@ begin
 
   FReplOpen := not ACompleteLine;
   FReplOpenKind := AKind;
+  { AND WHETHER WHAT IS OPEN IS A PROMPT, which is what PumpReplQueue waits for.
+    An open fragment that is nothing but prompts is where the caret would be if
+    a person were typing; anything else is output. }
+  FReplAtPrompt := (not ACompleteLine) and (AKind = rsStdOut) and
+                   IsAllPrompt(AText);
   TrimRepl;
 end;
 
@@ -2456,11 +2565,15 @@ begin
       for I := 0 to High(Segs) do
         AddReplText(AKind, Segs[I].Text,
                     (I < High(Segs)) or ACompleteLine);
+      PumpReplQueue;
       Exit;
     end;
   end;
 
   AddReplText(AKind, AText, ACompleteLine);
+  { A prompt may have just landed, and a queued line is waiting for exactly
+    that. }
+  PumpReplQueue;
 end;
 
 procedure TFrmMain.ReplFinished(Sender: TObject; AExitCode: Integer;
