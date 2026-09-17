@@ -1,0 +1,27 @@
+# Folding under gtk2. Same case as steps-fold.txt.
+#
+# The clicks are measured DOWN from the top here, not up from the bottom: the
+# editor is anchored under the toolbar and the tab strip, so its rows keep their
+# place whatever height mutter gives the window -- it is the OUTPUT panel that
+# moves, which is why every other Linux script in this directory uses `bot`.
+raise
+wait 800
+shot 170-the-markers-and-the-four-that-have-none
+
+# Collapse the function at line 6. The fold column is the fifth gutter part,
+# at the right-hand end of the gutter.
+at 57 176
+wait 900
+shot 171-the-function-collapsed
+
+# And back, with nothing below it moved.
+at 57 176
+wait 900
+shot 172-and-back
+
+# The for at line 8: a block inside a block.
+at 57 210
+wait 900
+shot 173-an-inner-block-collapsed
+at 57 210
+wait 600
