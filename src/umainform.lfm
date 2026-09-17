@@ -425,6 +425,76 @@ object FrmMain: TFrmMain
         ViewStyle = vsReport
       end
     end
+    object TabWatch: TTabSheet
+      Caption = 'Watches'
+      ClientHeight = 152
+      ClientWidth = 992
+      object PanelWatch: TPanel
+        Left = 0
+        Height = 30
+        Top = 122
+        Width = 992
+        Align = alBottom
+        BevelOuter = bvNone
+        ClientHeight = 30
+        ClientWidth = 992
+        TabOrder = 1
+        object EditWatch: TEdit
+          Left = 4
+          Height = 23
+          Top = 3
+          Width = 700
+          Anchors = [akTop, akLeft, akRight]
+          OnKeyDown = EditWatchKeyDown
+          TabOrder = 0
+          TextHint = 'An expression to watch, then Enter'
+        end
+        object BtnWatchAdd: TButton
+          Left = 710
+          Height = 25
+          Top = 2
+          Width = 80
+          Anchors = [akTop, akRight]
+          Caption = 'Add'
+          OnClick = BtnWatchAddClick
+          TabOrder = 1
+        end
+        object BtnWatchRemove: TButton
+          Left = 796
+          Height = 25
+          Top = 2
+          Width = 90
+          Anchors = [akTop, akRight]
+          Caption = 'Remove'
+          OnClick = BtnWatchRemoveClick
+          TabOrder = 2
+        end
+      end
+      object ListWatch: TListView
+        Left = 0
+        Height = 122
+        Top = 0
+        Width = 992
+        Align = alClient
+        Columns = <
+          item
+            Caption = 'Expression'
+            Width = 260
+          end
+          item
+            Caption = 'Value'
+            Width = 420
+          end
+          item
+            Caption = 'Kind'
+            Width = 90
+          end>
+        ReadOnly = True
+        RowSelect = True
+        TabOrder = 0
+        ViewStyle = vsReport
+      end
+    end
     object TabRepl: TTabSheet
       Caption = 'REPL'
       ClientHeight = 152
@@ -630,6 +700,9 @@ object FrmMain: TFrmMain
       Caption = '&Debug'
       object MnuToggleBreakpoint: TMenuItem
         Action = ActToggleBreakpoint
+      end
+      object MnuBreakpointCondition: TMenuItem
+        Action = ActBreakpointCondition
       end
       object MnuClearBreakpoints: TMenuItem
         Action = ActClearBreakpoints
@@ -841,6 +914,12 @@ object FrmMain: TFrmMain
       Hint = 'Mark this line. The program stops here under Start Debugging'
       OnExecute = ActToggleBreakpointExecute
       ShortCut = 116
+    end
+    object ActBreakpointCondition: TAction
+      Caption = 'Breakpoint &Condition...'
+      Hint = 'Stop at this breakpoint only when an expression is true'
+      OnExecute = ActBreakpointConditionExecute
+      ShortCut = 8308
     end
     object ActClearBreakpoints: TAction
       Caption = 'Clear All Break&points'

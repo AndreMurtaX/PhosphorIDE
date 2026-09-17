@@ -37,7 +37,7 @@ uses
   InterfaceBase,
   {$IFDEF WINDOWS}Win32Int,{$ELSE}Gtk2Int,{$ENDIF}
   SysUtils, Classes,
-  uphosphorlang, uphosphormsg, usynphosphor, udebugproto, ubreakpoints,
+  uphosphorlang, uphosphormsg, usynphosphor, udebugproto, ubreakpoints, uwatchlist,
   uphosphorcomplete,
   { The transport is exercised against a socket this program opens itself:
     no host is started, nothing is spawned, and the test runs the same on a
@@ -2624,6 +2624,81 @@ end;
 
 { ------------------------------------------------------------ breakpoints --- }
 
+{ ------------------------------------------------------- the watch list --- }
+procedure TestWatches;
+var
+  W: TWatchList;
+  A, B: Integer;
+begin
+  Group('uwatchlist: what a watch says when it does not know');
+  W := TWatchList.Create;
+  try
+    A := W.Add('count% * 2');
+    Check('a watch gets an id', A > 0);
+    CheckEqInt('  and a row', 1, W.Count);
+    CheckEq('  carrying the expression', 'count% * 2', W[0].Expr);
+    Check('  which starts out UNKNOWN, not empty-valued',
+      W[0].State = wsUnknown);
+
+    CheckEqInt('an empty expression is not a watch', 0, W.Add('   '));
+    CheckEqInt('  and adds no row', 1, W.Count);
+    CheckEqInt('a duplicate is not added twice', 0, W.Add('count% * 2'));
+    CheckEqInt('  even spelled with spaces round it', 0, W.Add('  count% * 2  '));
+    CheckEqInt('  so the row count holds', 1, W.Count);
+
+    B := W.Add('total');
+    Check('a second watch gets a DIFFERENT id', (B > 0) and (B <> A));
+
+    W.SetValue(A, '6', 'int');
+    Check('an answer makes it a value', W[0].State = wsValue);
+    CheckEq('  the host rendering, untouched', '6', W[0].Value);
+    CheckEq('  and its kind', 'int', W[0].Kind);
+
+    W.SetError(A, 'no variable "count%" here');
+    Check('a refusal makes it an error', W[0].State = wsError);
+    CheckEq('  carrying what the host said', 'no variable "count%" here', W[0].Error);
+    { A ROW SHOWING BOTH is a row a reader has to guess about, and the guess they
+      make is the wrong one: the number is easier to read than the sentence. }
+    CheckEq('  and the old value is GONE, not left beside it', '', W[0].Value);
+    CheckEq('  kind too', '', W[0].Kind);
+
+    { THE RULE THE WHOLE PANE EXISTS FOR. A value from the last stop is
+      indistinguishable from a value from this one by looking at it. }
+    W.SetValue(A, '6', 'int');
+    W.SetValue(B, '210', 'int');
+    W.Invalidate;
+    Check('the program moving forgets every answer', W[0].State = wsUnknown);
+    Check('  both of them', W[1].State = wsUnknown);
+    CheckEq('  with no value left behind', '', W[0].Value);
+    CheckEq('  and no error either', '', W[0].Error);
+    CheckEq('but the EXPRESSION survives -- it belongs to the person, not the session',
+      'count% * 2', W[0].Expr);
+
+    { AN ANSWER FOR A WATCH THAT IS GONE. A person can delete a row while its
+      reply is in flight, and a ROW index would then hand the value to whatever
+      slid up into that position -- the stale value this pane exists to prevent,
+      wearing a different hat. }
+    W.RemoveAt(0);
+    CheckEqInt('removing a watch leaves the other', 1, W.Count);
+    CheckEq('  and it is the right one', 'total', W[0].Expr);
+    W.SetValue(A, '999', 'int');
+    Check('a late answer for a deleted watch lands nowhere',
+      W[0].State = wsUnknown);
+    CheckEq('  and certainly not on its neighbour', '', W[0].Value);
+    CheckEqInt('an id that never existed finds nothing', -1, W.IndexOfId(9999));
+    CheckEqInt('and neither does zero', -1, W.IndexOfId(0));
+
+    { IDS ARE NOT REUSED, so a reply can never be right by accident. }
+    CheckEqInt('an id is never handed out twice', -1, W.IndexOfId(A));
+    Check('a new watch gets a fresh id, not the freed one', W.Add('x') > B);
+
+    W.Clear;
+    CheckEqInt('clear empties it', 0, W.Count);
+  finally
+    W.Free;
+  end;
+end;
+
 procedure TestBreakpoints;
 var
   B: TBreakpointSet;
@@ -2800,6 +2875,7 @@ end;
 procedure TestProtocol;
 var
   Frame: String;
+  Items: TBreakpointItems;
   M: TPdbpMessage;
 begin
   Group('udebugproto: frames both ends must agree on');
@@ -2809,12 +2885,57 @@ begin
   Check('  it names the command', Pos('"cmd" : "initialize"', Frame) > 0);
   Check('  and the protocol version', Pos('"protocol" : 1', Frame) > 0);
 
-  Frame := EncodeSetBreakpoints(7, 'x.bas', [3, 11]);
+  SetLength(Items, 2);
+  Items[0].Line := 3; Items[0].Condition := '';
+  Items[1].Line := 11; Items[1].Condition := '';
+  Frame := EncodeSetBreakpoints(7, 'x.bas', Items, True);
   Check('breakpoints carry the whole set', Pos('[3, 11]', Frame) > 0);
+  Check('  and no conditions key when none of them has one',
+    Pos('conditions', Frame) = 0);
 
-  Frame := EncodeSetBreakpoints(8, 'x.bas', []);
+  SetLength(Items, 0);
+  Frame := EncodeSetBreakpoints(8, 'x.bas', Items, True);
   Check('an empty set is legal -- it is how the last one is cleared',
     Pos('"lines" : []', Frame) > 0);
+
+  { --- AND A CONDITION, WHICH RIDES BESIDE `lines` AND NEVER INSIDE IT ------ }
+  { The console host as it FIRST shipped read that array with fpjson's
+    Integers[], which converts: an object element raised inside its loop and took
+    the debuggee down over one element of an otherwise conformant frame. The
+    hardening that drops a non-integer instead is newer than some hosts in the
+    wild, and an editor cannot know which one is on the other end. }
+  SetLength(Items, 2);
+  Items[0].Line := 3; Items[0].Condition := '';
+  Items[1].Line := 11; Items[1].Condition := 'i% > 3';
+  Frame := EncodeSetBreakpoints(9, 'x.bas', Items, True);
+  Check('lines stays an array of NUMBERS', Pos('[3, 11]', Frame) > 0);
+  Check('  with the conditions parallel to it',
+    Pos('"conditions" : ["", "i% > 3"]', Frame) > 0);
+  Check('  and the empty one still occupies its slot, so the indexes line up',
+    Pos('["", ', Frame) > 0);
+
+  { GATED ON THE HANDSHAKE. A host that answered conditionalBreakpoints:false and
+    is sent one anyway installs the line and fires on every hit, the condition
+    silently ignored -- worse than not offering conditions at all, because the
+    mark looks like it took. }
+  Frame := EncodeSetBreakpoints(10, 'x.bas', Items, False);
+  Check('a host that cannot do conditions is sent none',
+    Pos('conditions', Frame) = 0);
+  Check('  but still gets its breakpoints', Pos('[3, 11]', Frame) > 0);
+
+  { --- AND THE REFUSAL THAT COMES BACK ------------------------------------- }
+  M := DecodePdbp('{"seq":9,"ok":true,"lines":[3,11],"rejected":[' +
+    '{"line":11,"condition":"i% >","error":"unexpected token in expression"}]}');
+  Check('a reply can carry refused conditions', M.Valid and M.Ok);
+  CheckEqInt('  and still install the lines', 2, Length(M.Lines));
+  CheckEqInt('  one refusal', 1, Length(M.Rejected));
+  CheckEqInt('  on the line it was typed on', 11, M.Rejected[0].Line);
+  CheckEq('  quoting the condition back', 'i% >', M.Rejected[0].Condition);
+  CheckEq('  with the host wording', 'unexpected token in expression',
+    M.Rejected[0].ErrorText);
+
+  M := DecodePdbp('{"seq":9,"ok":true,"lines":[3]}');
+  CheckEqInt('a reply with nothing to reject says nothing', 0, Length(M.Rejected));
 
   Frame := EncodeSimple(9, pcStepOver);
   Check('a bare command needs nothing else', Pos('"cmd" : "stepOver"', Frame) > 0);
@@ -3131,7 +3252,7 @@ procedure TestSession;
 var
   S: TDebugSession;
   sink: TNoteSink;
-  none: TPdbpLines;
+  none: TBreakpointItems;
 begin
   Group('debug session: what may be asked when');
 
@@ -3199,6 +3320,7 @@ begin
   TestFoldWired;
   MeasureHighlighter;
   TestBreakpoints;
+  TestWatches;
   TestCompletion;
   TestOutline;
   TestFindInFiles;

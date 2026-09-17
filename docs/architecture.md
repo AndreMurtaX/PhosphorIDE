@@ -656,7 +656,7 @@ scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println` are one wor
 
 ### What does not exist
 
-**Nothing, on the debugger, as of 2026-09-17.** This heading held four entries
+**Nothing, on the debugger, as of 2026-09-17.** This heading held five entries
 and has been emptied one at a time; what follows is the record of what each one
 claimed and when it stopped being true, because the lesson is not about
 debugging.
@@ -666,7 +666,15 @@ debugging.
 made it true in the sibling repository, and the sentence beside it -- that they
 must never be closed in-process, because an expression evaluator here would be an
 interpreter here -- is not the thing that changed and is why the work happened
-over there. The watch pane is roadmap item 26.
+over there. The watch pane landed the same day, as item 26: the eighth tab in
+`PagesOutput`, over `uwatchlist.TWatchList`, with every value the host's own
+rendering and every answer forgotten the moment the program moves.
+
+**Conditional breakpoints** were here too, and they are the same story one step
+further out: the condition travels in `setBreakpoints`, the HOST evaluates it at
+the boundary, and the editor is told nothing at all when it is false. Doing it
+here instead was measured at 11,6 to 23 ms per hit against 0,04 to 2,3 ms there,
+and would have written one Output line per refused hit.
 
 **A call-stack pane** was in this list until 2026-09-16. It is the FIFTH tab in
 `PagesOutput` -- Output, Problems, Find, Outline, Call Stack, Variables, REPL --

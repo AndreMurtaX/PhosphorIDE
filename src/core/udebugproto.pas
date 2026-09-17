@@ -37,7 +37,13 @@ unit udebugproto;
 interface
 
 uses
-  Classes, SysUtils, fpjson, jsonparser;
+  { ubreakpoints for TBreakpointItems, and DELIBERATELY not a second record of
+    its own. A breakpoint on the wire is a line and the user's condition, which
+    is exactly what a breakpoint in the set is; defining that pair twice is how
+    the two would come to disagree about which field is which. Both units are
+    LCL-free and neither knows about the other's job -- ubreakpoints has no uses
+    clause at all -- so the dependency costs nothing and buys the one shape. }
+  Classes, SysUtils, fpjson, jsonparser, ubreakpoints;
 
 const
   { Bumped when a change would break an existing implementation of the other end.
@@ -101,6 +107,21 @@ type
 
   TPdbpLines = array of Integer;
 
+  { A CONDITION THE HOST WOULD NOT TAKE, from `setBreakpoints`' reply.
+
+    It carries the line so the editor can put the message where the condition was
+    typed, and the condition itself so it can say WHICH one when a line's text has
+    moved on since. The host sends this only for a condition it could not read as
+    an expression; one whose NAMES are wrong cannot be caught at reply time,
+    because scope is a frame and there is no frame yet, and arrives instead as a
+    stop that says why. }
+  TPdbpRejection = record
+    Line: Integer;
+    Condition: String;
+    ErrorText: String;
+  end;
+  TPdbpRejections = array of TPdbpRejection;
+
   TPdbpVariable = record
     Name: String;     // includes the type suffix: count%, name$, list@
     Value: String;    // already rendered by the host, as PRINT would render it
@@ -158,6 +179,11 @@ type
     // verified, so there was nothing here to read.
     Lines: TPdbpLines;
 
+    // pcSetBreakpoints' response, when the host refused a condition. Empty is
+    // the ordinary case and the key is omitted entirely then, so a host that has
+    // never heard of conditions answers exactly what it always answered.
+    Rejected: TPdbpRejections;
+
     // pcStackTrace's response
     Frames: TPdbpFrames;
 
@@ -173,7 +199,7 @@ function PdbpStopReasonName(AReason: TPdbpStopReason): String;
 
 function EncodeInitialize(ASeq: Integer; const AClientName: String): String;
 function EncodeSetBreakpoints(ASeq: Integer; const APath: String;
-  const ALines: array of Integer): String;
+  const AItems: TBreakpointItems; AWithConditions: Boolean): String;
 function EncodeLaunch(ASeq: Integer; const AProgramPath: String;
   AStopAtEntry: Boolean): String;
 function EncodeSimple(ASeq: Integer; ACommand: TPdbpCommand): String;
@@ -249,21 +275,59 @@ begin
 end;
 
 function EncodeSetBreakpoints(ASeq: Integer; const APath: String;
-  const ALines: array of Integer): String;
+  const AItems: TBreakpointItems; AWithConditions: Boolean): String;
 var
   Obj: TJSONObject;
-  Arr: TJSONArray;
+  Arr, Conds: TJSONArray;
   I: Integer;
+  Any: Boolean;
 begin
   Obj := NewRequest(ASeq, pcSetBreakpoints);
   Obj.Add('path', APath);
   Arr := TJSONArray.Create;
-  for I := Low(ALines) to High(ALines) do
-    Arr.Add(ALines[I]);
+  for I := Low(AItems) to High(AItems) do
+    Arr.Add(AItems[I].Line);
   { The whole set is replaced, never added to. An add/remove protocol needs both
     ends to agree on what is currently set, and they will not: the editor's list
     moves every time a line is inserted above a mark. }
   Obj.Add('lines', Arr);
+
+  { CONDITIONS RIDE IN A SIBLING KEY, parallel to `lines` and the same length.
+
+    NOT AS OBJECTS INSIDE `lines`, which is the shape that suggests itself: the
+    console host as it FIRST shipped read that array with fpjson's Integers[],
+    which converts, and an object element raised inside its loop and took the
+    debuggee down. The hardening that drops a non-integer instead arrived on
+    2026-09-16 and an editor cannot know which host is on the other end. A key an
+    unaware host never looks for cannot hurt it.
+
+    AND ONLY WHEN THE HOST SAID IT UNDERSTANDS. A host that answers
+    conditionalBreakpoints:false would install the line and fire on every hit --
+    the condition silently ignored, which is the one outcome worse than refusing
+    to send it. The caller passes what the handshake said; this function does not
+    guess.
+
+    The key is omitted when no breakpoint has one, so the ordinary frame is the
+    frame it always was. }
+  if not AWithConditions then
+  begin
+    Result := Frame(Obj);
+    Exit;
+  end;
+  Any := False;
+  for I := Low(AItems) to High(AItems) do
+    if AItems[I].Condition <> '' then
+    begin
+      Any := True;
+      Break;
+    end;
+  if Any then
+  begin
+    Conds := TJSONArray.Create;
+    for I := Low(AItems) to High(AItems) do
+      Conds.Add(AItems[I].Condition);
+    Obj.Add('conditions', Conds);
+  end;
   Result := Frame(Obj);
 end;
 
@@ -371,6 +435,39 @@ begin
   Result.SetVariable := GetBool(Caps, 'setVariable', False);
   Result.Pause := GetBool(Caps, 'pause', False);
   Result.ConditionalBreakpoints := GetBool(Caps, 'conditionalBreakpoints', False);
+end;
+
+{ The conditions the host would not take. Absent is the ordinary answer and is
+  not an error; a malformed element is dropped rather than raising, for the same
+  reason every other array here is read that way. }
+procedure ParseRejections(AObj: TJSONObject; out AOut: TPdbpRejections);
+var
+  Item, El: TJSONData;
+  Arr: TJSONArray;
+  Obj: TJSONObject;
+  I, N: Integer;
+begin
+  AOut := nil;
+  Item := AObj.Find('rejected');
+  if (Item = nil) or (Item.JSONType <> jtArray) then
+    Exit;
+  Arr := TJSONArray(Item);
+  SetLength(AOut, Arr.Count);
+  N := 0;
+  for I := 0 to Arr.Count - 1 do
+  begin
+    El := Arr.Items[I];
+    if (El = nil) or (El.JSONType <> jtObject) then
+      Continue;
+    Obj := TJSONObject(El);
+    AOut[N].Line := GetInt(Obj, 'line', 0);
+    AOut[N].Condition := GetStr(Obj, 'condition', '');
+    AOut[N].ErrorText := GetStr(Obj, 'error', '');
+    if AOut[N].Line < 1 then
+      Continue;
+    Inc(N);
+  end;
+  SetLength(AOut, N);
 end;
 
 procedure ParseInstalledLines(AObj: TJSONObject; out ALines: TPdbpLines);
@@ -550,6 +647,7 @@ begin
     Result.Kind := GetStr(Obj, 'kind', '');
     Result.Capabilities := ParseCapabilities(Obj);
     ParseInstalledLines(Obj, Result.Lines);
+    ParseRejections(Obj, Result.Rejected);
     ParseFrames(Obj, Result.Frames);
     ParseVariables(Obj, Result.Variables);
   finally

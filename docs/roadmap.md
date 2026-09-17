@@ -1827,6 +1827,73 @@ came before.
 
 ## 26. Watches, and a breakpoint with a condition
 
+**DONE 2026-09-17**, across both repositories (Phosphor `1b38e9e`).
+
+**THE WATCH PANE IS THE EIGHTH TAB**, and `uwatchlist.TWatchList` is where the
+thinking is -- LCL-free, so `phosphoridetest` pins every case without a window. A
+watch has THREE states and the third is the whole point: unknown, a value, or an
+error. `Invalidate` empties every answer the instant the program stops standing
+still, so the pane shows a BLANK rather than the number from the last stop. That is
+this item's own sentence, and it is worth restating as a general one: a reading that
+might be from now and might be from a minute ago is a reading nobody can act on, and
+nothing about it looks different. The EXPRESSIONS survive, because they belong to the
+person and not to the session.
+
+**AN ID, NOT A ROW.** The `evaluate` reply carries a value and nothing else -- not
+the expression, not the frame -- so this side has to remember which question it
+answers. A row index would hand a late answer to whatever slid up when a watch was
+deleted, which is the same stale value wearing a different hat. Ids come from a
+counter and are never reused; an answer for a watch that is gone lands nowhere.
+
+**THE CONDITION IS EVALUATED IN THE HOST, and that was measured rather than
+assumed.** Faking it here -- stop, ask `evaluate`, continue when false -- works, and
+costs 11,6 to 23 ms per hit against 0,04 to 2,3 ms over there. A 10 000-hit loop is
+231 seconds against 58; it writes one Output line and one band flash per refused
+hit; and this editor already loses between 1 and 13 stops in ten thousand, each of
+which would be a condition never evaluated. The host side is one evaluator with two
+callers, so a condition and a watch cannot come to disagree about what an expression
+means -- the failure this pair of repositories has now spent five items avoiding.
+
+**FOUR GUTTER GLYPHS, not a badge.** Armed and inert cross with plain and
+conditional; a conditional one is the same disc with a bite out of its right side.
+SynEdit CAN paint two marks on one line -- `MaxExtraMarksColums` is published and
+setting it to 1 makes both appear -- but at this gutter's width they share 24 px and
+read as a smudge. Drawn and looked at, not reasoned about.
+
+**A REFUSED CONDITION BECOMES A PROBLEMS ROW ON ITS OWN LINE**, which is the one
+channel in this window that carries a line and can be jumped to -- what "reported
+where it was typed" has to mean when the thing typed is not in the text. The
+breakpoint is then installed unconditional and the row says so. A condition whose
+NAMES are wrong cannot be caught at that moment, because scope is a frame and there
+is not one yet; it arrives later as a stop carrying `text`.
+
+**AND ToItems FINALLY HAS CALLERS.** `ToArray`'s comment had said "for handing to a
+debug adapter" since it was written and nothing ever did: both sites that build the
+frame wrote their own loop over the document's facade. That cost nothing while a
+breakpoint was one integer and would have cost this whole feature the moment one
+carried a condition, because a hand-written loop that copies the line and forgets the
+condition compiles, runs, and sends a mark that fires on every hit.
+
+**The claims that had expired, corrected as the item asks.** The toolbar hint that
+still said "Nothing stops at it yet"; `architecture.md` calling the call-stack pane a
+fourth tab (it is the fifth, and it WAS the fourth when written -- Find and Outline
+landed either side and nobody counted again); "only frame 0 has a line", fixed in
+Phosphor on 2026-09-16; and `capabilities.evaluate` being false on every host, which
+stopped being true the day before this. Plus a count that lived as a literal in five
+places across three files and was wrong in all five.
+
+**Proven:** 747 checks -> 822, clean at `-vewn`, `--selftest` 0 with the new pane and
+five gutter marks counted, both generators current, and green on Linux. On the host
+side, 97 protocol assertions across seven sessions -> 117 across eight.
+
+**What is NOT done, and is not hidden.** The chunk a condition compiles to is not
+cached, so a condition on a hot line in a LARGE program costs 2,3 ms a hit -- 2000
+hits in 4,5 s. A cache keyed on the expression takes that to microseconds and the
+technique is proven (`TProgram.Patch` re-points the prologue so the kept program does
+not grow, measured at zero growth over 10 000 correct evaluations). It is a known
+piece of work and it is written down in `../Phosphor/docs/debugging.md` rather than
+left to be discovered.
+
 **What.** The editor half of item 25, plus conditional breakpoints.
 
 **Why they are one item.** Both are the same request with a different caller: a watch

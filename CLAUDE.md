@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 778 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 822 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -53,7 +53,9 @@ Nothing is done on a claim. An increment is complete when all five hold:
    `uphosphorlang.pas is current (538 core, 181 package, 426 gui)`, and
    `python tools/gen-icons.py --check` prints
    `uphosphoricons.pas is current (9 icons, 16 and 24 px)`. Both exit 0, and both
-   build scripts run them.
+   build scripts run them. The icon check prints the TOOLBAR count only; the five
+   gutter marks are counted by `--selftest` instead, which is the gate that would
+   notice one going missing.
 5. **Green on Linux too.** Windows-green has shipped Linux-broken defects in the
    sibling repository (SIGPIPE, soname, cert generation), and this repository has two
    Linux-only hazards of its own: `cthreads` and the gtk2 widgetset.
@@ -470,26 +472,66 @@ to change it, so the reader knows where to check.
 
 What is still absent, and must not be described otherwise:
 
-- **No watches. `evaluate` EXISTS NOW, and it is the host's.** As of 2026-09-17 the
-  console host answers `evaluate` and advertises `capabilities.evaluate: true` with a
-  second key, `evaluateCalls: false`, saying that no call the user writes is
-  performed. **This repository needed no change to discover it** --
-  `DecodeCapabilities` (`core/udebugproto.pas:359`) already read the key and
-  `EncodeEvaluate` (`:289`) already wrote the request, both written before the other
-  end existed. That is the third time a two-repository contract has been proved right
-  by one end changing and the other not, after the two debts above.
+- **Watches exist, and every value in them is the HOST's.** The Watches tab is the
+  eighth in `PagesOutput`; `uwatchlist.TWatchList` holds the expressions and the last
+  answer for each, with no LCL in it so `phosphoridetest` can pin every case without
+  a window. The invariant at the top is why the evaluating happens over there: an
+  expression evaluator in this program would be an interpreter in this program,
+  whatever it was for.
 
-  What is still absent here is the PANE: nothing consumes `TDebugCaps.Evaluate` yet,
-  and roadmap item 26 is the watch list that will. The invariant at the top is
-  untouched and is the reason the work happened over there: an expression evaluator
-  in this program would be an interpreter in this program, whatever it was for.
-- **No conditional breakpoints.** A breakpoint the host could not arm IS drawn, as a
-  **hollow ring in the gutter** beside the solid dot of one that will fire â€” the
-  convention every debugger uses, and what roadmap item 13's image list was for. The
-  full-row maroon and grey it replaced were a stand-in the code said so about at the
-  time: a band of colour behind a line of code is a line of code that is harder to
-  read, and a breakpoint is a thing you set and then read around. The one band that
-  stays is the navy one for the current statement, because "you are here" IS a band.
+  **A WATCH HAS THREE STATES AND THE THIRD IS THE POINT.** Unknown, a value, or an
+  error -- and `Invalidate` empties every answer the instant the program stops
+  standing still, so the pane shows a BLANK rather than the number from the last
+  stop. A reading that might be from now and might be from a minute ago is a reading
+  nobody can act on, and nothing about it looks different. The expressions survive,
+  because they are the person's and not the session's.
+
+  **AN ID, NOT A ROW.** The `evaluate` reply carries the value and nothing else --
+  not the expression, not the frame -- so this side has to remember which question it
+  answers. A row index would hand a late answer to whatever slid up when the person
+  deleted a watch, which is the same stale value wearing a different hat. Ids come
+  from a counter and are never reused, so an answer for a watch that is gone lands
+  nowhere, which is correct.
+
+  **And they follow the call-stack selection**, by frame INDEX, exactly as the
+  variables pane does: `count%` in frame 0 and in frame 1 are different questions.
+- **A breakpoint can carry a CONDITION, and the host is what evaluates it.**
+  `Debug > Breakpoint Condition...` (Shift+F5) on a line that has a mark; empty
+  clears it. It travels in `setBreakpoints`' `conditions` array, gated on
+  `capabilities.conditionalBreakpoints` -- a host that reports false must never be
+  sent one, because it would install the line, ignore the condition and stop on
+  every hit, which looks exactly like a condition that is always true.
+
+  **THE EDITOR DOES NOT EVALUATE IT, AND THAT WAS MEASURED RATHER THAN ASSUMED.**
+  Faking a condition here -- stop, ask `evaluate`, continue when it is false --
+  works, and costs 11,6 to 23 ms per hit against 0,04 to 2,3 ms in the host; a
+  10 000-hit loop is 231 seconds against 58, it writes one Output line and one band
+  flash per refused hit, and this editor already loses between 1 and 13 stops in ten
+  thousand, each of which would be a condition never evaluated.
+
+  **FOUR GUTTER GLYPHS, not a badge beside the dot.** Armed and inert cross with
+  plain and conditional, and a conditional one is the same disc with a bite out of
+  its right side: still a breakpoint, visibly incomplete. SynEdit CAN paint two marks
+  on one line -- `MaxExtraMarksColums` is published -- but at this gutter's width the
+  two share 24 px and read as a smudge. That was drawn and looked at, not reasoned
+  about.
+
+  **A condition the host would not READ comes back in the `setBreakpoints` reply**
+  and becomes a Problems row on its own line, which is the one channel in this window
+  that carries a line and can be jumped to. That is what "reported where it was
+  typed" has to mean when the thing typed is not in the text. The breakpoint is then
+  installed unconditional and the row says so, because a mark that is visible and
+  never honoured is worse than one that fires too often. A condition whose NAMES are
+  wrong cannot be caught then -- scope is a frame, and at that moment there is none --
+  and arrives later as a stop carrying `text`.
+
+  A breakpoint the host could not arm is still drawn as a **hollow ring** beside the
+  solid dot of one that will fire, the convention every debugger uses and what
+  roadmap item 13's image list was for. The full-row maroon and grey it replaced were
+  a stand-in the code said so about at the time: a band of colour behind a line of
+  code is a line of code that is harder to read, and a breakpoint is a thing you set
+  and then read around. The one band that stays is the navy one for the current
+  statement, because "you are here" IS a band.
 
 The **call stack pane** landed on 2026-09-16 and is driven on both platforms. Two
 rules in it are worth keeping: every `variables` request goes **by frame index**, which

@@ -185,6 +185,27 @@ the difference because the host answers which lines it actually installed.
 speaks the protocol. `Debug > Why is stepping unavailable?` says which of the six
 search positions it tried and what it found.
 
+### Watch an expression
+
+Open the **Watches** tab, type `total * 2` and press Enter. At every stop it is
+evaluated and the value appears; press F6 and watch it **go blank** rather than keep
+the old number. That is on purpose: a value from the last stop looks exactly like a
+value from this one, and a pane you cannot trust is a pane you cannot use.
+
+Try `nosuch%` too. The row says what the host said -- `no variable "nosuch%" here` --
+rather than showing 0, which is what the language itself would answer for an
+undeclared name.
+
+### Stop only sometimes
+
+Put a breakpoint on the `total = total + i` line, then **Shift+F5** and type
+`i > 2`. The mark gets a bite taken out of it, and Start Debugging now stops once
+instead of three times.
+
+Try a condition that is not an expression -- `i >` -- and it is refused the moment
+you press Debug, as a row in the **Problems** tab pointing at that line. The
+breakpoint stays, and stops on every pass, which the row tells you.
+
 ---
 
 ## 7. What works today
@@ -206,17 +227,25 @@ Honest, as of 2026-09-17.
 | Call stack pane, with every frame carrying its line | yes |
 | Variables pane, locals and globals, by frame | yes |
 | A failed run tinting the line it blamed | yes |
-| `evaluate` — the host computes an expression at a stop | yes, **host side only** |
+| `evaluate` — the host computes an expression at a stop | yes |
+| A **Watches** pane, evaluated at every stop and at every frame you select | yes |
+| **Conditional breakpoints** — stop only when an expression is true | yes |
 
 ## 8. What does not work today
 
 Said plainly, because a limitation recorded in the present tense is a claim with an
 expiry date nobody set.
 
-- **No watch pane.** The host answers `evaluate` and the editor reads the capability,
-  but nothing consumes it yet. That is roadmap item 26.
-- **No conditional breakpoints.** `capabilities.conditionalBreakpoints` is false and
-  the protocol field is not yet specified. Also item 26.
+- **A condition on a hot line in a BIG program is slow.** Each hit compiles the
+  expression: 0,04 ms per hit on a small program, but **2,3 ms on a 606-line one** --
+  2000 hits in 4,5 seconds. The fix is a cache and the technique is proven; it is not
+  built. On the programs this editor is usually pointed at you will not notice.
+- **A condition cannot call anything.** `i% > 3`, `total > 100`, `a$ = "x"` and
+  `lista@[2] = 0` all work; `len(s$) > 2` is refused, with a message, when you type
+  it. Same rule as `evaluate`, for the same reason.
+- **A typo in a condition stops the program rather than being ignored**, and the stop
+  says why. That is deliberate: the alternative is a breakpoint you can see and that
+  never fires.
 - **`evaluate` refuses every function call you write.** `count% * 2`, `a$ + b$`,
   `x > 3 and y < 9`, a local, a global, a `const` and `a@[i]` all answer. `len(x$)`
   does not, and will not until the engine's registry can say whether a function has
@@ -249,7 +278,7 @@ Read out of `src/umainform.lfm` rather than from memory.
 | Ctrl+Shift+O / Ctrl+Shift+R | Outline, REPL |
 | Ctrl+Shift+Enter | Send selection to the REPL |
 | **F9 / Ctrl+F9 / Ctrl+F2** | **Run, Check Syntax, Stop** |
-| **F5** | **Toggle Breakpoint** |
+| **F5 / Shift+F5** | **Toggle Breakpoint, Breakpoint Condition...** |
 | **Shift+F9** | **Start Debugging** |
 | **F8 / F7 / Shift+F8 / F6** | **Step Over, Into, Out, Continue** |
 

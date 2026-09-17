@@ -265,10 +265,45 @@ def break_hidden(c):
     c.poly(((2.2, 4.8), (5.8, 4.8), (4, 6.8)), MAROON)
 
 
+# AND THE FOURTH AND FIFTH SAY "ONLY SOMETIMES" -- roadmap item 26. A breakpoint
+# with a condition stops on some passes and not others, and that is a thing to
+# know from the gutter: the commonest confusion a conditional breakpoint causes is
+# a person watching a program run past a mark they can plainly see.
+#
+# IT HAS TO BE A GLYPH AND NOT A BADGE BESIDE THE DOT, and that was measured
+# rather than assumed. SynEdit CAN paint two marks on one line -- MaxExtraMarksColums
+# is published and setting it to 1 makes both appear -- but at this gutter's width
+# the two share 24 px, which squeezes each to about 12 and reads as a smudge
+# rather than as two shapes. Widening the gutter to fit them would spend the
+# editor's horizontal space on a state most lines do not have.
+#
+# A DISC WITH A BITE OUT OF ITS RIGHT SIDE, and the bite is the whole idea: the
+# mark is still a breakpoint -- same maroon, same size, same family -- and it is
+# visibly incomplete, which is what "stops only sometimes" looks like. A question
+# mark was drawn first and thrown away: at 16 px it is four grey pixels that read
+# as dirt, and it says "I do not know" where the truth is "I know exactly, and it
+# depends".
+#
+# The bite is PAPER rather than transparent so that it reads on both toolbars --
+# the gutter is near-white on Windows and near-black under gtk2, and a hole would
+# be invisible on one of them. Same reason the outlines elsewhere in this file are
+# mid grey.
+def break_armed_cond(c):
+    c.disc(4, 4, 2.4, MAROON)
+    c.disc(5.6, 4, 1.3, PAPER)
+
+
+def break_inert_cond(c):
+    c.ring(4, 4, 2.4, 1.15, MAROON)
+    c.disc(5.6, 4, 1.3, PAPER)
+
+
 GUTTER = (
     ('BreakArmed', break_armed),
     ('BreakInert', break_inert),
     ('BreakHidden', break_hidden),
+    ('BreakArmedCond', break_armed_cond),
+    ('BreakInertCond', break_inert_cond),
 )
 
 ICONS = (

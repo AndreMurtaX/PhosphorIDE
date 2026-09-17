@@ -25,7 +25,8 @@ uses
   Classes, SysUtils, Math, Types, Forms, Controls, Graphics, Dialogs, Menus, ComCtrls,
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
-  ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
+  ubreakpoints, ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
+  uwatchlist,
   SynEditHighlighter,
   usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
   uphosphorcomplete, uphosphoroutline, uphosphorrepl, ufindinfiles, uphosphorfold,
@@ -38,6 +39,7 @@ type
   TFrmMain = class(TForm)
     ActAbout: TAction;
     ActCheck: TAction;
+    ActBreakpointCondition: TAction;
     ActClearBreakpoints: TAction;
     ActComplete: TAction;
     ActFindInFiles: TAction;
@@ -181,6 +183,12 @@ type
     ListStack: TListView;
     TabVariables: TTabSheet;
     ListVariables: TListView;
+    ListWatch: TListView;
+    TabWatch: TTabSheet;
+    PanelWatch: TPanel;
+    EditWatch: TEdit;
+    BtnWatchAdd: TButton;
+    BtnWatchRemove: TButton;
     TbCheck: TToolButton;
     TbNew: TToolButton;
     TbOpen: TToolButton;
@@ -248,6 +256,11 @@ type
     procedure ActSaveAsExecute(Sender: TObject);
     procedure ActSaveExecute(Sender: TObject);
     procedure ActStopExecute(Sender: TObject);
+    procedure ActBreakpointConditionExecute(Sender: TObject);
+    procedure BtnWatchAddClick(Sender: TObject);
+    procedure BtnWatchRemoveClick(Sender: TObject);
+    procedure EditWatchKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
     procedure ActToggleBreakpointExecute(Sender: TObject);
     procedure ActUndoExecute(Sender: TObject);
     procedure ActionList1Update(AAction: TBasicAction; var Handled: Boolean);
@@ -442,6 +455,13 @@ type
       live breakpoint is dead. }
     FInstalledPath: String;
     FInstalledLines: TPdbpLines;
+    FWatches: TWatchList;
+    { WHICH FRAME THE WATCHES WERE LAST ASKED ABOUT. The call-stack selection
+      drives the variables pane by frame index and must drive this one the same
+      way: `count%` in frame 0 and in frame 1 are different questions, and a pane
+      that answered the first while the user was reading the second would be
+      telling a lie that looks like an answer. }
+    FWatchFrame: Integer;
 
     function ActiveDoc: TEditorDoc;
     function DocOfPage(APage: TTabSheet): TEditorDoc;
@@ -460,6 +480,10 @@ type
     procedure RefreshDebugActions;
     procedure RepaintEditors;
     procedure SyncGutterMarks(ADoc: TEditorDoc);
+    procedure RefreshWatches;
+    procedure AskWatches;
+    procedure DebugEvaluated(Sender: TObject; AId: Integer; AOk: Boolean;
+      const AValue, AKind, AError: String);
     procedure DocBreakpointsChanged(Sender: TObject; AFromEdit: Boolean);
     procedure DocFoldsChanged(Sender: TObject);
     function CompletionTier: TPhosphorTier;
@@ -502,7 +526,7 @@ type
     procedure DebugExited(Sender: TObject; AExitCode: Integer);
     procedure DebugNote(Sender: TObject; const AText: String);
     procedure DebugLinesInstalled(Sender: TObject; const APath: String;
-      const AInstalled: TPdbpLines);
+      const AInstalled: TPdbpLines; const ARejected: TPdbpRejections);
     procedure DebugVariables(Sender: TObject; AFrame: Integer;
       const AVars: TPdbpVariables);
     procedure DebugStack(Sender: TObject; const AFrames: TPdbpFrames);
@@ -696,6 +720,9 @@ begin
   FDebug.OnExited := @DebugExited;
   FDebug.OnNote := @DebugNote;
   FDebug.OnLinesInstalled := @DebugLinesInstalled;
+  FDebug.OnEvaluate := @DebugEvaluated;
+  FWatches := TWatchList.Create;
+  FWatchFrame := 0;
   FDebug.OnVariables := @DebugVariables;
   FDebug.OnStackTrace := @DebugStack;
 
@@ -748,6 +775,7 @@ procedure TFrmMain.FormDestroy(Sender: TObject);
 var
   I: Integer;
 begin
+  FreeAndNil(FWatches);
   if FSettings <> nil then
   begin
     FSettings.WindowMaximised := WindowState = wsMaximized;
@@ -1252,6 +1280,177 @@ begin
   if frWholeWord in ReplaceDialog1.Options then
     Include(Opts, ssoWholeWord);
   ActiveDoc.Edit.SearchReplace(ReplaceDialog1.FindText, ReplaceDialog1.ReplaceText, Opts);
+end;
+
+{ A CONDITION ON THE BREAKPOINT UNDER THE CARET.
+
+  AN InputBox, NOT A FORM, and the same one Go to Line uses. Nothing in this
+  window is edited in place -- there is no popup menu, no editable list and no
+  grid anywhere in it -- so a dialog is the house style rather than a shortcut,
+  and a condition is typed about as often as a line number is.
+
+  EMPTY CLEARS IT, and Cancel changes nothing, which is why this is InputQuery
+  and not InputBox: the two answers are different and InputBox cannot tell them
+  apart. Clearing by typing nothing is how a person gets rid of a condition they
+  cannot remember writing.
+
+  IT IS OFFERED ONLY ON A LINE THAT HAS A BREAKPOINT. A condition without one is
+  not a thing the set can hold, and inventing a breakpoint here would be the menu
+  doing something its caption does not say. }
+procedure TFrmMain.ActBreakpointConditionExecute(Sender: TObject);
+var
+  Doc: TEditorDoc;
+  Line: Integer;
+  Cond: String;
+begin
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Exit;
+  Line := Doc.CaretLine;
+  if not Doc.HasBreakpoint(Line) then
+  begin
+    StatusBar1.Panels[3].Text :=
+      Format('line %d has no breakpoint to put a condition on', [Line]);
+    Exit;
+  end;
+  Cond := Doc.BreakpointSet.ConditionOf(Line);
+  if not InputQuery('Breakpoint condition',
+    Format('Stop at line %d only when this is true (empty stops always):', [Line]),
+    Cond) then
+    Exit;
+  Cond := Trim(Cond);
+  if not Doc.BreakpointSet.SetCondition(Line, Cond) then
+    Exit;
+
+  { THE GUTTER AND THE HOST BOTH HAVE TO BE TOLD, and neither follows from the
+    other. The mark is a second copy of the set (see SyncGutterMarks) and the
+    host holds a third; a condition that changed only here would be a mark that
+    looks conditional and a program that stops anyway. }
+  SyncGutterMarks(Doc);
+  SyncBreakpoints(Doc);
+  if Cond = '' then
+    StatusBar1.Panels[3].Text := Format('line %d stops on every pass again', [Line])
+  else
+    StatusBar1.Panels[3].Text :=
+      Format('line %d stops when %s', [Line, Cond]);
+end;
+
+{ ---------------------------------------------------------------- watches --- }
+
+{ THE PANE, REDRAWN FROM THE LIST. Three columns and three states, and the state
+  is what decides the row -- see uwatchlist for why a value and an error are one
+  state with three cases rather than two strings.
+
+  AN UNKNOWN WATCH SHOWS NOTHING, not the number from the last stop. That is
+  roadmap item 26's own sentence -- "says plainly when one cannot be evaluated
+  rather than showing a stale value" -- and it is the reason this pane is worth
+  having: a reading that might be from now and might be from a minute ago is a
+  reading nobody can act on, and there is no way to tell the two apart by looking. }
+procedure TFrmMain.RefreshWatches;
+var
+  I: Integer;
+  W: TWatchItem;
+  Item: TListItem;
+  Sel: Integer;
+begin
+  Sel := -1;
+  if ListWatch.Selected <> nil then
+    Sel := ListWatch.Selected.Index;
+  ListWatch.Items.BeginUpdate;
+  try
+    ListWatch.Items.Clear;
+    for I := 0 to FWatches.Count - 1 do
+    begin
+      W := FWatches[I];
+      Item := ListWatch.Items.Add;
+      Item.Caption := W.Expr;
+      case W.State of
+        wsValue:
+          begin
+            Item.SubItems.Add(W.Value);
+            Item.SubItems.Add(W.Kind);
+          end;
+        wsError:
+          begin
+            Item.SubItems.Add(W.Error);
+            Item.SubItems.Add('');
+          end;
+      else
+        { Not 'unknown', not '?', not the last value. A blank, because the honest
+          answer is that this editor does not know and saying anything else would
+          be inventing one. }
+        Item.SubItems.Add('');
+        Item.SubItems.Add('');
+      end;
+    end;
+    if (Sel >= 0) and (Sel < ListWatch.Items.Count) then
+      ListWatch.Items[Sel].Selected := True;
+  finally
+    ListWatch.Items.EndUpdate;
+  end;
+end;
+
+{ ONE REQUEST PER WATCH, at the frame the panes are showing. Sent only while the
+  program is standing still and only to a host that said it can evaluate; the
+  session refuses both cases anyway, and asking it to refuse would put a line in
+  the output pane for something this side already knew. }
+procedure TFrmMain.AskWatches;
+var
+  I: Integer;
+begin
+  if FWatches.Count = 0 then
+    Exit;
+  if FDebug.State <> dsStopped then
+    Exit;
+  if not FDebug.Capabilities.Evaluate then
+    Exit;
+  for I := 0 to FWatches.Count - 1 do
+    FDebug.RequestEvaluate(FWatches[I].Id, FWatchFrame, FWatches[I].Expr);
+end;
+
+{ One answer. The id is the watch's own and not its row -- see uwatchlist -- so
+  an answer for a watch the person deleted while it was in flight finds nothing
+  and is dropped, which is right. }
+procedure TFrmMain.DebugEvaluated(Sender: TObject; AId: Integer; AOk: Boolean;
+  const AValue, AKind, AError: String);
+begin
+  if AOk then
+    FWatches.SetValue(AId, AValue, AKind)
+  else
+    FWatches.SetError(AId, AError);
+  RefreshWatches;
+end;
+
+procedure TFrmMain.BtnWatchAddClick(Sender: TObject);
+begin
+  if FWatches.Add(EditWatch.Text) = 0 then
+  begin
+    { Empty or already there. Neither is an error and neither deserves a dialog;
+      the status bar is where this window says small true things. }
+    StatusBar1.Panels[3].Text := 'nothing to add, or that expression is already watched';
+    Exit;
+  end;
+  EditWatch.Text := '';
+  RefreshWatches;
+  AskWatches;
+end;
+
+procedure TFrmMain.BtnWatchRemoveClick(Sender: TObject);
+begin
+  if ListWatch.Selected = nil then
+    Exit;
+  FWatches.RemoveAt(ListWatch.Selected.Index);
+  RefreshWatches;
+end;
+
+procedure TFrmMain.EditWatchKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if (Key = VK_RETURN) and (Shift = []) then
+  begin
+    Key := 0;
+    BtnWatchAddClick(Sender);
+  end;
 end;
 
 procedure TFrmMain.ActGotoLineExecute(Sender: TObject);
@@ -3242,7 +3441,19 @@ begin
     { SOLID IF THE HOST BOUND IT, HOLLOW IF IT COULD NOT. Outside a session
       nothing is known and BreakpointIsArmed answers True, which draws the mark
       the way the user meant it -- see its own comment: unknown is not dead. }
-    if BreakpointIsArmed(ADoc, Line) then
+    { AND BITTEN IF IT HAS A CONDITION, which crosses with the pair above rather
+      than replacing it: a conditional breakpoint on a line the host could not
+      bind is both, and drawing only one of the two facts would hide whichever
+      the reader happened to need. Four glyphs, because SynEdit paints one mark
+      per line at this gutter's width -- see the header. }
+    if ADoc.BreakpointSet.ConditionOf(Line) <> '' then
+    begin
+      if BreakpointIsArmed(ADoc, Line) then
+        Mark.ImageIndex := markBreakArmedCond
+      else
+        Mark.ImageIndex := markBreakInertCond;
+    end
+    else if BreakpointIsArmed(ADoc, Line) then
       Mark.ImageIndex := markBreakArmed
     else
       Mark.ImageIndex := markBreakInert;
@@ -3279,8 +3490,8 @@ function TFrmMain.StartDebugSession: Boolean;
 var
   Doc: TEditorDoc;
   Path: String;
-  Lines: TPdbpLines;
-  I, Port: Integer;
+  Items: TBreakpointItems;
+  Port: Integer;
 begin
   Result := False;
   if not RequireHost then
@@ -3291,16 +3502,17 @@ begin
   if Doc = nil then
     Exit;
 
-  Lines := nil;
-  SetLength(Lines, Doc.BreakpointCount);
-  for I := 0 to Doc.BreakpointCount - 1 do
-    Lines[I] := Doc.Breakpoints[I];
+  { THROUGH ToItems, NOT A LOOP. A hand-written loop over the lines compiles,
+    runs, and sends a breakpoint whose condition was left behind -- which is a
+    mark that looks conditional in the gutter and fires on every hit. Both wire
+    sites in this file used to be that loop; both go through the one copy now. }
+  Items := Doc.BreakpointSet.ToItems;
 
   { STOP AT ENTRY WHEN THERE ARE NO BREAKPOINTS. Otherwise Start Debugging on a
     program with no marks runs to completion and is indistinguishable from Run --
     the user pressed the debug button and watched nothing happen. With a mark,
     entry would be a stop they did not ask for. }
-  Port := FDebug.BeginListen(Path, Lines, Length(Lines) = 0);
+  Port := FDebug.BeginListen(Path, Items, Length(Items) = 0);
   if Port = 0 then
   begin
     MessageDlg('PhosphorIDE',
@@ -3393,6 +3605,18 @@ begin
     still at one statement; the moment it resumes they are a photograph presented
     as a live view, and the host will not answer a question about either while it
     runs. Same rule as the stripe, one line further out. }
+  { AND NO WATCH SURVIVES THE PROGRAM MOVING. The expressions stay -- they are
+    the person's, not the session's -- but every ANSWER is forgotten, because a
+    value from the last stop is indistinguishable from a value from this one by
+    looking at it, and the whole point of the pane is that you can act on what it
+    says. This is the rule roadmap item 26 names: say plainly that you do not
+    know, rather than show a stale value. }
+  if FDebug.State <> dsStopped then
+  begin
+    FWatches.Invalidate;
+    RefreshWatches;
+  end;
+
   if (FDebug.State <> dsStopped) and (Length(FStackFrames) > 0) then
   begin
     ClearStack;
@@ -3454,6 +3678,10 @@ begin
     instead of relabelling itself a moment later. }
   FDebug.RequestStackTrace;
   FDebug.RequestVariables(0);
+  { AND EVERY WATCH, at frame 0 -- the frame the other two panes are about to
+    show. A stop is the only moment any of the three can be answered. }
+  FWatchFrame := 0;
+  AskWatches;
   if not FVarShown then
   begin
     FVarShown := True;
@@ -3483,11 +3711,12 @@ begin
 end;
 
 procedure TFrmMain.DebugLinesInstalled(Sender: TObject; const APath: String;
-  const AInstalled: TPdbpLines);
+  const AInstalled: TPdbpLines; const ARejected: TPdbpRejections);
 var
   Doc: TEditorDoc;
   I: Integer;
   Dead: String;
+  Msg: TPhosphorMessage;
 begin
   { A line with no executable statement on it -- a blank, a comment, an `endif`,
     an `endfunction` -- comes back ABSENT, and that absence is the only
@@ -3518,12 +3747,41 @@ begin
   if Dead <> '' then
     AddOutput(Format('  debug: nothing will stop on line%s %s -- no statement ' +
       'there to stop at', [Copy('s', 1, Ord(Pos(',', Dead) > 0)), Dead]));
+
+  { A CONDITION THE HOST WOULD NOT READ GOES IN THE PROBLEMS PANE, because that
+    is the one channel in this window that carries a LINE and can be jumped to --
+    which is what "reported where it was typed" has to mean when the thing typed
+    is not in the text. The output pane would say it once and scroll away; the
+    status bar holds one sentence; the blame wash is keyed to a single line per
+    document and is cleared by the next run.
+
+    THE BREAKPOINT IS STILL INSTALLED, unconditional, and the row says so. That
+    is the host's decision and this only reports it: a mark that is visible and
+    never honoured is worse than one that fires too often, so the condition is
+    dropped rather than the breakpoint. }
+  for I := 0 to High(ARejected) do
+  begin
+    Msg.Kind := pmkSourceError;
+    Msg.Path := APath;
+    Msg.Line := ARejected[I].Line;
+    Msg.Text := Format('breakpoint condition "%s" refused: %s -- this ' +
+      'breakpoint will stop on every pass', [ARejected[I].Condition,
+      ARejected[I].ErrorText]);
+    Msg.Raw := Msg.Text;
+    AddProblem(Msg, APath);
+    Doc.BreakpointSet.SetCondition(ARejected[I].Line, '');
+  end;
+  if Length(ARejected) > 0 then
+  begin
+    { THE GUTTER HAS TO FOLLOW. The host dropped the condition and so did the set
+      one line up; a mark still drawn with a bite out of it would be the third
+      copy disagreeing with the other two. }
+    SyncGutterMarks(Doc);
+    PagesOutput.ActivePage := TabProblems;
+  end;
 end;
 
 procedure TFrmMain.SyncBreakpoints(ADoc: TEditorDoc);
-var
-  Lines: TPdbpLines;
-  I: Integer;
 begin
   { A BREAKPOINT SET DURING A SESSION IS THE NORMAL CASE, not an exotic one: the
     user runs, stops somewhere, reads the code and marks the line they now want.
@@ -3541,11 +3799,7 @@ begin
   if CompareFilenames(ADoc.FullDisplayName, FDebugPath) <> 0 then
     Exit;
 
-  Lines := nil;
-  SetLength(Lines, ADoc.BreakpointCount);
-  for I := 0 to ADoc.BreakpointCount - 1 do
-    Lines[I] := ADoc.Breakpoints[I];
-  FDebug.SetBreakpoints(FDebugPath, Lines);
+  FDebug.SetBreakpoints(FDebugPath, ADoc.BreakpointSet.ToItems);
 end;
 
 function TFrmMain.DocByPath(const APath: String): TEditorDoc;
@@ -3686,6 +3940,12 @@ begin
     A frame the host has since forgotten is refused with `no frame N`, and the
     session reports that through OnNote rather than guessing. }
   FDebug.RequestVariables(Item.Index);
+  { THE WATCHES FOLLOW THE SELECTION TOO. `count%` in frame 0 and in frame 1 are
+    different questions, and a pane answering the first while the user reads the
+    second is a lie that looks like an answer. Same reason the variables pane is
+    keyed by index and not by name. }
+  FWatchFrame := Item.Index;
+  AskWatches;
 end;
 
 procedure TFrmMain.ListStackDblClick(Sender: TObject);

@@ -89,6 +89,15 @@ begin
         [FrmMain.ListVariables.Columns.Count, FrmMain.PagesOutput.PageCount]));
       Report.Add(Format('call stack pane: %d columns',
         [FrmMain.ListStack.Columns.Count]));
+      { AND THE WATCH PANE, which has an input row the other two do not. Both
+        halves are counted: a list whose columns did not stream shows nothing,
+        and an edit that did not stream is a pane you cannot add a watch to --
+        and neither is a failure anywhere, which is the whole reason for
+        counting rather than looking. }
+      Report.Add(Format('watch pane: %d columns, input=%s, buttons=%d',
+        [FrmMain.ListWatch.Columns.Count,
+         BoolToStr(FrmMain.EditWatch <> nil, True),
+         FrmMain.PanelWatch.ControlCount - 1]));
       { AN IMAGE LIST THAT STREAMED EMPTY IS A TOOLBAR OF BLANK BUTTONS, and
         that is not a failure anywhere: the buttons still have captions, the
         form still builds, and only a screenshot would show it. Counted here

@@ -44,7 +44,7 @@ unit udebugsession;
 interface
 
 uses
-  Classes, SysUtils, udebugproto, udebugtransport;
+  Classes, SysUtils, ubreakpoints, udebugproto, udebugtransport;
 
 type
   { Where a session is in its life. }
@@ -67,7 +67,14 @@ type
   TDebugExitEvent = procedure(Sender: TObject; AExitCode: Integer) of object;
   TDebugNoteEvent = procedure(Sender: TObject; const AText: String) of object;
   TDebugLinesEvent = procedure(Sender: TObject; const APath: String;
-    const AInstalled: TPdbpLines) of object;
+    const AInstalled: TPdbpLines;
+    const ARejected: TPdbpRejections) of object;
+
+  { ONE WATCH'S ANSWER. AId is the id the request was made with, so the caller can
+    find the row it belongs to -- or discard it, if that row is gone. AOk false
+    means AError says why and there is no value; the two are never both set. }
+  TDebugEvaluateEvent = procedure(Sender: TObject; AId: Integer; AOk: Boolean;
+    const AValue, AKind, AError: String) of object;
   { AFrame is the frame the answer belongs to, carried alongside the request
     rather than remembered in a single field: two reads in flight at once would
     otherwise both be labelled with the second one's frame. }
@@ -97,8 +104,9 @@ type
       frame 0 in quick succession could not tell the replies apart. }
     FPendingArg: array of Integer;
     FProgramPath: String;
-    FWantLines: TPdbpLines;
+    FWantItems: TBreakpointItems;
     FWantEntry: Boolean;
+    FOnEvaluate: TDebugEvaluateEvent;
     FHandshakeDone: Boolean;
     { A transport that must be torn down, but not from where the request came.
       See CloseTransport. }
@@ -138,7 +146,7 @@ type
     { Open the listener and remember what to do once the debuggee connects.
       Returns the port to put on its command line, or 0 if the socket failed. The
       CALLER spawns the process; this never does. }
-    function BeginListen(const AProgramPath: String; const ALines: TPdbpLines;
+    function BeginListen(const AProgramPath: String; const AItems: TBreakpointItems;
       AStopAtEntry: Boolean): Word;
 
     { The caller could not start the child after all. }
@@ -156,9 +164,18 @@ type
     function StepInto: Boolean;
     function StepOut: Boolean;
     function Pause: Boolean;
-    function SetBreakpoints(const APath: String; const ALines: TPdbpLines): Boolean;
+    function SetBreakpoints(const APath: String; const AItems: TBreakpointItems): Boolean;
     function RequestStackTrace: Boolean;
     function RequestVariables(AFrame: Integer): Boolean;
+
+    { ASK THE HOST WHAT AN EXPRESSION IS WORTH, in the frame the editor is
+      looking at. AId comes back on the answer and is the caller's to choose.
+
+      Refused here rather than sent and refused there when the host said it
+      cannot evaluate: `Capabilities.Evaluate` is the handshake's answer and
+      sending anyway would put a refusal in the output pane for something the
+      editor already knew. }
+    function RequestEvaluate(AId, AFrame: Integer; const AExpr: String): Boolean;
 
     { End the session. Terminate kills the program; otherwise it is let go and
       runs to completion undebugged. }
@@ -177,6 +194,7 @@ type
     property OnStopped: TDebugStopEvent read FOnStopped write FOnStopped;
     property OnExited: TDebugExitEvent read FOnExited write FOnExited;
     property OnNote: TDebugNoteEvent read FOnNote write FOnNote;
+    property OnEvaluate: TDebugEvaluateEvent read FOnEvaluate write FOnEvaluate;
     property OnLinesInstalled: TDebugLinesEvent read FOnLinesInstalled
       write FOnLinesInstalled;
     property OnVariables: TDebugVariablesEvent read FOnVariables
@@ -401,7 +419,7 @@ end;
 { -------------------------------------------------------------- the session - }
 
 function TDebugSession.BeginListen(const AProgramPath: String;
-  const ALines: TPdbpLines; AStopAtEntry: Boolean): Word;
+  const AItems: TBreakpointItems; AStopAtEntry: Boolean): Word;
 var
   i: Integer;
 begin
@@ -414,8 +432,8 @@ begin
   CloseTransport;
 
   FProgramPath := AProgramPath;
-  SetLength(FWantLines, Length(ALines));
-  for i := 0 to High(ALines) do FWantLines[i] := ALines[i];
+  SetLength(FWantItems, Length(AItems));
+  for i := 0 to High(AItems) do FWantItems[i] := AItems[i];
   FWantEntry := AStopAtEntry;
   FHandshakeDone := False;
   FCurrentPath := '';
@@ -463,8 +481,12 @@ end;
 
 procedure TDebugSession.SendSetBreakpoints;
 begin
+  { GATED ON THE HANDSHAKE, here and at the other caller. A host that answers
+    conditionalBreakpoints:false and is sent one anyway installs the line and
+    fires on every hit, the condition silently ignored -- which is worse than
+    not offering conditions at all, because the mark looks like it took. }
   SendRaw(EncodeSetBreakpoints(NextSeq(pcSetBreakpoints), FProgramPath,
-                               FWantLines));
+                               FWantItems, FCapabilities.ConditionalBreakpoints));
 end;
 
 procedure TDebugSession.HandleDisconnect(Sender: TObject);
@@ -561,8 +583,12 @@ begin
         { The reply carries the set the host INSTALLED, which may be smaller than
           the one asked for. Handing it on is what lets the gutter show a mark
           that will never fire differently from one that will. }
+        { AND THE CONDITIONS IT WOULD NOT TAKE, in the same breath. They belong
+          to this reply and nowhere else: a condition that is not an expression
+          is decidable the moment it is sent, and the editor can then put the
+          message beside the line while the person is still looking at it. }
         if Assigned(FOnLinesInstalled) then
-          FOnLinesInstalled(Self, FProgramPath, AMsg.Lines);
+          FOnLinesInstalled(Self, FProgramPath, AMsg.Lines, AMsg.Rejected);
         if not FWantEntry and (FState = dsStarting) then
           SendRaw(EncodeLaunch(NextSeq(pcLaunch), FProgramPath, False))
         else if FState = dsStarting then
@@ -593,6 +619,17 @@ begin
     pcStackTrace:
       if Assigned(FOnStackTrace) then
         FOnStackTrace(Self, AMsg.Frames);
+
+    pcEvaluate:
+      { THE ARGUMENT IS A WATCH'S OWN ID, not its row. The reply carries the
+        value and nothing else -- not the expression, not the frame -- so the
+        editor has to remember which question this is the answer to, and a ROW
+        would be the wrong handle: a person can delete a watch while its answer
+        is in flight, and the next row along would then be shown a value it never
+        asked for. Which is exactly the stale value item 26 exists to prevent,
+        wearing a different hat. An id is never reused. }
+      if Assigned(FOnEvaluate) then
+        FOnEvaluate(Self, arg, AMsg.Ok, AMsg.Text, AMsg.Kind, AMsg.ErrorText);
   else
     { evaluate is refused by every host that reports evaluate:false, which is
       every host today, so its answer is a refusal handled above. }
@@ -700,7 +737,7 @@ begin
 end;
 
 function TDebugSession.SetBreakpoints(const APath: String;
-  const ALines: TPdbpLines): Boolean;
+  const AItems: TBreakpointItems): Boolean;
 var
   i: Integer;
 begin
@@ -710,10 +747,28 @@ begin
     Note('breakpoints can only be sent to a running debug session');
     Exit;
   end;
-  SetLength(FWantLines, Length(ALines));
-  for i := 0 to High(ALines) do FWantLines[i] := ALines[i];
+  SetLength(FWantItems, Length(AItems));
+  for i := 0 to High(AItems) do FWantItems[i] := AItems[i];
   FProgramPath := APath;
-  Result := SendRaw(EncodeSetBreakpoints(NextSeq(pcSetBreakpoints), APath, ALines));
+  Result := SendRaw(EncodeSetBreakpoints(NextSeq(pcSetBreakpoints), APath,
+                                         AItems, FCapabilities.ConditionalBreakpoints));
+end;
+
+function TDebugSession.RequestEvaluate(AId, AFrame: Integer;
+  const AExpr: String): Boolean;
+begin
+  Result := False;
+  if FState <> dsStopped then
+  begin
+    Note('an expression can only be evaluated while the program is stopped');
+    Exit;
+  end;
+  if not FCapabilities.Evaluate then
+  begin
+    Note('this host does not evaluate expressions');
+    Exit;
+  end;
+  Result := SendRaw(EncodeEvaluate(NextSeq(pcEvaluate, AId), AFrame, AExpr));
 end;
 
 function TDebugSession.RequestStackTrace: Boolean;

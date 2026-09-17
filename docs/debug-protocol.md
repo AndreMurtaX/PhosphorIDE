@@ -120,7 +120,7 @@ Response:
 ```json
 {"seq":1,"ok":true,"protocol":1,"capabilities":{"stepOut":true,"pause":true,
  "evaluate":true,"evaluateCalls":false,"setVariable":false,
- "conditionalBreakpoints":false}}
+ "conditionalBreakpoints":true}}
 ```
 
 `protocol` in the response is the version the HOST speaks. **If the two differ, the
@@ -139,7 +139,7 @@ request it knows will be refused.
 | `evaluate` | `evaluate` can compute an expression in a frame |
 | `evaluateCalls` | a function call written in an expression is PERFORMED. **Read it whenever `evaluate` is true**: a host may be able to evaluate `count% * 2` and refuse `len(s$)`, and those are different products. False does not mean an expression containing parentheses is refused -- index syntax (`a@[i]`, `s$[n]`) may reach a call the compiler put there rather than one the user wrote. It means a NAME the user types with arguments after it will be refused. |
 | `setVariable` | a variable's value can be written (no command for this in version 1; the capability is reserved so a host cannot claim it by accident later) |
-| `conditionalBreakpoints` | `setBreakpoints` honours a `condition` on a breakpoint |
+| `conditionalBreakpoints` | `setBreakpoints` honours the `conditions` array. **A host that reports false must never be sent one**: it would install the line, ignore the condition and stop on every hit, which looks exactly like a condition that is always true. |
 
 ### `setBreakpoints`
 
@@ -161,11 +161,76 @@ view authoritative by construction.
 was launched with; a path it does not recognise is not an error, it simply matches
 nothing.
 
+#### A condition on a breakpoint
+
+```json
+{"seq":2,"cmd":"setBreakpoints","path":"C:/w/x.bas","lines":[3,11],
+ "conditions":["","i% > 3"]}
+```
+
+`conditions` is **optional**, is an array of strings **the same length as `lines`**,
+and is read **by the same index**. An empty string is an ordinary breakpoint, which
+is why the common case can leave the whole key out. Send it only when
+`capabilities.conditionalBreakpoints` is true.
+
+**It is a sibling key and the condition is never put inside `lines`**, which is the
+shape that suggests itself and the one that must not be used. `lines` stays an array
+of numbers. The console host as it first shipped read that array with fpjson's
+`Integers[]`, which CONVERTS: an object element raised inside its loop and **killed
+the debuggee** over one element of an otherwise conformant frame. The hardening that
+drops a non-integer instead is newer than hosts that may still be running, and an
+editor cannot know which one is on the other end. A key an unaware host never looks
+for cannot hurt it.
+
+**The index is the INPUT index.** A host is allowed to drop a `lines` element it
+cannot use, so its input and output indexes part company on the first bad element.
+Both ends read `conditions[i]` against `lines[i]` as they arrived, before anything
+is dropped. Getting this wrong gives a condition to the wrong breakpoint, silently.
+
+**A condition is an expression, so everything `evaluate` says applies to it** --
+including that a host may refuse every call the user writes, which
+`capabilities.evaluateCalls` announces. `len(s$) > 2` is not a condition the console
+host will take.
+
 Response:
 
 ```json
 {"seq":2,"ok":true,"lines":[3,11]}
 ```
+
+With a condition the host would not read:
+
+```json
+{"seq":2,"ok":true,"lines":[3,11],"rejected":[
+  {"line":11,"condition":"i% >","error":"unexpected token in expression"}]}
+```
+
+`rejected` is **omitted entirely when there is nothing to reject**, so a host that
+has never heard of conditions answers exactly what it always answered. Each entry
+carries the line, the condition quoted back, and the host's own wording.
+
+**A rejected condition does not reject the breakpoint.** The line is still in
+`lines` and still installed, **unconditional** -- because a mark that is visible and
+never honoured is worse than one that fires too often. The editor is expected to say
+so where the condition was typed and to stop drawing it as conditional.
+
+**Only a condition that is not an EXPRESSION can be rejected here.** Whether its
+names are in scope is a question about a frame, and at `setBreakpoints` time there
+is no frame. That refusal arrives later, as a stop:
+
+```json
+{"event":"stopped","reason":"breakpoint","path":"C:/w/x.bas","line":11,
+ "text":"the condition i% > q could not be evaluated: no variable \"q\" here"}
+```
+
+**A condition that cannot be evaluated STOPS the program**, and says why in `text` --
+the same key an exception stop uses. The alternative is a breakpoint that silently
+never fires, which is the one outcome a person cannot diagnose from the outside. A
+condition that evaluates to something other than a boolean is the same case.
+
+**Only a `breakpoint` stop is filtered.** A step that lands on a conditional line
+stops, because the user asked to step and the condition is not about them; so does
+an entry, a pause and an exception.
 
 `lines` in the response is the set the host **actually installed**, which may be
 smaller: a line holding no executable statement -- a blank line, a comment, `endif`
