@@ -4,6 +4,15 @@
     ./readtext.py                 list every text-bearing control of phosphoride
     ./readtext.py "Call Stack"    print the text under the control with that name
     ./readtext.py --grep "total"  exit 0 if any control's text contains it
+    ./readtext.py --invoke "Exit" click the menu item with that name
+
+AND --invoke CLOSES THE OTHER HALF OF THE GAP. CLAUDE.md has said since
+2026-09-16 that the gtk2 MENU BAR "answers neither a synthetic click nor F10
+navigation from XTest and so could not be driven at all" -- the one part of this
+program no script could reach. That was true of XTest and is not true of AT-SPI:
+a menu item exposes one action, and doing it opens the menu's dialog exactly as a
+click would. Measured on 2026-09-17: Help > About PhosphorIDE invoked, and the
+dialog it opened read back through this same script.
 
 WHY THIS EXISTS. `tools/lane/lane-windows.ps1` asserts on TEXT: it sends
 WM_GETTEXT and reads a pane's whole transcript back, which is how the REPL's
@@ -128,7 +137,14 @@ def role_of(node):
 def main():
     args = sys.argv[1:]
     grep = None
-    if args and args[0] == '--grep':
+    invoke = None
+    if args and args[0] == '--invoke':
+        if len(args) < 2:
+            sys.stderr.write('readtext: --invoke needs something to act on\n')
+            return 2
+        invoke = args[1]
+        args = args[2:]
+    elif args and args[0] == '--grep':
         if len(args) < 2:
             sys.stderr.write('readtext: --grep needs something to look for\n')
             return 2
@@ -148,6 +164,26 @@ def main():
                 print('found in %s %r' % (role_of(node), label_of(node)[:40]))
                 return 0
         sys.stderr.write('readtext: %r is in no control this program shows\n' % grep)
+        return 1
+
+    if invoke is not None:
+        for node, _ in nodes:
+            if label_of(node) != invoke:
+                continue
+            try:
+                n = Atspi.Action.get_n_actions(node)
+            except Exception:
+                n = 0
+            if n < 1:
+                continue
+            try:
+                Atspi.Action.do_action(node, 0)
+            except Exception as exc:
+                sys.stderr.write('readtext: %r would not act (%s)\n' % (invoke, exc))
+                return 1
+            print('invoked %s %r' % (role_of(node), invoke))
+            return 0
+        sys.stderr.write('readtext: nothing named %r can be acted on\n' % invoke)
         return 1
 
     if args:

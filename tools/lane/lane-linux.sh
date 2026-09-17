@@ -208,6 +208,20 @@ text() {
     fi
 }
 
+# `menu <name>` CLICKS A MENU ITEM, which nothing on this machine could do.
+# CLAUDE.md has said since 2026-09-16 that the gtk2 menu bar answers neither a
+# synthetic click nor F10 from XTest, and that was the one part of this program no
+# script could reach. AT-SPI reaches it: a menu item exposes one action and doing
+# it opens what a click would open.
+menu() {
+    if python3 "$HERE/readtext.py" --invoke "$1" >/dev/null 2>&1; then
+        echo "MENU OK   $1"
+    else
+        echo "MENU FAIL nothing named: $1"
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+
 while IFS= read -r line; do
     case "$line" in
         shot\ *) flush; shot "${line#shot }" ;;
@@ -220,6 +234,7 @@ while IFS= read -r line; do
         outtab)  flush; outtab ;;
         say\ *) flush; say "${line#say }" ;;
         text\ *) flush; text "${line#text }" ;;
+        menu\ *) flush; menu "${line#menu }" ;;
         ''|'#'*) : ;;
         *) buf="$buf$line
 " ;;

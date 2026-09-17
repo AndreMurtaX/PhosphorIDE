@@ -45,3 +45,13 @@ shot 471-after-the-run
 text lane-readtext-ok
 text total=42
 say Output
+
+# AND THE MENU BAR, which nothing here could reach until now. CLAUDE.md has said
+# since 2026-09-16 that the gtk2 menu bar answers neither a synthetic click nor
+# F10 from XTest -- the one part of this program no script could touch. AT-SPI
+# reaches it, and the proof is not that the call returned: it is that the dialog
+# the menu opened can be read back, by name and by its words.
+menu About PhosphorIDE
+wait 900
+text An editor for Phosphor BASIC
+shot 472-the-menu-bar-opened-this
