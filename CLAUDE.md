@@ -127,11 +127,19 @@ item exposes an AT-SPI action and doing it opens what a click would open -- meas
 by invoking Help > About and reading the dialog it opened back through the same
 script.
 
-So what is still unwatched is ONE thing: the **`xvfb-run` branch of `build.sh`**,
-the one CI uses. It is not stubbornness. `xvfb-run` is not installed on the VM,
-`sudo` there wants a password, and installing a package on somebody's machine is
-their call. Until it is run, "green on Linux" means green in a real Xwayland
-session, which is not quite the same claim.
+**AND THE `xvfb-run` BRANCH HAS NOW BEEN RUN**, on 2026-09-17, with `DISPLAY` and
+`XAUTHORITY` unset so nothing could fall through to the real session. Both modes,
+exit 0, and the selftest constructs every form under the virtual framebuffer just
+as it does under Xwayland -- so the sentence this file carried from 2026-09-10,
+that a session and a virtual framebuffer are not quite the same thing, is
+settled: for this program, on this machine, they are. `docs/building.md` has the
+run.
+
+The `--release` build was RED the first time and that is the whole value of
+having run it: `-O3` runs flow analysis the Default mode does not, and found two
+warnings that had been sitting in `uphosphorcomplete.pas` all along. **A build
+mode nobody exercises is a build mode carrying whatever it likes**, against a bar
+that says zero. Release is 4 824 432 bytes against Default's 37 168 816.
 
 Measured on 2026-09-10 on Ubuntu with Lazarus 4.8: `bash scripts/build.sh` builds both
 projects clean, `bin/phosphoridetest` is green, and the selftest constructs all three

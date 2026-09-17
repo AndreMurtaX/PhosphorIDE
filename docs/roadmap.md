@@ -2029,7 +2029,7 @@ two `--check` gates that already exist.
 
 ## 28. Reading text back, on the machine that cannot
 
-**FIRST HALF DONE 2026-09-17. SECOND HALF BLOCKED, and it is not mine to unblock.**
+**DONE 2026-09-17**, both halves.
 
 **Reading text back: done, through AT-SPI, and it needed no new package.** The item
 said the route must not want anything the VM does not have without Andre's say-so.
@@ -2059,13 +2059,28 @@ AT-SPI: a menu item exposes one action and doing it opens what a click would ope
 `menu <name>` is the verb, and the case proves it by invoking Help > About and then
 reading the dialog that opened, by its words. The obstacle was never the editor.
 
-**The `xvfb-run` half is blocked on a package and a password.** `xvfb-run` is not
-installed on the VM (`apt-cache policy xvfb`: `Installed: (none)`), and `sudo -n`
-there fails, so it cannot be installed without Andre. That clause is one of the two
-item 1 never closed and it is still open; so is its sibling, a `--release` build on
-Linux. Until then, "green on Linux" means green in a real Xwayland session, which is
-not quite the same claim -- which is the sentence `CLAUDE.md` has carried since
-2026-09-10 and which this item exists to settle.
+**AND THE `xvfb-run` RUN HAPPENED.** It was blocked on a package and a password --
+`xvfb` was not installed and `sudo -n` fails on that machine -- so Andre installed it
+and said so, which is the right way round for somebody else's computer. With `DISPLAY`
+and `XAUTHORITY` unset, so nothing could fall through to the real session:
+
+- `xvfb-run -a bash scripts/build.sh` -- **exit 0**, and the selftest runs in FULL
+  under it: every form constructed, every count reported. The virtual framebuffer and
+  the real session agree, so the sentence `CLAUDE.md` has carried since 2026-09-10 --
+  "a session and a virtual framebuffer are not quite the same thing" -- can stop being
+  carried.
+- `xvfb-run -a bash scripts/build.sh --release` -- **RED the first time**, which is
+  exactly what the clause was for. `-O3` runs flow analysis the Default mode does not,
+  and found two warnings in `uphosphorcomplete.pas` that had been there all along:
+  `Commas` and `Names` "does not seem to be initialized". A build mode nobody
+  exercises is a build mode carrying whatever it likes, against a bar that says zero.
+  Fixed, and green on the second run.
+- And the two modes are worth what they claim: **37 168 816 bytes** Default against
+  **4 824 432** Release, same source and same day. Seven point seven times. Neither
+  number had ever been written down.
+
+Both runs are recorded in `docs/building.md`, which is where the item said to put
+them.
 
 **What.** A way for the Linux lane to read what a control SAYS, and a single run of
 `scripts/build.sh` under `xvfb-run`.

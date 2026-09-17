@@ -156,6 +156,49 @@ units in `lib/$(TargetCPU)-$(TargetOS)-release`. Same `-vewn`, same output path 
 binary, so a Release build overwrites a Default one and vice versa. Build with `-B` when
 you switch.
 
+### Both modes, under `xvfb-run`, measured 2026-09-17
+
+This is the run roadmap item 1 asked for and item 28 finally made. **Nobody had ever
+executed the `xvfb-run` branch** -- the one CI uses -- and `CLAUDE.md` had carried the
+sentence "a session and a virtual framebuffer are not quite the same thing" since
+2026-09-10 without settling it.
+
+Ubuntu 24 in VirtualBox, Lazarus 4.8 with FPC 3.2.2, `xvfb` 2:21.1.12, with `DISPLAY`
+and `XAUTHORITY` unset so nothing could fall through to the real session:
+
+```
+env -u DISPLAY -u XAUTHORITY xvfb-run -a bash scripts/build.sh              # exit 0
+env -u DISPLAY -u XAUTHORITY xvfb-run -a bash scripts/build.sh --release    # exit 0
+bin/phosphoridetest                                                          # 822 green
+```
+
+**Default is green and the selftest runs in full under it** -- every form constructed,
+every count reported, `about form: ok`, `preferences form: ok`. So the virtual
+framebuffer and the real session agree, and that sentence can stop being carried.
+
+**Release was RED the first time, and that is what the clause was for.** `-O3` turns on
+flow analysis the Default mode never runs, and it found two:
+
+```
+src/core/uphosphorcomplete.pas(474,17) Warning: (5036) Local variable "Commas" does not seem to be initialized
+src/core/uphosphorcomplete.pas(506,6)  Warning: (5089) Local variable "Names" of a managed type does not seem to be initialized
+```
+
+The logic was right; the proof was not composable. A slot is written at `(` under
+`Depth < MaxCallDepth` and read at the end under `Depth > 0` and
+`Depth <= MaxCallDepth`, `Inc(Depth)` is unconditional, and the three guards live in
+three places. Both stacks are cleared up front now. **A build mode nobody exercises is
+a build mode carrying whatever it likes**, against a bar that says zero warnings.
+
+**And the two modes are worth what they claim.** Same source, same machine, same day:
+
+| mode | binary |
+| --- | --- |
+| Default (DWARF 3, assertions, no optimisation) | **37 168 816 bytes** |
+| Release (`-O3`, smart-linked, stripped) | **4 824 432 bytes** |
+
+Seven point seven times smaller. Neither number had ever been written down.
+
 **heaptrc (`-gh`) is deliberately absent from both, and must stay absent.** On 2026-09-10
 a Default mode carrying `-gh` produced an editor that would not exit: the window closed,
 the process did not. heaptrc writes its leak report to stdout during unit finalisation,
