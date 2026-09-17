@@ -1403,7 +1403,17 @@ begin
   if FDebug.State <> dsStopped then
     Exit;
   if not FDebug.Capabilities.Evaluate then
+  begin
+    { THE PANE SAYS SO RATHER THAN SITTING BLANK. A host that cannot evaluate is
+      not a watch that is still being worked out -- it is one that will never be
+      answered, and a row that looks like it is waiting is the same lie as a stale
+      value. The menu item spells out the rest. }
+    for I := 0 to FWatches.Count - 1 do
+      FWatches.SetError(FWatches[I].Id,
+        'this host does not evaluate expressions -- see Debug > What can this debugger do?');
+    RefreshWatches;
     Exit;
+  end;
   for I := 0 to FWatches.Count - 1 do
     FDebug.RequestEvaluate(FWatches[I].Id, FWatchFrame, FWatches[I].Expr);
 end;
@@ -3222,16 +3232,45 @@ begin
     Format('no definition for %s in this file', [Nm]);
 end;
 
+{ WHAT THIS HOST CAN DO -- all of it, not only whether it steps.
+
+  IT USED TO ASK "Why is stepping unavailable?" AND HIDE ITSELF when stepping
+  worked, which was right while stepping was the only thing a host could lack. It
+  stopped being right on 2026-09-17: a host can now speak `debug` perfectly and
+  still answer `evaluate: false` or `conditionalBreakpoints: false`, and then the
+  Watches tab sits empty and a condition is quietly not sent, with the menu item
+  that exists to explain such things hidden because stepping was fine.
+
+  That is this program's own recurring defect -- a capability honoured in silence
+  -- so the question is now the general one and the item is always visible,
+  because it always has an answer. }
 procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
+var
+  Body: String;
 begin
-  { Reachable from a toolbar or a shortcut even while the menu item is hidden, so
-    the answer is guarded here too rather than only where it is offered. }
   if FDebug.Available then
   begin
-    MessageDlg('PhosphorIDE',
-      Format('Stepping IS available: %s speaks the debug protocol.'#10#10 +
-             'Set a breakpoint and press Start Debugging.',
-             [FHostPath]), mtInformation, [mbOK], 0);
+    Body := Format('%s speaks the debug protocol.'#10#10 +
+      'Stepping: yes -- set a breakpoint and press Start Debugging.'#10,
+      [FHostPath]);
+    if FDebug.Capabilities.StepOut then
+      Body := Body + 'Step Out: yes.'#10
+    else
+      Body := Body + 'Step Out: no -- this host does not offer it.'#10;
+    if FDebug.Capabilities.Evaluate then
+      Body := Body + 'Watches: yes -- the Watches tab is evaluated at every stop.'#10
+    else
+      Body := Body + 'Watches: NO -- this host does not evaluate expressions, so ' +
+        'the Watches tab will stay empty.'#10;
+    if FDebug.Capabilities.ConditionalBreakpoints then
+      Body := Body + 'Breakpoint conditions: yes -- Shift+F5 on a marked line.'#10
+    else
+      Body := Body + 'Breakpoint conditions: NO -- this host ignores them, so a ' +
+        'condition is not sent and a marked line stops on every pass.'#10;
+    Body := Body + #10 +
+      'A capability is the host''s answer at the handshake. This editor never ' +
+      'sends a request it was told would be refused.';
+    MessageDlg('PhosphorIDE', Body, mtInformation, [mbOK], 0);
     Exit;
   end;
   if MessageDlg('Stepping is not available yet',
@@ -3282,11 +3321,18 @@ begin
       ActStepOut.Hint := 'Run until this function returns'
     else
       ActStepOut.Hint := 'This host does not offer step out';
-    { The menu item asks "Why is stepping unavailable?". On a host that can step
-      it has no answer, and it was opening a dialog whose body was the empty
-      string -- the explained absence turning into an unexplained blank the
-      moment the thing it explained stopped being absent. }
-    ActDebugWhy.Visible := False;
+    { IT ASKED "Why is stepping unavailable?" and hid itself here. On a host
+      that could step it had no answer, and once opened a dialog whose body was
+      the empty string -- the explained absence turning into an unexplained blank
+      the moment the thing it explained stopped being absent. The question is now
+      "What can this debugger do?", which has an answer either way, so it stays
+      visible: a host can step perfectly and still not evaluate, and a hidden
+      explanation is how that gets honoured in silence. }
+    { VISIBLE EVEN WHEN STEPPING WORKS, because the question is no longer only
+      about stepping: a host can step and still not evaluate. It used to hide
+      itself here, and a hidden explanation is how a capability comes to be
+      honoured in silence. }
+    ActDebugWhy.Visible := True;
   end
   else
   begin

@@ -961,7 +961,7 @@ object FrmMain: TFrmMain
       OnExecute = ActDebugStopExecute
     end
     object ActDebugWhy: TAction
-      Caption = '&Why is stepping unavailable?'
+      Caption = '&What can this debugger do?'
       OnExecute = ActDebugWhyExecute
     end
     object ActPreferences: TAction

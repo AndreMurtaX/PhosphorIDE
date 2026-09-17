@@ -182,8 +182,9 @@ a blank line, a comment or an `endif` has no statement to stop at. The editor dr
 the difference because the host answers which lines it actually installed.
 
 **If Start Debugging is greyed out**, the editor has not found a `phosphor` that
-speaks the protocol. `Debug > Why is stepping unavailable?` says which of the six
-search positions it tried and what it found.
+speaks the protocol. `Debug > What can this debugger do?` says which of the six
+search positions it tried and what it found -- and, on a host that DOES speak it,
+which of stepping, Step Out, watches and breakpoint conditions that host offers.
 
 ### Watch an expression
 

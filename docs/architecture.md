@@ -651,8 +651,11 @@ scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println` are one wor
   Into (F7), Step Out (Shift+F8), Continue (F6) and Stop Debugging, each enabled
   from the session STATE rather than from a capability flag alone, plus a
   variables pane fed by `variables` requests keyed by frame index.
-  **Debug > Why is stepping unavailable?** is hidden on a host that can step,
-  because a question with no answer left should not be asked.
+  **Debug > What can this debugger do?** lists stepping, Step Out, watches and
+  breakpoint conditions, each with the host's own handshake answer. It asked
+  "Why is stepping unavailable?" and hid itself on a host that could step, which
+  was right until a host could step and still not evaluate -- and then the
+  Watches tab sat empty with the menu item that explains such things hidden.
 
 ### What does not exist
 
