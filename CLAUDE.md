@@ -150,8 +150,13 @@ has watched; a session and a virtual framebuffer are not quite the same thing.
 
 `src/phosphoride.lpr:40-41` says `scripts/build.ps1` runs the selftest after
 `lazbuild`, and it does. Both scripts exist and both have been run: `build.ps1` on
-Windows and `build.sh` on Ubuntu, each green end to end. What remains unmeasured is
-narrower again: the **`xvfb-run` branch** of `build.sh`, and nothing else. The other
+Windows and `build.sh` on Ubuntu, each green end to end. ~~What remains unmeasured is
+narrower again: the **`xvfb-run` branch** of `build.sh`, and nothing else.~~ **Nothing in
+`build.sh` remains unmeasured**: that branch was run on 2026-09-17, both build modes,
+exit 0, which the paragraph two above this one already records. This sentence and its own
+correction sat in the same file, half a page apart, for half a day -- which is what a stale
+claim looks like from the inside, and why a DONE is written where the claim is and not only
+where the work is. The other
 half of that sentence -- the editor DRIVEN under gtk2 rather than merely constructed
 there -- stopped being true on 2026-09-16 and is now `tools/lane/`: keys through
 XTest, frames through `xwd` decoded by PIL, and a `steps-*-linux.txt` per case,
@@ -384,9 +389,12 @@ the bar.
 
   **AND IT IS WHAT MADE ITEM 29 A LEVER RATHER THAN A GUESS.** Item 19 measured a
   cascading keystroke at 12,45 us per line and found `ScanFoldLine` to be 4% of it, so
-  the interesting number was the other 96%: `uphosphorlang` asked FIVE sorted indexes in
-  turn, and a word in none of them -- a person's own names, which is most words --
-  paid for all five. One table and one binary search took the same measurement from
+  the interesting number was the other 96%: `uphosphorlang` asked SIX sorted indexes in
+  turn -- operator, literal, keyword, and then each of the three built-in tiers, because
+  `PhosphorBuiltinTier` loops -- and a word in none of them, which is most words a person
+  types, paid for all six. (This said FIVE until 2026-09-17, in three places written the
+  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1347` said six. A
+  count is derived or it is cited.) One table and one binary search took the same measurement from
   **13,28 us per line to 2,28**, and the worst single keystroke at 5000 lines from
   86,46 ms to 19,74. `ScanFoldLine` costs 0,47 us in both runs; only its SHARE moved,
   4% to 21%, because the denominator shrank. A measurement that agrees with itself

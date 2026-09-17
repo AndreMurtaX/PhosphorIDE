@@ -139,9 +139,13 @@ Two attempts at the call-stack pane clicked into the variables list instead, and
 read as a pane that did not work. The output panel is bottom-anchored; from the bottom
 every row keeps its place.
 
-Still not driveable here: the gtk2 **menu bar**, from a synthetic click or from
-F10 navigation. `Debug > Stop Debugging` is therefore driven on Windows, and on
-Linux the same teardown is reached from the process side by `steps-stop.txt`.
+Still not driveable **through XTest**: the gtk2 **menu bar**, from a synthetic click or
+from F10 navigation. It IS driveable through **AT-SPI** -- `readtext.py --invoke <name>`,
+and the `menu <name>` verb that wraps it, perform a menu item's exposed action and open
+what a click would open. `Debug > Stop Debugging` is still driven on Windows, and on
+Linux the same teardown is still reached from the process side by `steps-stop.txt`: that
+case was written before the verb existed, it asserts the child is gone rather than that a
+menu opened, and it is the stronger question of the two.
 
 ## Windows
 

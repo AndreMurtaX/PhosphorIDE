@@ -88,6 +88,7 @@ src/core/uphosphorhost.pas:118-118	5a76766549442798	P := TProcessUTF8.Create(nil
 src/core/uphosphorhost.pas:196-196	3cad279a8445c86c	end;
 src/core/uphosphorhost.pas:8-24	fcaaac870a6f7c63	The search order below is not arbitrary. It goes from the most deliberate answer
 src/core/uphosphorhost.pas:98-98	df8e39f2d3d9499e	function RunAndCapture(const AExe: String; const AArgs: array of String;
+src/core/uphosphorlang.pas:1347-1347	0d980b5b6e9e7c87	later one costs and the unit brings up six fewer TStringLists. }
 src/core/uphosphorlang.pas:21-22	f82c3abd25a9bbef	A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
 src/core/uphosphorlang.pas:30-31	21cb6e7136468331	{ Which host a built-in needs. Ordered by how universally available it is, so
 src/core/uphosphorlang.pas:73-74	1ba731e293293133	{ The raw lists, for a completion box or a documentation lookup. Sorted, lower

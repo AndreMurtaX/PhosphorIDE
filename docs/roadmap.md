@@ -24,14 +24,26 @@ sits low because nothing depends on it; item 17 sits last because it has a cost 
 the list does not, named where it is described.
 
 **That ordering is spent**, and the Phosphor lead time it was built around turned out to be
-a day rather than a season. Two things on the first list never closed, and neither is
-forgotten:
+a day rather than a season. **ONE thing on the first list is still open.** This paragraph
+named two until 2026-09-17:
 
-- **Item 2a**, the contract test against the real binary, which has not moved at all.
-- **Two clauses of item 1**: `xvfb-run -a bash scripts/build.sh` has still never been run
-  by anyone here, and neither has a `--release` build on Linux. The rest of item 1 -- the
-  editor DRIVEN under gtk2 rather than merely constructed -- was answered many times over
-  by `tools/lane/`, which is why the item reads as finished and is not.
+- **Item 2a**, the contract test against the real binary, which has not moved at all. It
+  is the only coupling between the two repositories with no automatic check behind it,
+  and the only numbered item on this list carrying no DONE line.
+- ~~**Two clauses of item 1**: `xvfb-run -a bash scripts/build.sh` has still never been
+  run by anyone here, and neither has a `--release` build on Linux.~~ **Both were run on
+  2026-09-17** and `docs/building.md` has the runs: the `xvfb-run` branch exits 0 with the
+  selftest constructing every form under the virtual framebuffer, and the `--release`
+  build was RED the first time, which is the whole value of having run it. Item 1 now
+  closes five clauses of six, and the sixth is written down rather than left open.
+
+**AND THIS PARAGRAPH IS ITSELF THE DEFECT IT DESCRIBES.** It is the summary a reader
+reaches for instead of the thirty items, it went stale the same day the work landed, and
+nothing here noticed: it was found on 2026-09-17 by an adversarial pass over a PUBLIC
+summary written from these files, not by anyone re-reading the roadmap. `check-citations.py`
+could not have caught it, because a claim about what is still open carries no citation to
+rot. **A list of what is not done needs the same discipline as a list of what is**: when an
+item closes, the summary at the top is part of the item.
 
 The ordering of the SECOND list, from 18 on, is a different one and is stated where it
 starts.
@@ -2162,9 +2174,24 @@ never closed; the other, a `--release` build on Linux, belongs with it.
 
 ## 29. The 3.5 microsecond identifier
 
-**DONE 2026-09-17.** One sorted table and one binary search where there were five
+**DONE 2026-09-17.** One sorted table and one binary search where there were **six**
 indexes asked in turn, and a comparison that folds ASCII case as it walks instead of
 calling `AnsiCompareText`.
+
+**THIS LINE SAID FIVE UNTIL 2026-09-17, AND SO DID `CLAUDE.md` AND THE COMMIT SUBJECT.**
+Six is what the code did. `usynphosphor` asked operator, literal and keyword, and then
+`PhosphorBuiltinTier` LOOPED over all three built-in tiers -- `uphosphorlang.pas` at
+`9c95592^`, lines 839-851 -- so a word in none of them, which is most words a person
+types, paid six `Find` calls and not five. The **What** section below says six twice, and
+`uphosphorlang.pas:1347` says six: the three places that said five were all written after
+the measurement, from memory, on the same day, and the correct copies were the older ones.
+The subject line of `9c95592` still says five and cannot be changed; this is the correction
+a reader will find.
+
+It is the second count asserted rather than derived in one session -- the first was
+three-versus-five citations, recorded under item 27, which is the item about a fact this
+repository may not retype. **A number that appears in more than one file is extracted or it
+is cited; it is never typed twice.**
 
 **MEASURED IN THE EDITOR, BEFORE AND AFTER, ON THE SAME MACHINE AND THE SAME DAY.**
 `phosphoride --measure-typing`, 21 passes, minimum and median, at 5000 lines:

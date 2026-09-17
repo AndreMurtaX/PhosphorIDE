@@ -93,10 +93,15 @@ a missing binary rather than an encoding fault, which is what makes it expensive
 ## What works
 
 Multi-tab editing, one `TSynEdit` per tab, with the highlighter below. Files are read
-and written as UTF-8 **with no byte-order mark** -- that is not a preference: the
-Phosphor lexer has no BOM handling at all, so a leading BOM is `unexpected character`
-on line 1 of an otherwise perfect program, and every Windows editor and
-`Set-Content -Encoding utf8` writes one.
+and written as UTF-8 **with no byte-order mark** -- that is not a preference, and the
+reason is not the one this paragraph gave until 2026-09-17. Measured on 2026-09-16,
+`phosphor run` on a BOM-saved file WORKS: the console host strips a leading BOM when it
+reads a file (`host/console/phosphor.lpr:787-806`), and has done since its first commit.
+The real reason is the path roadmap item 16 gave this editor. The **REPL reads LINES** and
+nothing strips those, so a BOM piped to a prompt is
+`error: unexpected character #194 (0xC2) at column 1` and **that line is lost**. The host
+is generous about a file and exact about a line, and this editor feeds it both. Every
+Windows editor and `Set-Content -Encoding utf8` writes a BOM.
 
 | keystroke  | action                                                          |
 | ---------- | --------------------------------------------------------------- |

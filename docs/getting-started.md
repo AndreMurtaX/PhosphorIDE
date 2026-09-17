@@ -241,9 +241,13 @@ expiry date nobody set.
   expression: 0,04 ms per hit on a small program, but **2,3 ms on a 606-line one** --
   2000 hits in 4,5 seconds. The fix is a cache and the technique is proven; it is not
   built. On the programs this editor is usually pointed at you will not notice.
-- **A condition cannot call anything.** `i% > 3`, `total > 100`, `a$ = "x"` and
-  `lista@[2] = 0` all work; `len(s$) > 2` is refused, with a message, when you type
-  it. Same rule as `evaluate`, for the same reason.
+- **A condition cannot call anything YOU write.** `i% > 3`, `total > 100`, `a$ = "x"`
+  and `lista@[2] = 0` all work; `len(s$) > 2` is refused, with a message, when you type
+  it. The bracket forms are not an exception to that rule, they sit under it: the
+  compiler lowers `a@[i]`, `s$[n]` and `s$[[n]]` to `arr_get`, `strline$` and `strchar$`,
+  so the call that runs is one the compiler wrote and not one you did. Same rule as
+  `evaluate`, for the same reason -- and this bullet read "cannot call anything" until
+  2026-09-17, with one of those lowered forms sitting in its own list of things that work.
 - **A typo in a condition stops the program rather than being ignored**, and the stop
   says why. That is deliberate: the alternative is a breakpoint you can see and that
   never fires.
@@ -256,9 +260,13 @@ expiry date nobody set.
   10 000-iteration loop, between 1 and 13 stops in ten thousand never reached the
   editor. It is not a conditional-breakpoint problem — it happens with a plain
   breakpoint too — and it is not yet diagnosed.
-- **The gtk2 menu bar cannot be driven by a script.** It answers neither a synthetic
-  click nor F10 from XTest, so it is the one part of the Linux UI that is only ever
-  checked by a person.
+- ~~**The gtk2 menu bar cannot be driven by a script.**~~ **It cannot be driven through
+  XTest** -- neither a synthetic click nor F10 -- which is still true and is a narrower
+  sentence than the one this bullet used to carry. Since 2026-09-17 a menu item is
+  reached through **AT-SPI** instead: the item exposes an action, and performing it opens
+  what a click would open, measured by invoking Help > About and reading the dialog back
+  through the same script (`tools/lane/readtext.py --invoke`, and the lane's `menu` verb).
+  No part of the Linux UI is now checked only by a person.
 
 ---
 
