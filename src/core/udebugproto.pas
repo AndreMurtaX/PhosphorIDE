@@ -131,8 +131,19 @@ type
     // peExited
     ExitCode: Integer;
 
-    // peTrace / peError
+    // peTrace / peError -- AND pcEvaluate's answer, which arrives under the same
+    // key. The host renders an evaluated value exactly as `variables` renders
+    // one and exactly as PRINT would, so there is one string here and not a
+    // number: the editor does not format values, does not know the rules, and a
+    // second renderer is a second set of rules to keep in step.
     Text: String;
+
+    // pcEvaluate's response: WHICH OF THE FIVE KINDS the value is --
+    // 'number' | 'int' | 'string' | 'bool' | 'handle', the same alphabet
+    // `variables` uses. Decoded and not derived: `Text` alone cannot say whether
+    // "42" was an int% or a number, and a watch pane that guessed would be
+    // inventing a fact the host already sent.
+    Kind: String;
 
     // pcInitialize's response
     Protocol: Integer;
@@ -536,6 +547,7 @@ begin
     Result.ErrorText := GetStr(Obj, 'error', '');
     Result.Protocol := GetInt(Obj, 'protocol', 0);
     Result.Text := GetStr(Obj, 'result', '');
+    Result.Kind := GetStr(Obj, 'kind', '');
     Result.Capabilities := ParseCapabilities(Obj);
     ParseInstalledLines(Obj, Result.Lines);
     ParseFrames(Obj, Result.Frames);

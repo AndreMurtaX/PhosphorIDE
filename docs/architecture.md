@@ -656,16 +656,36 @@ scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println` are one wor
 
 ### What does not exist
 
-**Watches and evaluate.** They need `capabilities.evaluate`, which is false on
-every host today, and they must never be closed in-process: an expression
-evaluator here would be an interpreter here.
+**Nothing, on the debugger, as of 2026-09-17.** This heading held four entries
+and has been emptied one at a time; what follows is the record of what each one
+claimed and when it stopped being true, because the lesson is not about
+debugging.
 
-**A call-stack pane** was in this list until 2026-09-16. It is a fourth tab in
-`PagesOutput`: frame index, function, line and file, with the selection driving
-the variables pane by frame INDEX -- which is why that pane needed no rewriting
-when frame 1 became selectable. Only frame 0 has a line to show; the engine does
-not record a call site per frame, so the callers are listed without one and a
-double-click on them does nothing rather than inventing a location.
+**Watches and evaluate** was here until 2026-09-17, and its reason was
+`capabilities.evaluate`, "which is false on every host today". Roadmap item 25
+made it true in the sibling repository, and the sentence beside it -- that they
+must never be closed in-process, because an expression evaluator here would be an
+interpreter here -- is not the thing that changed and is why the work happened
+over there. The watch pane is roadmap item 26.
+
+**A call-stack pane** was in this list until 2026-09-16. It is the FIFTH tab in
+`PagesOutput` -- Output, Problems, Find, Outline, Call Stack, Variables, REPL --
+carrying frame index, function, line and file, with the selection driving the
+variables pane by frame INDEX, which is why that pane needed no rewriting when
+frame 1 became selectable.
+
+It said "a fourth tab" until 2026-09-17 and it was a fourth tab when written; Find
+and Outline landed either side of it and nothing counted again. A cardinal in
+prose is a citation without a line number, and this one rotted in three weeks.
+
+It also said "Only frame 0 has a line to show; the engine does not record a call
+site per frame, so the callers are listed without one". That was true, was
+reported as a debt, and was **fixed in Phosphor on 2026-09-16** (`fce3db1`): the
+data had been recorded all along in `TCallFrame.CallerStmtPC` and the repair was
+one accessor plus an off-by-one. Every frame carries its own call site now, the
+editor needed no change for it, and `tests/debug_protocol_test.py` asserts that no
+frame is left without a line. The code that handles `line: 0` stays, because a
+frame reporting it is still a legal answer from a conformant host.
 
 **Step debugging** was in this list until 2026-09-16, with four citations, and is
 now the section above. The obstruction was in Phosphor and was structural:

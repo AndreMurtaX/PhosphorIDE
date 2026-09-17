@@ -2705,6 +2705,72 @@ begin
     B.Toggle(4);
     CheckEqInt('ToArray copies the set', 1, Length(B.ToArray));
     CheckEqInt('  with the right line', 4, B.ToArray[0]);
+
+    { --- AND THE CONDITION, which travels INSIDE the record ---------------- }
+    { EVERY ONE OF THESE IS A WAY THE TWO COULD COME APART if the condition were
+      a second array beside the lines. They are here rather than in the form
+      because the arithmetic is here: TrackEdit is the only code in this program
+      that knows which entries moved and which were deleted. }
+    B.Clear;
+    B.Toggle(10);
+    B.Toggle(20);
+    B.Toggle(30);
+    Check('a condition can be set', B.SetCondition(20, 'i% > 3'));
+    CheckEq('  and read back', 'i% > 3', B.ConditionOf(20));
+    { TWO OF THE THREE CARRY ONE, and they are DIFFERENT strings, on purpose: a
+      compaction that shifts the conditions by one index while the lines stay put
+      is only visible when the neighbours disagree. With one conditional entry
+      the defect has a single witness; with two adjacent ones it has three. }
+    Check('and a second, different one', B.SetCondition(30, 'total > 0'));
+    CheckEq('a breakpoint without one reads empty', '', B.ConditionOf(10));
+    CheckEq('a line with no breakpoint reads empty too', '', B.ConditionOf(99));
+    Check('setting one on a line with no breakpoint is refused',
+      not B.SetCondition(99, 'x'));
+    CheckEqInt('and the count of conditional ones', 2, B.ConditionalCount);
+
+    { INSERTING ABOVE moves the line AND takes the text with it. A parallel array
+      compacted by index would leave 'i% > 3' on whatever is now second. }
+    B.TrackEdit(15, 5);
+    CheckEq('an insertion above moves the line...', '10,25,35', Dump);
+    CheckEq('  ...and the condition goes with it', 'i% > 3', B.ConditionOf(25));
+    CheckEq('  and does not stay behind', '', B.ConditionOf(10));
+
+    { DELETING THE FIRST breakpoint compacts the array. This is the case that
+      would silently hand every remaining condition to the breakpoint below the
+      one that typed it. }
+    B.TrackEdit(10, -1);
+    CheckEq('deleting the first mark compacts the rest', '24,34', Dump);
+    CheckEq('  and the condition is still on its own line', 'i% > 3',
+      B.ConditionOf(24));
+    CheckEq('  and so is the one below it', 'total > 0', B.ConditionOf(34));
+    CheckEqInt('  with neither lost nor duplicated', 2, B.ConditionalCount);
+
+    { DELETING THE CONDITIONAL ONE takes its text with it. }
+    B.TrackEdit(24, -1);
+    CheckEq('deleting the conditional mark drops it', '33', Dump);
+    CheckEqInt('  and the other one survives it', 1, B.ConditionalCount);
+    CheckEq('  still carrying its own text', 'total > 0', B.ConditionOf(33));
+
+    { TOGGLING OFF AND ON AGAIN is how a person clears a condition they cannot
+      remember typing. A set that kept the old text would hand it back to a
+      breakpoint nobody meant to make conditional. }
+    B.Clear;
+    B.Toggle(7);
+    B.SetCondition(7, 'n = 0');
+    B.Toggle(7);
+    B.Toggle(7);
+    CheckEq('a toggled-off breakpoint does not remember its condition', '',
+      B.ConditionOf(7));
+
+    { ToItems IS THE ONLY WAY TO BUILD THE FRAME, so it carries both halves. }
+    B.Clear;
+    B.Toggle(3);
+    B.Toggle(9);
+    B.SetCondition(9, 'done?');
+    CheckEqInt('ToItems copies every breakpoint', 2, Length(B.ToItems));
+    CheckEqInt('  with the lines', 9, B.ToItems[1].Line);
+    CheckEq('  and the conditions', 'done?', B.ToItems[1].Condition);
+    CheckEq('  including the empty one', '', B.ToItems[0].Condition);
   finally
     B.Free;
   end;
@@ -2804,6 +2870,29 @@ begin
   Check('  the two still reserved stay off',
     (not M.Capabilities.SetVariable) and (not M.Capabilities.ConditionalBreakpoints));
   Check('  a key this editor does not know disturbs nothing', M.Valid);
+
+  { --- AN EVALUATED VALUE, AND ITS KIND ---------------------------------- }
+  { `result` was already decoded, into Text, and `kind` was dropped on the floor.
+    Both matter to a watch pane and neither can be derived from the other: "42"
+    alone cannot say whether it was an int% or a number, and the host has already
+    decided -- it renders the value exactly as PRINT would and names the kind
+    beside it, the same alphabet `variables` uses. An editor that guessed would be
+    inventing a fact it was sent. }
+  M := DecodePdbp('{"seq":7,"ok":true,"result":"6","kind":"int"}');
+  Check('an evaluated value decodes', M.Valid and M.IsResponse and M.Ok);
+  CheckEq('  the value, rendered by the host', '6', M.Text);
+  CheckEq('  and the kind it is', 'int', M.Kind);
+
+  M := DecodePdbp('{"seq":8,"ok":true,"result":"Ada!","kind":"string"}');
+  CheckEq('a string keeps its quotes off', 'Ada!', M.Text);
+  CheckEq('  and says it is a string', 'string', M.Kind);
+
+  M := DecodePdbp('{"seq":9,"ok":false,"error":"no variable \"naosei\" here"}');
+  Check('a refused expression is a refusal, not an empty value',
+    M.Valid and M.IsResponse and (not M.Ok));
+  CheckEq('  carrying what the host said', 'no variable "naosei" here', M.ErrorText);
+  CheckEq('  and no value at all', '', M.Text);
+  CheckEq('  and no kind either', '', M.Kind);
 
   M := DecodePdbp('{"seq":2,"ok":false,"error":"no such frame"}');
   Check('a refusal decodes', M.Valid and not M.Ok);

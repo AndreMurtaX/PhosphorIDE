@@ -838,7 +838,7 @@ object FrmMain: TFrmMain
     end
     object ActToggleBreakpoint: TAction
       Caption = 'Toggle &Breakpoint'
-      Hint = 'Mark this line. Nothing stops at it yet -- see Debug > Why is stepping unavailable?'
+      Hint = 'Mark this line. The program stops here under Start Debugging'
       OnExecute = ActToggleBreakpointExecute
       ShortCut = 116
     end
