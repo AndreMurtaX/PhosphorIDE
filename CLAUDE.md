@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 742 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 747 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -470,9 +470,19 @@ to change it, so the reader knows where to check.
 
 What is still absent, and must not be described otherwise:
 
-- **No watches and no evaluate.** `capabilities.evaluate` is `false` on every host
-  today, and the editor must never close that gap in-process: an expression evaluator
-  here would be an interpreter here. See the invariant at the top.
+- **No watches. `evaluate` EXISTS NOW, and it is the host's.** As of 2026-09-17 the
+  console host answers `evaluate` and advertises `capabilities.evaluate: true` with a
+  second key, `evaluateCalls: false`, saying that no call the user writes is
+  performed. **This repository needed no change to discover it** --
+  `DecodeCapabilities` (`core/udebugproto.pas:359`) already read the key and
+  `EncodeEvaluate` (`:289`) already wrote the request, both written before the other
+  end existed. That is the third time a two-repository contract has been proved right
+  by one end changing and the other not, after the two debts above.
+
+  What is still absent here is the PANE: nothing consumes `TDebugCaps.Evaluate` yet,
+  and roadmap item 26 is the watch list that will. The invariant at the top is
+  untouched and is the reason the work happened over there: an expression evaluator
+  in this program would be an interpreter in this program, whatever it was for.
 - **No conditional breakpoints.** A breakpoint the host could not arm IS drawn, as a
   **hollow ring in the gutter** beside the solid dot of one that will fire â€” the
   convention every debugger uses, and what roadmap item 13's image list was for. The

@@ -1724,6 +1724,80 @@ here" outranks "this was wrong last time".
 
 ## 25. Phosphor: an expression the debugger can evaluate
 
+**DONE 2026-09-17**, in `C:/Dev/Phosphor` (`aae86e6`). The host answers `evaluate`
+for a global, a local in a named frame and an expression that faults;
+`capabilities.evaluate` is true; and **this repository needed no change to discover
+it** -- `DecodeCapabilities` already read the key and `EncodeEvaluate` already wrote
+the request, both written before the other end existed. Third time that contract has
+been proved right by one end moving and the other not.
+
+**IT REUSES THE COMPILER RATHER THAN WRITING A SECOND LANGUAGE.** The whole source is
+compiled again with one line appended -- `<hidden> = (<expr>)` -- so the precedence
+is the language's own, including the two irregularities a re-implementation gets
+wrong: `-2 ^ 2` is -4 because `^` takes a PRIMARY base, and `a < b < c` does not
+chain because the comparison rung is an `if` and not a `while`. Appending can only
+ADD names and instructions, so every global index of the running program is where it
+was -- the property `ReplRun` has rested on since the REPL existed, checked over 154
+real programs rather than assumed. One compile costs 0,9 ms on the mean of 7558 `.bas`
+files across both repositories, 15,7 ms on the worst. A second expression reader was
+built and differentially checked against the engine over 77 expressions before this
+was chosen; it worked, and it was a second copy of a language this pair of
+repositories has spent three items de-duplicating.
+
+**THE GATE READS THE EMITTED INSTRUCTIONS, NEVER THE TEXT**, and that is the whole
+safety argument. `expr` is the one field of this protocol an editor sends verbatim,
+so it is where a hostile string arrives: `total) : total = 99 : println (1` is a
+legal line whose middle statement writes a global. The compiler refuses most such
+smuggles -- **but by accident**, on the trailing fragment failing to be a statement
+rather than on the payload, so balancing the tail gets all of them past it; and a
+comment defeats any scheme that neutralises the tail by appending a terminator. None
+of that is visible to a text rule and all of it is plain in the bytecode, which may
+hold only opcodes that compute and exactly one store: the last instruction, into the
+slot the host itself named. 39 hostile strings were measured against it.
+
+**No call the user writes is performed**, said on the wire by a new
+`evaluateCalls: false` capability -- the handshake carries six keys now, and
+`docs/debug-protocol.md` specifies both. `a@[i]`, `s$[n]` and `s$[[n]]` do answer,
+through the three names the compiler's own bracket lowering emits and only where the
+program defines no function of that name and arity. Refusing them would have meant a
+debugger that renders an array as `@1` in its variables pane and then declines to
+look inside it.
+
+**A fresh VM per request** -- no output seam, no input seam, no debug seam, its own
+ceilings -- seeded with every global and then the frame's locals over the globals of
+the same name, which IS the shadowing rule rather than a second copy of it. It has
+nothing to save and restore; the alternative needed fifteen fields put back, a list
+with no test that is not a second copy of itself. The handle registry is the one
+thing a fresh VM does not isolate, so `LiveHandleCount` is read either side of every
+request and a request that moved it gets no answer at all.
+
+**And it found an engine defect.** `TPhosphorVM.Create` never initialised
+`FErrHandler`, and 0 is a valid pc, so every freshly created VM carried an `ON ERROR`
+handler at instruction 0. `Run` resets it and `RunFrom` deliberately does not, so the
+hole was exactly a VM created and then driven by `RunFrom` -- which nothing did until
+this. It was invisible because what happened next depended on the program's own text:
+one containing `end` reached that halt, so `RunFrom` returned **True for a run that
+had faulted**, with `LastError` empty. Fixed in the constructor and pinned with
+`end` and without, because a check on the second half alone passes with the defect in
+place.
+
+Phosphor's own bar, all of it: `fpc -B -vewn` clean, every suite byte-exact,
+`-ProveFailure` seen catching a corrupted expectation, the boundary check green,
+`tests/debug_protocol_test.py` from 58 assertions across four sessions to **97 across
+seven**, and green on Linux -- suite, classic, examples, packages and the protocol.
+
+**What is NOT done, said out loud.** `len(x$)` is refused, along with all 1145
+registered names, because the registry carries no notion of an effect and this host
+will not guess. Widening that needs a purity bit beside `Reg.Add` across seventeen
+library units, which is a different piece of work and is not scoped. And the attack
+plan's ask for a `probe_sweep` leg evaluating at every stop is unmet by design: that
+is an ENGINE probe and this evaluator is host-side, so the leg could only exist as a
+second copy of the gate. The concern behind it -- an `on error` shape in the corpus --
+is answered at the right level instead, in the protocol suite's seventh session.
+
+**Here: nothing, as the item said.** Item 26 is the pane that will read
+`TDebugCaps.Evaluate`, which nothing consumes yet.
+
 **What.** Work in `C:/Dev/Phosphor`. A PDBP `evaluate` request that answers the value of an
 expression in a chosen frame, and `capabilities.evaluate` set true when it exists.
 

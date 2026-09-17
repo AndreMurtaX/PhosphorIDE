@@ -2775,6 +2775,36 @@ begin
   Check('  an undeclared one defaults OFF, never assumed',
     not M.Capabilities.Evaluate);
 
+  { --- AND THE REAL HOST'S HANDSHAKE, CAPTURED ---------------------------- }
+  { THE POINT OF THIS ONE IS THAT NOTHING HERE CHANGED. Roadmap item 25 built
+    `evaluate` in the sibling repository on 2026-09-17, and the test of whether
+    a two-repository contract was drawn in the right place is that the other end
+    needs no edit to discover it. DecodeCapabilities was written before any host
+    could answer; this asserts it reads the answer one now gives.
+
+    THE FRAME IS CAPTURED, NOT COMPOSED -- fpjson's spacing and all, which is
+    why it does not look like the examples in docs/debug-protocol.md. Recapture
+    it by sending an `initialize` request to a live `phosphor debug --port N`.
+    A hand-written frame would assert what this repository BELIEVES the host
+    says, which is the half a contract test exists to stop being enough.
+
+    `evaluateCalls` is the sixth key and this editor does not decode it: a
+    capability nothing consumes is not a field to add, and the spec says so --
+    an editor is correct without it and only KIND with it. What is pinned is
+    that an unknown key does not disturb the five that are read, which is the
+    property that lets the host grow. }
+  M := DecodePdbp('{ "seq" : 1, "ok" : true, "protocol" : 1, "capabilities" : ' +
+    '{ "stepOut" : true, "pause" : true, "evaluate" : true, ' +
+    '"evaluateCalls" : false, "setVariable" : false, ' +
+    '"conditionalBreakpoints" : false } }');
+  Check('the shipped host handshake decodes', M.Valid and M.IsResponse and M.Ok);
+  Check('  and evaluate is now TRUE, with no change here', M.Capabilities.Evaluate);
+  Check('  stepOut and pause are unchanged',
+    M.Capabilities.StepOut and M.Capabilities.Pause);
+  Check('  the two still reserved stay off',
+    (not M.Capabilities.SetVariable) and (not M.Capabilities.ConditionalBreakpoints));
+  Check('  a key this editor does not know disturbs nothing', M.Valid);
+
   M := DecodePdbp('{"seq":2,"ok":false,"error":"no such frame"}');
   Check('a refusal decodes', M.Valid and not M.Ok);
   CheckEq('  with its reason', 'no such frame', M.ErrorText);

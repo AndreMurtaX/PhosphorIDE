@@ -119,7 +119,8 @@ Response:
 
 ```json
 {"seq":1,"ok":true,"protocol":1,"capabilities":{"stepOut":true,"pause":true,
- "evaluate":false,"setVariable":false,"conditionalBreakpoints":false}}
+ "evaluate":true,"evaluateCalls":false,"setVariable":false,
+ "conditionalBreakpoints":false}}
 ```
 
 `protocol` in the response is the version the HOST speaks. **If the two differ, the
@@ -136,6 +137,7 @@ request it knows will be refused.
 | `stepOut` | `stepOut` is implemented |
 | `pause` | `pause` can interrupt a running program |
 | `evaluate` | `evaluate` can compute an expression in a frame |
+| `evaluateCalls` | a function call written in an expression is PERFORMED. **Read it whenever `evaluate` is true**: a host may be able to evaluate `count% * 2` and refuse `len(s$)`, and those are different products. False does not mean an expression containing parentheses is refused -- index syntax (`a@[i]`, `s$[n]`) may reach a call the compiler put there rather than one the user wrote. It means a NAME the user types with arguments after it will be refused. |
 | `setVariable` | a variable's value can be written (no command for this in version 1; the capability is reserved so a host cannot claim it by accident later) |
 | `conditionalBreakpoints` | `setBreakpoints` honours a `condition` on a breakpoint |
 
@@ -287,6 +289,28 @@ An expression that does not compile, or that fails, is `ok:false` with `error` s
 **Evaluation must not change the program's state**: no assignment, no call to a
 function with side effects that the host cannot undo. A host that cannot guarantee
 that must report `evaluate:false` rather than offering a half-safe one.
+
+**A HOST MAY MEET THAT BY REFUSING CALLS, and then it says so with
+`evaluateCalls`.** That is the clause's other reading and it is the honest one: a
+host with no way to know whether a library function has an effect cannot promise
+anything about a call, and refusing every call is a guarantee rather than a
+half-one. The console host does exactly this as of 2026-09-17, and the two keys
+together are what an editor needs before it offers a watch box -- `evaluate: true`
+says the request is worth sending, `evaluateCalls: false` says which requests are
+worth sending.
+
+**The editor does not have to read `evaluateCalls` to be correct**, because a
+refused call is an ordinary `ok:false` with an `error` the user can read. It has
+to read it to be KIND: a watch pane that offers completion for 1145 function names
+and then refuses all of them is worse than one that says up front what it can do.
+
+**What the console host refuses, as an example of the shape rather than as part of
+this specification**: every registered name, because its registry carries no notion
+of an effect; anything that would store, print, open a file or halt; and a
+statement smuggled in behind `:` or a newline. What it answers: names in scope
+(locals of the chosen frame first, then globals, which is the language's own
+shadowing), every operator, and index syntax. Its own reasoning is in
+`../Phosphor/docs/debugging.md`.
 
 ### `disconnect`
 
