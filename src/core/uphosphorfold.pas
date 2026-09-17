@@ -54,24 +54,42 @@ unit uphosphorfold;
   2. A word counts only where a statement may begin: the line's start, after a
      `:` at bracket depth 0, after `then`, after `else`.
   2a. AND A STATEMENT POSITION HAS A LEVEL. An integer is a LABEL where a
-     statement may begin at PROGRAM level -- a line's start, after a `:`, after
-     another label (`engine/PhosphorCompiler.pas:2939-2948`) -- and a label
-     leaves the position open, so `x = 1 : 20 function h()` runs. After `then`
-     or `else` the position is a statement's but not the program's, an integer
-     there is an expression rather than a label, and
-     `if x > 0 then 20 function f()` is refused. This is what the two copies of
-     the rule disagreed about; see the paragraph on item 18 below.
+     statement may begin at PROGRAM level -- a line's start, or after a `:`
+     (`engine/PhosphorCompiler.pas:2939-2948`) -- and a label leaves the
+     position open, so `x = 1 : 20 function h()` runs. After `then` or `else`
+     the position is a statement's but not the program's, an integer there is an
+     expression rather than a label, and `if x > 0 then 20 function f()` is
+     refused. This is what the two copies of the rule disagreed about; see the
+     paragraph on item 18 below.
+  2b. AND THERE IS ONLY ONE NUMERIC LABEL PER POSITION. `10 20 function f()` is
+     refused with `expected end of line`, because the compiler records a label
+     and then parses a STATEMENT rather than a second label. A NAMED label sits
+     on either side of a numeric one quite happily: `10 head: function f()` and
+     `head: 10 function f()` both compile. ONE SHAPE IS KNOWINGLY WRONG HERE --
+     `10 : 20 function f()` is refused too, because there is no statement before
+     that colon for it to separate, and this reads the colon as opening a fresh
+     position. Left wrong deliberately: the program does not compile either way,
+     so the cost is a row beside a file that is already red, and the alternative
+     is state this line does not otherwise need.
   3. `end` merges with an adjacent `if`, `while`, `select` or `function`, and the
      pair is one terminator.
-  3a. A TERMINATOR is recognised wherever it appears, and an OPENER only at a
-     statement position. The asymmetry is deliberate and it is what rule 6 rests
-     on: in `for i = 1 to 2 println i next` the `next` follows `println i` and is
-     not at a statement position, and a folder that missed it would leave the
-     `for` open to the end of the file -- which hides text just as surely as
-     opening one that should not have opened. The language makes it safe: a
-     terminator word used as a VARIABLE while its block is open is a compile
-     error (`for i = 1 to 2 / next = 5 / ... / next` is `expected end of line`),
-     and where its block is not open the caller's stack rejects it.
+  3a. A TERMINATOR is recognised wherever it appears AT BRACKET DEPTH 0, and an
+     OPENER only at a statement position. The asymmetry is deliberate and it is
+     what rule 6 rests on: in `for i = 1 to 2 println i next` the `next` follows
+     `println i` and is not at a statement position, and a folder that missed it
+     would leave the `for` open to the end of the file -- which hides text just
+     as surely as opening one that should not have opened. The language makes it
+     safe: a terminator word as the TARGET of a statement while its block is
+     open is a compile error (`for i = 1 to 2 / next = 5 / ... / next` is
+     `expected end of line`), and where its block is not open the caller's stack
+     rejects it.
+
+     THE DEPTH IS NOT A DETAIL, and the sentence above said "wherever" until
+     2026-09-17 because nobody had tried it: `println max(1, end function)`
+     compiles and runs, and so does `y = next + 1` inside the loop. Inside
+     brackets a terminator word is an ordinary variable -- a terminator is a
+     statement and a statement is not an argument -- and closing a block there
+     hid the rest of the file.
   4. An `if` after an `else` is `elseif`: a divider, never an opener.
   5. An `if` opens a block only when a `then` consumed it AND NOTHING FOLLOWS
      that `then` on the line. Anything after it makes the line the inline form.
@@ -86,9 +104,12 @@ unit uphosphorfold;
   cost then was a fold marker on `if x > 0 then 20 function f()`, which the
   compiler refuses, in a file the outline listed no function for.
 
-  That cost was nothing. The cost that was coming is the one
-  `uphosphorcomplete`'s header already names -- "two scanners that agree until
-  they do not" -- because Phosphor's compound-keyword table is a moving part,
+  That cost was nothing. The cost that was coming is the shape
+  `uphosphorcomplete`'s header names at its own `WordAtCaret` -- two questions,
+  two functions, ONE set of character rules, because a second copy of them
+  somewhere else is a defect waiting -- and which `docs/roadmap.md` item 18
+  calls "two scanners that agree until they do not". Phosphor's
+  compound-keyword table is a moving part,
   `gen-keywords.py --check` does not extract it, and a change there would have
   been fixed in ONE of the copies. From then on the outline pane and the fold
   gutter would have disagreed about where the same `function` ends, in the same
@@ -103,14 +124,24 @@ unit uphosphorfold;
   AND THE EXTRACTION WAS MEASURED RATHER THAN ASSERTED, on 2026-09-17, because
   "I only moved it" is the claim every refactor makes. A harness linked the two
   units as they were before the change and as they are after, and ran both over
-  4229 inputs -- every block word in every statement position, every spelling of
+  4524 inputs -- every block word in every statement position, every spelling of
   every terminator, and the 176 real `.bas` programs in this repository and in
-  `../Phosphor`. 911359 field comparisons. On the 176 real programs: NO
-  DIFFERENCE, in any field, anywhere. Every difference at all was on input that
-  is illegal or half-typed, it fell into six classes, and in all six the answer
+  `../Phosphor`. 920000 field comparisons. On the 176 real programs: NO
+  DIFFERENCE, in any field, anywhere. Every remaining difference is on input
+  that is illegal or half-typed, in eight classes, and in all eight the answer
   after the change is the better one -- five of them cases where the outline's
   copy and this one had already given different answers to the same question.
-  Each of the six is now a check in `tests/phosphoridetest.lpr`.
+  Each is a check in `tests/phosphoridetest.lpr`.
+
+  AND THE MEASUREMENT WAS NOT ENOUGH, which is the part worth carrying. The
+  first cut of this walk carried TWO REGRESSIONS ON LEGAL PROGRAMS that the
+  harness above ran straight past, because a corpus generated by varying the
+  WORDS cannot find a defect about their NEIGHBOURS: `end end function` lost its
+  terminator and `end rem a note` walked the comment as code. Both are in rule
+  3's paragraph on the pushback, both were found the same day by a review that
+  generated adjacency instead, and the corpus that missed them had 4229 cases in
+  it. A harness answers "did the answers move"; it does not answer "are the
+  inputs the ones that would move them". Generate the shapes, not the tokens.
 
   WHAT IS DELIBERATELY NOT DECIDED HERE. `select`'s ARMS are not folded: `case`
   is a legal assignment target wherever a select is not the innermost block, so
@@ -188,13 +219,11 @@ type
     AtStatement: Boolean;
     AtProgramLevel: Boolean;
 
-    { Where the next token would be, and the two half-tokens that may yet merge
-      with it. Not a consumer's business, but a record has no private part. }
+    { Where the next token would be. Not a consumer's business, but a record
+      has no private part. }
     NextStatement: Boolean;
     NextProgramLevel: Boolean;
-    HasHeld: Boolean;
-    HeldWord: String;
-    HeldCol, HeldSize: Integer;
+    NextLabelOk: Boolean;
   end;
 
 { Start a line. Nothing is read until WalkNext. }
@@ -213,8 +242,12 @@ procedure WalkSkipSpace(var AWalk: TLineWalk);
 function WalkTakeIdent(var AWalk: TLineWalk; out ACol: Integer): String;
 
 { The text between the parentheses at the walk's position, and how many
-  comma-separated names are in it. The walk is left past the closing one; an
-  unclosed list ends where the line does. }
+  comma-separated things are in it -- commas AT THIS LEVEL and outside strings,
+  so `(g(1, 2))` is one. The walk is left past the closing one.
+
+  A LIST THAT DOES NOT CLOSE COUNTS -1, which is "nobody knows" and not "none":
+  it ends where the line does, or at a `'`, which opens a comment and so ends
+  the line early. }
 function WalkTakeParens(var AWalk: TLineWalk; out ACount: Integer): String;
 
 { What this line does to the block structure, in the order it does it.
@@ -358,7 +391,13 @@ begin
   while AWalk.At <= AWalk.Len do
   begin
     if AWalk.Line[AWalk.At] = '\' then
-      Inc(AWalk.At, 2)
+    begin
+      { A BACKSLASH AS THE LAST BYTE eats a character that is not there, and a
+        Col+Size that runs past the line is a range a consumer cannot paint. }
+      Inc(AWalk.At, 2);
+      if AWalk.At > AWalk.Len + 1 then
+        AWalk.At := AWalk.Len + 1;
+    end
     else if AWalk.Line[AWalk.At] = '"' then
     begin
       Inc(AWalk.At);
@@ -396,7 +435,13 @@ begin
       Continue;
     end;
     if AWalk.Line[AWalk.At] in ['(', '[', '{'] then
-      Inc(D)
+    begin
+      Inc(D);
+      { A NESTED GROUP IS A THING, so `f([])` passes ONE argument and prints
+        what the function returns. Counting only bare words made it none. }
+      if D > 1 then
+        Any := True;
+    end
     else if AWalk.Line[AWalk.At] in [')', ']', '}'] then
       Dec(D)
     { AT THIS LEVEL ONLY. `f(g(1, 2))` is ONE argument, and counting every comma
@@ -445,10 +490,7 @@ begin
     of the next are two separate nothings. }
   AWalk.NextStatement := True;
   AWalk.NextProgramLevel := True;
-  AWalk.HasHeld := False;
-  AWalk.HeldWord := '';
-  AWalk.HeldCol := 0;
-  AWalk.HeldSize := 0;
+  AWalk.NextLabelOk := True;
 end;
 
 { Hand back a word as the current token and work out where the next one stands. }
@@ -466,6 +508,7 @@ begin
     nothing -- `endif` is a terminator and `elseif` is a divider. }
   AWalk.NextStatement := (not AMerged) and ((AWord = 'then') or (AWord = 'else'));
   AWalk.NextProgramLevel := False;
+  AWalk.NextLabelOk := False;
 end;
 
 function WalkNext(var AWalk: TLineWalk): Boolean;
@@ -476,14 +519,6 @@ var
 begin
   Result := False;
   AWalk.Token := wtNone;
-
-  { A word that was read ahead of its turn while looking for a merge. }
-  if AWalk.HasHeld then
-  begin
-    AWalk.HasHeld := False;
-    WalkEmitWord(AWalk, AWalk.HeldWord, AWalk.HeldCol, AWalk.HeldSize, False);
-    Exit(True);
-  end;
 
   WalkSkipSpace(AWalk);
   if AWalk.At > AWalk.Len then
@@ -536,10 +571,32 @@ begin
           WalkEmitWord(AWalk, Merged, Col, AWalk.At - Col, True);
           Exit(True);
         end;
-        AWalk.HasHeld := True;
-        AWalk.HeldWord := W2;
-        AWalk.HeldCol := Col2;
-        AWalk.HeldSize := AWalk.At - Col2;
+        { IT DID NOT MERGE, SO THE SECOND WORD IS PUT BACK AND READ AGAIN FROM
+          SCRATCH -- not handed forward as a token already decided.
+
+          The first cut handed it forward, and that was wrong twice, on legal
+          programs, measured 2026-09-17 by a review that generated the shapes
+          this unit's own corpus had not:
+
+            end end function   The lexer's merge pass advances by ONE when a
+                               pair does not merge (PhosphorLexer.pas:215-219),
+                               so it retries at the SECOND `end`, which merges
+                               with `function`. A word handed forward gets no
+                               lookahead of its own, so the terminator was lost
+                               and the fold ran to the end of the file --
+                               exactly the failure this unit exists to prevent.
+
+            end rem a note      `rem` is the lexer's own (PhosphorLexer.pas:453-
+                               458) and runs to end of line. A word handed
+                               forward skipped the `rem` test below, so the
+                               COMMENT was walked as code: a `:` in it opened a
+                               program-level statement position and a `function`
+                               in it was listed in the outline pane.
+
+          Rewinding costs one identifier re-scanned and has neither hole,
+          because the second word then arrives by the one path every other word
+          takes. }
+        AWalk.At := Col2;
       end;
     end;
 
@@ -562,8 +619,16 @@ begin
       close the statement it labels: `10 function h()`,
       `x = 1 : 20 function h()` and `setup: 30 function pick$(a$)` all define a
       function and all compile, while `if x > 0 then 20 function f()` is
-      refused. Anywhere else the position is already closed. }
-    AWalk.NextStatement := AWalk.AtStatement and AWalk.AtProgramLevel;
+      refused. Anywhere else the position is already closed.
+
+      AND THERE IS ONLY ONE OF THEM. `10 20 function f()` is refused with
+      `expected end of line`, because the compiler records a label at the top of
+      its statement loop and then parses a STATEMENT, not a second label
+      (engine/PhosphorCompiler.pas:2939-2948). A named label may still follow --
+      `10 head: function f()` compiles, and so does `head: 10 function f()`. }
+    AWalk.NextStatement := AWalk.AtStatement and AWalk.AtProgramLevel and
+                           AWalk.NextLabelOk;
+    AWalk.NextLabelOk := False;
     Exit(True);
   end;
 
@@ -581,16 +646,21 @@ begin
   AWalk.AtProgramLevel := AWalk.NextProgramLevel;
   { A `:` AT TOP LEVEL SEPARATES STATEMENTS, and it is also what puts the walk
     back at a statement after a label: `head: function a%()` reaches the
-    definition through this rule and not through a rule about labels. }
+    definition through this rule and not through a rule about labels. It opens a
+    FRESH position, label included -- `x = 1 : 20 function h()` runs, and so
+    does `10 head: function f()`, where the named label's own colon is this
+    token. }
   if (AWalk.Word = ':') and (AWalk.Depth = 0) then
   begin
     AWalk.NextStatement := True;
     AWalk.NextProgramLevel := True;
+    AWalk.NextLabelOk := True;
   end
   else
   begin
     AWalk.NextStatement := False;
     AWalk.NextProgramLevel := False;
+    AWalk.NextLabelOk := False;
   end;
   Result := True;
 end;

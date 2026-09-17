@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 545 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 626 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -286,12 +286,25 @@ the bar.
 
   **And an extraction is measured, not asserted.** "I only moved it" is the claim every
   refactor makes. The one above was checked by linking the units from before and after
-  the change into one harness and running both over 4229 inputs -- 911359 field
+  the change into one harness and running both over 4524 inputs -- about 920000 field
   comparisons, including the 176 real `.bas` programs in this repository and in
-  `../Phosphor`, on which there was no difference in any field. Every difference at all
-  was on illegal or half-typed input, and each is now a check. That harness is the
+  `../Phosphor`, on which there is no difference in any field. Every remaining
+  difference is on illegal or half-typed input, and each is a check. That harness is the
   cheapest honest answer to "is this the same code", and it is worth rebuilding for the
   next one.
+
+  **AND A HARNESS ANSWERS THE WRONG HALF OF THE QUESTION.** It answers "did the answers
+  move", not "are these the inputs that would move them". The first cut of the shared
+  walk carried two regressions ON LEGAL PROGRAMS that all 4229 of the first corpus's
+  cases ran straight past: `end end function` lost its terminator, so the fold ran to
+  the end of the file and collapsing it hid everything below, and `end rem a note`
+  walked the COMMENT as code, so a `function` named inside one reached the outline pane
+  and F12 resolved against it. Both are one mechanism -- a word read ahead for a
+  two-word merge was handed forward instead of put back, so it got neither the `rem`
+  test nor a lookahead of its own -- and both were found the same day by an adversarial
+  review that generated ADJACENCY where the corpus had generated words. **When you
+  build the corpus, vary the neighbours.** The fix is in `uphosphorfold.WalkNext`: it
+  rewinds, and the second word arrives by the one path every other word takes.
 
 - **Every path comparison goes through `CompareFilenames`** (`LazFileUtils`). It
   already knows that Windows is case-insensitive and Linux is not, which is one fewer

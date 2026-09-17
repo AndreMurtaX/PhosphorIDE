@@ -1153,11 +1153,11 @@ EVERY opener after a label after `then` opened a fold the outline listed nothing
 
 **The extraction was measured rather than asserted**, which is the part worth keeping. A
 harness linked the units from before the change and from after it into one program and ran
-both over 4229 inputs -- every block word in every statement position, every spelling of
+both over 4524 inputs -- every block word in every statement position, every spelling of
 every terminator, the half-typed and illegal shapes an editor actually sees, and the 176
-real `.bas` programs in this repository and in `../Phosphor`. **911359 field comparisons.
-On the 176 real programs: no difference in any field, anywhere.** Every difference at all
-was on illegal or half-typed input and fell into six classes:
+real `.bas` programs in this repository and in `../Phosphor`. **About 920000 field
+comparisons. On the 176 real programs: no difference in any field, anywhere.** Every
+remaining difference is on illegal or half-typed input and falls into eight classes:
 
 | input | before | after |
 | --- | --- | --- |
@@ -1167,13 +1167,36 @@ was on illegal or half-typed input and fell into six classes:
 | `function f(a, b` | 2 | unknown, which is what -1 already meant everywhere |
 | `function f('a')` | one parameter named `'a'` | unknown -- `'` is a COMMENT |
 | `f(,)` | 0 arguments | 2, which is the rule the old comment stated |
+| `f([])` | 0 arguments | 1 -- a nested group is a thing, and that program runs |
+| `10 20 function f()` | folded and listed | neither: a second numeric label is refused |
+| `max(1, end function)` | closed the block | nothing: inside brackets it is a variable |
 
-In five of the six the two copies had ALREADY disagreed with each other inside the one
-unit: `CallArgCount` knew about comments and counted separators a level at a time, and the
+In five of them the two copies had ALREADY disagreed with each other inside the one unit:
+`CallArgCount` knew about comments and counted separators a level at a time, and the
 outline's own parameter reader did neither. Nothing chose which of the two was right; the
-merge did. Each of the six is now a check, as is the walk itself -- `TestWalk` asks the
-rule directly, without a consumer, which is what neither copy ever had. 545 checks before,
-595 after, and the 545 pass unchanged.
+merge did. Each is now a check, as is the walk itself -- `TestWalk` asks the rule directly,
+without a consumer, which is what neither copy ever had. 545 checks before, 626 after, and
+the 545 pass unchanged.
+
+**AND THE HARNESS MISSED TWO REGRESSIONS, which is the more useful half of this item.** The
+first cut of the shared walk was wrong twice ON LEGAL PROGRAMS, and all 4229 cases of the
+first corpus ran straight past both, because a corpus built by varying the WORDS cannot
+find a defect about their NEIGHBOURS. A word read ahead for a two-word merge was handed
+forward as a decided token instead of being put back, so it got neither the `rem` test nor
+a lookahead of its own:
+
+* `end end function` lost its terminator -- the lexer's merge pass advances by ONE when a
+  pair does not merge and retries at the second `end` -- so the fold ran to the end of the
+  file and collapsing it hid everything below, which is the exact failure `uphosphorfold`
+  exists to prevent.
+* `end rem a note` walked the COMMENT as code, so a `:` inside one opened a program-level
+  statement position and a `function` inside one was listed in the outline pane, unclosed,
+  claiming every line below it.
+
+Both were found the same day by an adversarial review that generated adjacency rather than
+vocabulary, `WalkNext` now rewinds, and the shapes are checks on both sides. The rule
+carried into `CLAUDE.md` is the one that generalises: a differential harness answers "did
+the answers move", never "are these the inputs that would move them".
 
 **What.** `src/core/uphosphoroutline.pas` and `src/core/uphosphorfold.pas` each carry their
 own copy of "where may a statement begin". One of them should own it and the other should

@@ -2351,8 +2351,15 @@ begin
         Row := Row + '   (nested -- the host refuses this)';
       { AND THE ANNOTATION IS COMPUTED WITH THE LOOKUP F12 USES. A second
         definition of one name at one arity is unreachable -- the host takes the
-        first -- and if these two ever disagreed the pane would say so. }
-      if FindOutlineFunc(FOutline, FOutline[I].Name, FOutline[I].ParamCount) <> I then
+        first -- and if these two ever disagreed the pane would say so.
+
+        AN UNKNOWN ARITY IS NOT A COLLIDING ONE. A header whose parameter list
+        has not been closed yet reports -1, FindOutlineFunc reads a negative
+        count as "any arity" and so answers the FIRST definition of the name --
+        which would accuse a line the user is still typing of shadowing one they
+        finished. }
+      if (FOutline[I].ParamCount >= 0) and
+         (FindOutlineFunc(FOutline, FOutline[I].Name, FOutline[I].ParamCount) <> I) then
         Row := Row + '   (unreachable -- the first of this arity wins)';
       ListOutline.Items.Add(Row);
       FOutlineRows.Add(Format('%d|%s', [FOutline[I].Line, Path]));

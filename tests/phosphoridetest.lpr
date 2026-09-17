@@ -1142,6 +1142,44 @@ begin
   CheckEqInt('an argument list of nothing but commas is not empty', 2,
              CallArgCount('f(,)', 2));
 
+  { --- AND THE SAME THREE, FROM THIS SIDE --------------------------------- }
+  { A definition that exists only inside a comment is the worst of the three:
+    it is unterminated, so FuncAtLine hands it every line to the end of the
+    buffer, and F12 on a real name then resolves against a function nobody
+    wrote. `println "done" / end rem TODO: function parse$() goes here` runs. }
+  Funcs := ScanOutlineText('println "done"' + LE +
+                           'end rem TODO: function parse$() goes here' + LE);
+  CheckEqInt('a function named in a comment after end is not a function', 0,
+             Length(Funcs));
+  Funcs := ScanOutlineText('function f()' + LE + 'return 1' + LE +
+                           'end end function' + LE + 'function g()' + LE +
+                           'return 2' + LE + 'end function' + LE);
+  CheckEqInt('a stray end does not cost the real terminator', 3,
+             Funcs[0].EndLine);
+  Check('so the next definition is not nested in it', not Funcs[1].Nested);
+  { A TERMINATOR CANNOT BE AN ARGUMENT: `println max(1, endfunction)` runs. }
+  Funcs := ScanOutlineText('function f(a)' + LE +
+                           '  println max(1, endfunction)' + LE +
+                           '  return a' + LE + 'end function' + LE);
+  CheckEqInt('and one inside brackets does not end the definition', 4,
+             Funcs[0].EndLine);
+  Funcs := ScanOutlineText('10 10 function f()' + LE);
+  CheckEqInt('two numeric labels define nothing', 0, Length(Funcs));
+
+  { --- `local` IS A WORD, NOT FIVE BYTES ---------------------------------- }
+  { `function f() local_total = 0 / return local_total / endfunction` runs and
+    prints 0. Matching a prefix made `_total = 0` the local list, so
+    IsParamOrLocal answered yes for a name nobody declared. This was here before
+    the rule was extracted and came across unchanged. }
+  Funcs := ScanOutlineText('function f() local_total = 0' + LE);
+  CheckEq('a name that starts with local is not a local clause', '',
+          Funcs[0].Locals);
+  Check('and the name is not one of its locals',
+        not IsParamOrLocal(Funcs[0], '_total'));
+  Funcs := ScanOutlineText('function f(a) local t, u' + LE);
+  CheckEq('while a real clause still reads', 't, u', Funcs[0].Locals);
+  Check('and its names answer', IsParamOrLocal(Funcs[0], 'u'));
+
   { --- the word under the caret --------------------------------------------- }
   { PrefixAtCaret looks backwards because completion asks what has been TYPED.
     This asks what the word IS, so it reaches both ways from the caret. }
@@ -1466,6 +1504,58 @@ begin
   CheckEq('and the if that starts the next line is its own statement',
           'if!^', Walked('if'));
 
+  { --- THE SECOND WORD IS PUT BACK, NOT HANDED FORWARD -------------------- }
+  { The lookahead above reads a word that may not be its partner, and what
+    happens to that word is where the first cut of this unit was wrong TWICE,
+    on legal programs. Both were found on 2026-09-17 by a review that generated
+    the shapes the unit's own corpus had not: everything here is about ADJACENCY
+    and the corpus varied the words, not their neighbours.
+
+    1. THE MERGE PASS RETRIES AT THE SECOND WORD. It advances by one when a pair
+       does not merge (engine/PhosphorLexer.pas:215-219), so `end end function`
+       is `end` followed by `endfunction` -- and a word handed forward gets no
+       lookahead of its own, so the terminator was LOST and the fold ran to the
+       end of the file. `function f() / return 1 / end end function / ...` runs
+       and prints. }
+  CheckEq('the second end merges with what follows it', 'end!^ endfunction',
+          Walked('end end function'));
+  CheckEq('and the third likewise', 'end!^ end endfunction',
+          Walked('end end end function'));
+  CheckEq('else then a two-word terminator is the terminator', 'elseif!^ x then',
+          Walked('else if x then'));
+  { 2. `rem` IS THE LEXER'S OWN and runs to end of line
+       (engine/PhosphorLexer.pas:453-458). A word handed forward skipped the
+       `rem` test, so the COMMENT was walked as code: a `:` in it opened a
+       program-level statement position and a `function` in it reached the
+       outline pane. `println "done" / end rem TODO: function parse$() here`
+       runs, and there is no function in it. }
+  CheckEq('a rem after end is still a comment', 'end!^',
+          Walked('end rem a note'));
+  CheckEq('and after else too', 'else!^', Walked('else rem a note'));
+  CheckEq('end then else if is end and a divider', 'end!^ elseif x then',
+          Walked('end else if x then'));
+
+  { --- ONE NUMERIC LABEL PER STATEMENT POSITION --------------------------- }
+  { `10 20 function f()` is refused with `expected end of line`: the compiler
+    records a label at the top of its statement loop and then parses a
+    STATEMENT, not a second label. A NAMED label may still sit on either side of
+    a numeric one, and both of those compile. }
+  CheckEq('a second integer closes the position', '#!^ #!^ function^',
+          Walked('10 10 function'));
+  CheckEq('but a named label after a numeric one does not',
+          '#!^ head!^ : function!^', Walked('10 head: function'));
+  CheckEq('nor a numeric one after a named one',
+          'head!^ : #!^ function!^', Walked('head: 10 function'));
+  { AND ONE SHAPE IS KNOWINGLY WRONG: `10 : 20 function f()` is refused too --
+    there is no statement before that colon for it to separate -- and the walk
+    reads the colon as opening a fresh position, label included. It is left
+    wrong deliberately. The program does not compile either way, so the cost is
+    a row in a list beside a file that is already red, and the alternative is
+    tracking whether a statement has actually been seen since the position
+    opened -- state this line does not otherwise need. }
+  CheckEq('a colon straight after a label is the known gap',
+          '#!^ :!^ #!^ function!^', Walked('10 : 20 function'));
+
   { --- what hides text ----------------------------------------------------- }
   CheckEq('a string is one token', 'println!^ "', Walked('println "a : b"'));
   CheckEq('and a colon in it starts nothing', 'println!^ "',
@@ -1518,6 +1608,23 @@ begin
   WalkLine(W, '(a '' why');
   WalkTakeParens(W, N);
   CheckEqInt('and a comment inside one does not close it', -1, N);
+  { A NESTED GROUP IS A THING. `function f(a) / return 7 / endfunction /
+    println f([])` runs and prints 7, so the call passes one argument; counting
+    only bare words made it none. }
+  WalkLine(W, '([])');
+  WalkTakeParens(W, N);
+  CheckEqInt('a list holding one empty group holds one thing', 1, N);
+
+  { --- a token never reaches past the end of its line ---------------------- }
+  { A BACKSLASH AS THE LAST BYTE eats a character that is not there, and a
+    Col+Size past the line is a range no consumer can paint. }
+  WalkLine(W, 'x = "ab\');
+  N := 0;
+  while WalkNext(W) do
+    if W.Token = wtString then
+      N := W.Col + W.Size - 1;
+  CheckEqInt('an unterminated literal ending in a backslash stops at the end',
+             8, N);
 end;
 
 { ----------------------------------------------------------- where a block -- }
@@ -1681,6 +1788,33 @@ begin
           Folds('if x > 0 then function f()'));
   CheckEq('and every other opener behaves the same way', '',
           Folds('if x > 0 then 20 for i = 1 to 3'));
+
+  { --- ADJACENCY, which is where the shared walk was wrong twice ---------- }
+  { Every line here RUNS. See the long block in TestWalk for the two mechanisms;
+    these are the same facts seen from the consumer, because a lost terminator
+    here is the failure this unit exists to prevent -- a fold that runs to the
+    end of the file and hides everything under it. }
+  CheckEq('a stray end before the real terminator loses nothing', '-function',
+          Folds('end end function'));
+  CheckEq('and the same for an if', '-if', Folds('end end if'));
+  CheckEq('else then a terminator still terminates', '-if',
+          Folds('else end if'));
+  CheckEq('and for a function', '-function', Folds('else end function'));
+  CheckEq('a comment after end is a comment', '',
+          Folds('end rem so end function closes'));
+  CheckEq('and end then else if opens no phantom if', '',
+          Folds('end else if x = 2 then'));
+  { AND A TERMINATOR CANNOT BE AN ARGUMENT. `println max(1, end function)`
+    compiles and runs: inside the brackets the words are ordinary variables. }
+  CheckEq('a terminator inside brackets is a variable', '',
+          Folds('  println max(1, end function)'));
+
+  { --- one numeric label, and the two that still compile ------------------- }
+  CheckEq('two numeric labels define nothing', '', Folds('10 10 function f()'));
+  CheckEq('a named label after a numeric one still does', '+function',
+          Folds('10 head: function f()'));
+  CheckEq('and a numeric one after a named one', '+function',
+          Folds('head: 10 function f()'));
 
   { --- the tables, for a caller that wants to ask directly ----------------- }
   Check('if opens', BlockOpenedBy('if') = pbIf);

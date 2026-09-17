@@ -46,12 +46,19 @@ unit uphosphoroutline;
       end function` is ONE legal line holding TWO complete definitions, and it
       runs. A scanner that stops at the first match per line finds half of it.
     - `10 function h()` is legal, and so are `x = 1 : 20 function h()` and
-      `setup: 30 function pick$(a$)`: an integer is a label wherever a statement
-      may begin AT PROGRAM LEVEL, which the compiler's own comment enumerates as
-      a line's start, after a `:`, after a numeric label and after a named one
-      (engine/PhosphorCompiler.pas:2939-2948 and the note at :2962-2972). The
-      first version of this unit asked the narrower question -- is this the first
-      token of the line -- and lost both of those definitions.
+      `setup: 30 function pick$(a$)`: a label may begin wherever a statement may
+      begin AT PROGRAM LEVEL, which the compiler's own comment enumerates as a
+      line's start, after a `:`, after a numeric label and after a named one
+      (engine/PhosphorCompiler.pas:2962-2972). The first version of this unit
+      asked the narrower question -- is this the first token of the line -- and
+      lost both of those definitions.
+
+      BUT THAT ENUMERATION IS THE NAMED-LABEL READER'S, and reading it as the
+      integer's costs a definition that does not exist. The numeric label is a
+      different branch (:2939-2948) and it runs ONCE per turn of the statement
+      loop, so `10 20 function f()` is refused with `expected end of line` while
+      `10 head: function f()` and `head: 10 function f()` both compile. Measured
+      2026-09-17, after this paragraph had said otherwise since it was written.
       But `if x > 0 then 20 function f()` is REFUSED (`expected end of line`),
       because `then` opens a statement and not a program-level one. That is the
       whole reason the walk reports WHY it is at a statement position and not
@@ -250,9 +257,12 @@ begin
         Continue;
 
       { --- a terminator ------------------------------------------------- }
-      if W.Word = 'endfunction' then
+      if (W.Word = 'endfunction') and (W.Depth = 0) then
       begin
-        { CLOSES WHEREVER IT APPEARS, not only at a statement position.
+        { CLOSES WHEREVER IT APPEARS AT DEPTH 0, and not only at a statement
+          position. The depth is what says it is a terminator at all:
+          `println max(1, endfunction)` compiles and runs -- the word is an
+          ordinary variable there, because a terminator cannot be an argument.
           `function a() return 1 : end function` puts it after a complete
           statement, and the word can otherwise only be a function NAME -- which
           the header reader below has already eaten -- or a variable nobody
@@ -292,9 +302,14 @@ begin
           begin
             F.Params := WalkTakeParens(W, F.ParamCount);
             WalkSkipSpace(W);
-            if LowerCase(Copy(W.Line, W.At, 5)) = 'local' then
+            { A WORD AND NOT FIVE BYTES. `function f() local_total = 0` compiles
+              and runs, and matching a prefix made `_total = 0` the local list --
+              so `IsParamOrLocal` answered yes for `_total`, which is not a name
+              anybody declared. Measured 2026-09-17; the byte-prefix form was
+              here before the rule was extracted and moved across unchanged. }
+            LocalAt := W.At;
+            if LowerCase(WalkTakeIdent(W, NameAt)) = 'local' then
             begin
-              Inc(W.At, 5);
               { To the end of the line, or to the `:` that ends the header's
                 statement. Whatever is here is a list of names. }
               LocalAt := W.At;
@@ -302,7 +317,9 @@ begin
                     (W.Line[W.At] <> '''') do
                 Inc(W.At);
               F.Locals := Trim(Copy(W.Line, LocalAt, W.At - LocalAt));
-            end;
+            end
+            else
+              W.At := LocalAt;        // not a `local` clause: put the word back
           end
           else
             F.ParamCount := -1;
