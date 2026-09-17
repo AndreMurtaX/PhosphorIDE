@@ -1,0 +1,46 @@
+# Typing at the top of a long file under gtk2. Same case as steps-typing.txt;
+# the keys are spelled the X way, and there is no `timekey` here for the same
+# reason there is none there -- see that file for the two ways of timing this
+# from outside the process that both lie.
+#
+# The NUMBER on this platform comes from
+#   bin/phosphoride --measure-typing /tmp/typing.txt <a real .bas>
+# which times TCustomSynEdit.CommandProcessor from inside. Measured on the VM
+# under gtk2 on 2026-09-17, on the largest Phosphor program that exists
+# (19_argord_and_size.bas, 874 lines): a quiet keystroke 0.11 ms, the cascading
+# one 9.66 ms, against 1.65 and 12.70 on Windows. Both under one frame.
+raise
+wait 900
+shot 190-two-thousand-lines-and-an-unfinished-word
+
+# The caret to column 8, the end of `functio` -- NOT End, which would put it
+# after `measured()` where an `n` opens nothing at all.
+key ctrl+Home
+key Home
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+key Right
+wait 400
+
+# The keystroke the whole item is about. The fold marker appearing in the gutter
+# beside line 1 is the visible proof that this is the cascading edit.
+type n
+wait 800
+shot 191-the-definition-completed-and-the-marker-with-it
+
+# Three more characters, none of which changes a block.
+type ame
+wait 600
+shot 192-and-typing-continues-normally
+
+# And back out, which cascades in its turn.
+key BackSpace
+key BackSpace
+key BackSpace
+key BackSpace
+wait 800
+shot 193-and-back-with-the-marker-gone
