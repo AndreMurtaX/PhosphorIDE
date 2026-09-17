@@ -1,5 +1,5 @@
 # The lane on Windows, driven from a step script -- the counterpart of
-# lane-linux.sh, taking the same commands so a case can be written once.
+# lane-linux.sh, with which it shares SIX verbs of eight.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 `
 #              -Fixture tools\lane\deep.bas -Steps tools\lane\steps-stack.txt
@@ -7,6 +7,32 @@
 # Commands, one per line: key <chord>, type <text>, wait <ms>, shot <name>,
 # at <dx> <dy> (click, relative to the window's top-left), memo (print the Output
 # pane's text), dblclick <dx> <dy>.
+#
+# A CASE IS WRITTEN TWICE, NOT ONCE. This header said "the same commands so a
+# case can be written once" until 2026-09-17, and it was wrong twice over.
+#
+# The VERBS only mostly match. Shared: `key`, `type`, `wait`, `raise`, `shot`,
+# `at`. Here and not there: `dblclick`, `memo`. There and not here: `at2` (which
+# is what `dblclick` is called on that side), `bot` and `bot2` (a click measured
+# UP from the bottom edge, because mutter gives the window a different height on
+# different runs), `outtab`, `rootshot` and `popshot`.
+#
+# And the KEY NAMES do not match at all: `key` here is SendKeys -- `^g`,
+# `{ENTER}`, `{F5}`, `+{F9}` -- and on Linux it is an X keysym -- `ctrl+g`,
+# `Return`, `F5`, `shift+F9`. Feeding one
+# driver the other's script does not fail: SendKeys renders every token it does
+# not recognise as LITERAL TEXT, so `steps-lane.txt` run here typed
+# `ctrlGctrlA3ReturnF5...` into the fixture and drove nothing. It cost a run, and
+# the only reason it cost no more is that this script kills the editor without
+# saving.
+#
+# Hence the file names: `steps-NAME.txt` is this driver's and
+# `steps-NAME-linux.txt` is lane-linux.sh's. FOUR FILES PREDATE THAT RULE and are
+# Linux-only despite carrying no suffix -- `steps-lane.txt`, `steps-blocked.txt`,
+# `steps-exception.txt` and `steps-stop.txt`. Their Windows counterparts are not
+# missing; they are the earlier single-purpose drivers beside this one, with the
+# steps baked into the PowerShell: lane-windows-steps.ps1, -session.ps1 and
+# -exception.ps1.
 #
 # TRAP: Process.MainWindowHandle is NOT the form -- the LCL keeps a hidden
 # top-level window holding Application.Title and Windows hands that one back, so

@@ -11,6 +11,34 @@ compiled by `lazbuild`. It is verification tooling for a conversation with a liv
 `phosphor debug --port` child, which no headless gate can stand in for. Roadmap
 item 2a is the contract test that would turn part of it into a gate.
 
+## A case is written twice, not once
+
+The two drivers share **six verbs of eight**, and do not share key names at all.
+
+| | |
+| --- | --- |
+| both | `key`, `type`, `wait`, `raise`, `shot`, `at` |
+| Windows only | `dblclick`, `memo` |
+| Linux only | `at2` (what `dblclick` is called there), `bot` and `bot2` (a click measured UP from the bottom edge, because mutter gives the window a different height on different runs), `outtab`, `rootshot`, `popshot` |
+
+`key` is **SendKeys** on Windows (`^g`, `{ENTER}`, `{F5}`, `+{F9}`) and an **X
+keysym** on Linux (`ctrl+g`, `Return`, `F5`, `shift+F9`).
+
+**Feeding one driver the other's script does not fail.** SendKeys renders any
+token it does not recognise as literal text, so `steps-lane.txt` run through
+`lane-windows.ps1` on 2026-09-17 typed `ctrlGctrlA3ReturnF5...` into the fixture
+and drove nothing at all. The screenshots came out, the run reported no error, and
+only reading them showed it. It cost one run, and nothing worse only because the
+driver kills the editor without saving.
+
+So the file names carry the platform: **`steps-NAME.txt` is the Windows driver's
+and `steps-NAME-linux.txt` is the Linux one's.** Four files predate that rule and
+are **Linux-only despite having no suffix** — `steps-lane.txt`,
+`steps-blocked.txt`, `steps-exception.txt` and `steps-stop.txt`. Their Windows
+counterparts are not missing: they are `lane-windows-steps.ps1`,
+`lane-windows-session.ps1` and `lane-windows-exception.ps1`, written before the
+generic driver existed, with the steps baked into the PowerShell.
+
 ## What is here
 
 | | |
@@ -37,8 +65,8 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |
 | `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
-| `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, same commands as the Linux one |
-| `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the earlier, single-purpose Windows drivers |
+| `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, the same VERBS as the Linux one — but not the same key names, see below |
+| `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the earlier, single-purpose Windows drivers, with their steps baked into the PowerShell: they are the Windows half of the four cases that have no `-linux` twin |
 | `pdbp-probe.py` | speaks PDBP to the host with no editor involved, which is how the host's own defects were separated from the editor's |
 | `first-statement-probe.py` | the reproduction for the first of the two debts in `docs/phosphor-debugger-debts.md`: a breakpoint on the first executed statement is answered installed and never fires |
 
