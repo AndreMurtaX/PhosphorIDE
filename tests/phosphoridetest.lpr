@@ -2708,6 +2708,25 @@ begin
   finally
     B.Free;
   end;
+
+  { --- AND THE RULE ON ITS OWN, which is now shared ----------------------- }
+  { TrackEdit applies TrackLine to a whole set; roadmap item 24 applies it to the
+    single line a failed run blamed. Two copies of a three-branch rule is how the
+    two would come to disagree about where a line went, so there is one, and it
+    is checked without a set around it. }
+  CheckEqInt('a line above an insertion does not move', 3, TrackLine(3, 5, 2));
+  CheckEqInt('a line at the insertion moves', 7, TrackLine(5, 5, 2));
+  CheckEqInt('and one below it', 9, TrackLine(7, 5, 2));
+  CheckEqInt('a line above a deletion does not move', 3, TrackLine(3, 5, -2));
+  CheckEqInt('a line inside a deletion is dropped', 0, TrackLine(5, 5, -2));
+  CheckEqInt('and the last line of it too', 0, TrackLine(6, 5, -2));
+  CheckEqInt('the first line after a deletion moves up', 5, TrackLine(7, 5, -2));
+  CheckEqInt('an edit that changes no count moves nothing', 4, TrackLine(4, 2, 0));
+  { NOTHING IS NOT A LINE, and asking about it must not invent one: the blame is
+    0 when there is none, and every edit in a session would otherwise shift that
+    0 into a line number. }
+  CheckEqInt('zero stays zero', 0, TrackLine(0, 1, 5));
+  CheckEqInt('and is not dragged by a deletion either', 0, TrackLine(0, 1, -5));
 end;
 
 { ------------------------------------------------------------ the protocol --- }

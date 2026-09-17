@@ -526,6 +526,8 @@ type
     procedure ScrollOutputToEnd;
     procedure TrimOutput;
     procedure AddProblem(const AMsg: TPhosphorMessage; const AFallbackPath: String);
+    procedure ClearBlame;
+    procedure MarkBlame(const APath: String; ALine: Integer);
     procedure GotoSource(const APath: String; ALine: Integer;
       AColumn: Integer = 1; AFocus: Boolean = True);
 
@@ -1353,6 +1355,13 @@ begin
     FProblemLines.Clear;
   end;
 
+  { AND THE MARK IN THE TEXT GOES WHATEVER THAT PREFERENCE SAYS -- roadmap item
+    24. The Problems pane is a LOG and may legitimately keep what the last run
+    said beside what this one says; a band behind a line of code is a claim about
+    THIS text, right now, and a claim that outlived the run that produced it is a
+    lie. So this clear is unconditional and the one above is not. }
+  ClearBlame;
+
   Doc := ActiveDoc;
   if (Doc <> nil) and (not Doc.IsUntitled) then
     WorkDir := ExtractFilePath(Doc.FileName)
@@ -1631,6 +1640,45 @@ begin
   ScrollOutputToEnd;
 end;
 
+{ Forget what any run said about any file. Called when a run starts, and by
+  nothing else: the mark is a memory of a run, and a run beginning is the one
+  moment that memory is certainly stale. }
+procedure TFrmMain.ClearBlame;
+var
+  I: Integer;
+begin
+  for I := 0 to FDocs.Count - 1 do
+    TEditorDoc(FDocs[I]).BlameLine := 0;
+  RepaintEditors;
+end;
+
+{ Mark ALine of APath, if that file is open and nothing is marked yet.
+
+  ONLY THE DOCUMENT THE DIAGNOSTIC NAMES, which is item 24's "and only there": a
+  run of one file cannot say anything about another tab, and a packed executable
+  reports a line with no path at all -- AddProblem hands that one an empty string
+  and this leaves every document alone. }
+procedure TFrmMain.MarkBlame(const APath: String; ALine: Integer);
+var
+  I: Integer;
+  Doc: TEditorDoc;
+begin
+  if (APath = '') or (ALine < 1) then
+    Exit;
+  for I := 0 to FDocs.Count - 1 do
+  begin
+    Doc := TEditorDoc(FDocs[I]);
+    if Doc.IsUntitled or (Doc.BlameLine <> 0) then
+      Continue;
+    if CompareFilenames(Doc.FileName, ExpandFileNameUTF8(APath)) = 0 then
+    begin
+      Doc.BlameLine := ALine;
+      Doc.Edit.Invalidate;
+      Exit;
+    end;
+  end;
+end;
+
 procedure TFrmMain.AddProblem(const AMsg: TPhosphorMessage; const AFallbackPath: String);
 var
   Path: String;
@@ -1649,6 +1697,15 @@ begin
     ListProblems.Items.Add(Format('%s(%d): %s',
       [ExtractFileName(Path), AMsg.Line, AMsg.Text]));
     FProblemLines.Add(Format('%d|%s', [AMsg.Line, Path]));
+    { AND THE FIRST ONE OF THE RUN IS MARKED IN THE TEXT. The first, not the
+      last: a failure cascades, the line a person acts on is the one the host
+      blamed first, and a band that jumped to the final complaint of a run would
+      point at consequences rather than at the cause.
+
+      HasSourceLocation is the whole of the no-location rule -- `file not found:`
+      and a `--check` warning carry none, take the other branch, and mark
+      nothing. }
+    MarkBlame(Path, AMsg.Line);
   end
   else
   begin
@@ -3979,6 +4036,23 @@ begin
     ASpecial := True;
     AMarkup.Background := clNavy;
     AMarkup.Foreground := clWhite;
+    Exit;
+  end;
+
+  { AND THE LINE THE LAST RUN BLAMED, which loses to the stop above and to
+    nothing else -- roadmap item 24. "You are here" outranks "this was wrong last
+    time", and the Exit above is the whole of how that is arranged.
+
+    A WASH AND NOT A BAND. The stop's navy is opaque because it is where you ARE
+    and it moves as you step; this one stays put while somebody reads and edits
+    around it, so it keeps the text's own colours and tints only the background.
+    The same argument retired the full-width maroon the breakpoint used to have:
+    a line of code is a thing you read, and a diagnostic is a thing you read it
+    BECAUSE of. }
+  if (Doc.BlameLine = ALine) and (ALine > 0) then
+  begin
+    ASpecial := True;
+    AMarkup.Background := TColor($C8C8FF);   { a pale red wash, BGR }
     Exit;
   end;
 

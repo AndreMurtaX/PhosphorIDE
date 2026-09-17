@@ -47,6 +47,7 @@ type
     { WHAT THE FILE ON DISK USED, so that saving it gives it back. Both are set
       by LoadFromFile and defaulted for a buffer that has never been one. }
     FShape: TTextShape;
+    FBlameLine: Integer;
     FUntitledIndex: Integer;
     FBreakpoints: TBreakpointSet;
     FOnBreakpointsChanged: TBreakpointsChangedEvent;
@@ -60,6 +61,10 @@ type
       change. What changed is which lines are DRAWN, and the gutter's marks are a
       picture of the set, so the picture has to be taken again. }
     procedure FoldsChanged(Sender: TSynEditStrings; AIndex, ACount: Integer);
+    { A LINE'S TEXT CHANGED, which is a different notification from a line being
+      added or removed. Roadmap item 24 needs both: the blamed line FOLLOWS an
+      insertion above it and LOSES ITS MARK when it is itself typed into. }
+    procedure LineEdited(Sender: TSynEditStrings; AIndex, ACount: Integer);
     function FoldedView: TSynEditFoldedView;
     procedure Changed(AFromEdit: Boolean);
     function GetModified: Boolean;
@@ -119,6 +124,21 @@ type
     { Open the block whose header is AHeaderLine. Nothing happens if it is not a
       collapsed header. The caret is NOT moved: this is a reveal, not a jump. }
     procedure RevealFoldAt(AHeaderLine: Integer);
+
+    { THE LINE THE LAST RUN BLAMED, or 0. Roadmap item 24.
+
+      IT IS A MEMORY OF A RUN AND NOT AN OPINION ABOUT THE TEXT. Nothing here
+      compiles anything; this is what the host said, the last time it was asked,
+      about the file as it then stood. So it follows an insertion above it the
+      way a breakpoint does -- the arithmetic is the same `TrackLine` -- and it
+      is DROPPED the moment the line itself is typed into, because a claim about
+      text that has changed is a claim about text that no longer exists.
+
+      The caller clears it when a run starts, unconditionally: unlike the
+      Problems pane, which empties only when a preference says so, a mark in the
+      TEXT that outlived the run that produced it would be a lie whatever that
+      preference says. }
+    property BlameLine: Integer read FBlameLine write FBlameLine;
 
     property Edit: TSynEdit read FEdit;
     property FileName: String read FFileName write FFileName;
@@ -207,6 +227,7 @@ begin
     which is what a text file is expected to have. }
   FShape.Ending := System.LineEnding;
   FShape.FinalNewline := True;
+  FBlameLine := 0;
   FBreakpoints := TBreakpointSet.Create;
   TSynEditAccess(FEdit).ViewedTextBuffer.AddChangeHandler(senrLineCount, @LinesChanged);
   { AND THE ONE FOLDING SENDS. `senrLineMappingChanged` is the notification a
@@ -215,6 +236,8 @@ begin
     no member for one, so this is the only way to hear about it. }
   TSynEditAccess(FEdit).ViewedTextBuffer.AddChangeHandler(senrLineMappingChanged,
                                                           @FoldsChanged);
+  TSynEditAccess(FEdit).ViewedTextBuffer.AddChangeHandler(senrLineChange,
+                                                          @LineEdited);
 end;
 
 destructor TEditorDoc.Destroy;
@@ -227,6 +250,8 @@ begin
     TSynEditAccess(FEdit).ViewedTextBuffer.RemoveChangeHandler(senrLineCount, @LinesChanged);
     TSynEditAccess(FEdit).ViewedTextBuffer.RemoveChangeHandler(senrLineMappingChanged,
                                                                @FoldsChanged);
+    TSynEditAccess(FEdit).ViewedTextBuffer.RemoveChangeHandler(senrLineChange,
+                                                               @LineEdited);
   end;
   { FEdit itself belongs to the parent control and is freed with it. Freeing it
     here as well is a double free the first time a tab is closed. }
@@ -301,6 +326,8 @@ begin
     AIndex+1 is untouched -- pressing Enter at the end of line 5 inserts line 6
     and must leave a mark on line 5 exactly where it was. }
   FBreakpoints.TrackEdit(AIndex + 1, ACount);
+  { THE SAME ARITHMETIC, on the one other line number this object remembers. }
+  FBlameLine := TrackLine(FBlameLine, AIndex + 1, ACount);
   { TRUE: this is SynEdit's own line-count notification, and other handlers on it
     have not run yet. Whoever listens has to know that, because SynEdit moves ITS
     marks on the same notification and a listener that redraws from here is
@@ -312,6 +339,19 @@ procedure TEditorDoc.Changed(AFromEdit: Boolean);
 begin
   if Assigned(FOnBreakpointsChanged) then
     FOnBreakpointsChanged(Self, AFromEdit);
+end;
+
+procedure TEditorDoc.LineEdited(Sender: TSynEditStrings; AIndex, ACount: Integer);
+begin
+  { AIndex is 0-based and ACount is how many lines were modified. A blame on any
+    of them is about text that is no longer there.
+
+    SynEdit sends this for the line the caret is on as it is typed, which is
+    exactly the moment the claim stops being true -- and it is why this is a
+    separate handler from LinesChanged: typing INSIDE a line changes no count at
+    all, so the breakpoint notification never fires for it. }
+  if (FBlameLine >= AIndex + 1) and (FBlameLine <= AIndex + ACount) then
+    FBlameLine := 0;
 end;
 
 procedure TEditorDoc.LoadFromFile(const APath: String);

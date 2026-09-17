@@ -53,6 +53,19 @@ type
     property Lines[AIndex: Integer]: Integer read GetLine; default;
   end;
 
+{ WHERE ONE LINE ENDS UP after an edit that changed the line count, or 0 if the
+  edit deleted it.
+
+  This is the arithmetic TBreakpointSet.TrackEdit applies to a whole set, pulled
+  out so that the ONE OTHER THING in this editor that remembers a line number can
+  apply it too: roadmap item 24's mark on the line a failed run blamed. A second
+  copy of a three-branch rule is how the two would come to disagree about where a
+  line went, and this repository has spent two items on exactly that.
+
+  AFirstLine is the 1-based line at which the change happened and ADelta the
+  number of lines added (positive) or removed (negative). }
+function TrackLine(ALine, AFirstLine, ADelta: Integer): Integer;
+
 implementation
 
 function TBreakpointSet.IndexOf(ALine: Integer): Integer;
@@ -119,9 +132,24 @@ begin
   SetLength(FLines, 0);
 end;
 
+function TrackLine(ALine, AFirstLine, ADelta: Integer): Integer;
+begin
+  if (ADelta = 0) or (ALine < 1) then
+    Exit(ALine);
+  { Strictly above the change: text inserted or removed below a line cannot
+    change which statement that line is. }
+  if ALine < AFirstLine then
+    Exit(ALine);
+  { Inside a deleted range: the line is gone. Dropped rather than slid onto its
+    neighbour, which would point at a statement nobody chose. }
+  if (ADelta < 0) and (ALine < AFirstLine - ADelta) then
+    Exit(0);
+  Result := ALine + ADelta;
+end;
+
 procedure TBreakpointSet.TrackEdit(AFirstLine, ADelta: Integer);
 var
-  I, Keep: Integer;
+  I, Keep, Moved: Integer;
 begin
   if ADelta = 0 then
     Exit;
@@ -129,20 +157,11 @@ begin
   Keep := 0;
   for I := 0 to High(FLines) do
   begin
-    if FLines[I] < AFirstLine then
-    begin
-      FLines[Keep] := FLines[I];
-      Inc(Keep);
-    end
-    else if (ADelta < 0) and (FLines[I] < AFirstLine - ADelta) then
-    begin
-      { Inside the deleted range. Dropped -- see the header. }
-    end
-    else
-    begin
-      FLines[Keep] := FLines[I] + ADelta;
-      Inc(Keep);
-    end;
+    Moved := TrackLine(FLines[I], AFirstLine, ADelta);
+    if Moved = 0 then
+      Continue;                  { the deletion swallowed it }
+    FLines[Keep] := Moved;
+    Inc(Keep);
   end;
   SetLength(FLines, Keep);
 end;

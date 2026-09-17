@@ -1648,6 +1648,52 @@ afterwards is indistinguishable from the same lines typed by hand.
 
 ## 24. A diagnostic you can see in the text
 
+**DONE 2026-09-17.** A run that fails tints the line it blamed, in the document that
+diagnostic names and in no other.
+
+**A WASH, NOT A BAND.** The debug stop keeps its opaque navy because it is where you ARE and
+it moves as you step; this one stays put while somebody reads and edits around it, so it
+keeps the text's own colours and tints only the background. That is the same argument that
+retired the full-width maroon the breakpoint used to have: a line of code is a thing you
+read, and a diagnostic is a thing you read it BECAUSE of.
+
+**The stop still wins**, and the arrangement is one `Exit`: `EditorSpecialLineMarkup`
+answers the debug line first and returns, so "you are here" outranks "this was wrong last
+time" without a rule being written for it.
+
+**THE FIRST DIAGNOSTIC OF THE RUN, NOT THE LAST.** A failure cascades; the line a person
+acts on is the one the host blamed first, and a mark that jumped to the final complaint
+would point at consequences rather than at the cause.
+
+**Cleared unconditionally when a run starts**, which is the one place the item told us not
+to copy the existing behaviour: the Problems pane empties only when `Clear output on run` is
+set, because a pane is a LOG and may legitimately keep two runs side by side. A band behind
+a line of code is a claim about THIS text right now, and a claim that outlived the run that
+produced it is a lie whatever the preference says.
+
+**And it is dropped the moment its line is typed into.** That needed a second notification:
+`senrLineCount` is what moves a breakpoint when lines are added above it, and typing INSIDE
+a line changes no count at all -- so `TEditorDoc` now also listens to `senrLineChange`, which
+is the one that fires for the line under the caret.
+
+**One rule, two consumers.** The arithmetic that follows an insertion was
+`TBreakpointSet.TrackEdit`'s alone; it is now `ubreakpoints.TrackLine`, which TrackEdit
+applies to a set and item 24 applies to the single line it remembers. A second copy of a
+three-branch rule is how the two would come to disagree about where a line went, and this
+repository has spent two items on exactly that. `phosphoridetest` checks the rule without a
+set around it -- including that **0 stays 0**, because otherwise every edit in a session
+would shift "no blame" into a line number.
+
+**A diagnostic with no location marks nothing**, and that costs no code: `HasSourceLocation`
+already chooses the branch, and `file not found:` and a `--check` warning take the other one.
+
+**Driven on both platforms** by `tools/lane/steps-blame.txt` and `steps-blame-linux.txt` over
+`blame.bas`. **The edit comes last in those scripts and that order is deliberate**: F9 saves
+before it runs, so an edit followed by another run would write the change into a checked-in
+fixture and leave the repository dirty after every pass. Editing last means nothing saves
+it. The first attempt did it the other way round and did leave the file changed; undoing at
+the end did not restore it, because by then the focus was not in the editor.
+
 **What.** The line a failed run blamed is marked IN THE EDITOR, not only in the Problems
 pane.
 

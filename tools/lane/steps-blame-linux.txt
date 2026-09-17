@@ -1,0 +1,50 @@
+# A diagnostic you can see in the text -- roadmap item 24, under gtk2.
+# Same case as steps-blame.txt; the keys are spelled the X way.
+#
+# blame.bas fails to compile and the host blames LINE 4.
+#
+# THE EDIT COMES LAST, AND THAT ORDER IS DELIBERATE. F9 saves before it runs, so
+# an edit followed by another run would write the change into a checked-in
+# fixture and leave the repository dirty after every pass. Editing last means
+# nothing saves it: the driver kills the editor without saving, and the file on
+# disk is the file in git.
+#
+# WHAT THIS CASE DOES NOT SHOW is the no-location branch -- `file not found:` and
+# a `--check` warning carry no line, take AddProblem's other arm and mark
+# nothing. That branch has no picture of its own: its evidence is a Problems row
+# with no `(n)` in it, which this pane has shown since roadmap item 6.
+raise
+wait 800
+shot 460-nothing-marked-yet
+
+# RUN. F9 hands the file to the host, which refuses it and names line 4.
+key F9
+wait 4000
+shot 461-line-4-is-marked
+
+# THE MARK SURVIVES SCROLLING. To the end of the file and back.
+key ctrl+End
+wait 600
+key ctrl+Home
+wait 600
+shot 462-still-marked-after-scrolling
+
+# A SECOND RUN CLEARS IT AND SAYS IT AGAIN. The file has not changed, so the
+# host blames the same line -- what this shows is that the mark is a memory of
+# THIS run and not an accumulation.
+key F9
+wait 4000
+shot 463-a-second-run-marks-it-again
+
+# AND EDITING THE MARKED LINE CLEARS IT, because a claim about text that has
+# changed is a claim about text that no longer exists. Nothing after this saves.
+key ctrl+g
+wait 600
+type 4
+key Return
+wait 600
+key End
+type 1
+wait 900
+shot 464-edited-so-the-mark-is-gone
+outtab
