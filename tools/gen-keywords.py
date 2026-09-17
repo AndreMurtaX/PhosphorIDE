@@ -246,6 +246,35 @@ type
     TStringArray so this unit compiles unchanged against an FPC that predates it. }
   TPhosphorWordList = array of String;
 
+  { WHAT A WORD IS, in one answer.
+
+    The five questions below used to be five searches, asked in turn, over five
+    indexes -- so a word that is none of them, which is what a person's own names
+    are and therefore what most words in a program are, paid for all five before
+    being told no. Measured at -O3 on 2026-09-17: 3,5 us for a miss and 0,9 us for
+    a hit, against 0,04 us for the LowerCase(Copy(...)) that precedes it. Two
+    identifiers on a line is about 7 us, paid on every line of every rescan, every
+    file open and every scroll.
+
+    ONE SORTED TABLE, one binary search, one answer. The five questions still
+    exist and still mean what they meant; each is now a call to this and a compare.
+
+    pwkNone is a word this repository knows nothing about, which is the answer for
+    almost every word in almost every program -- and is now the CHEAPEST answer
+    rather than the most expensive one. }
+  TPhosphorWordKind = (pwkNone, pwkOperator, pwkLiteral, pwkKeyword,
+                       pwkBuiltinCore, pwkBuiltinPackage, pwkBuiltinGui);
+
+{ True when the word is one this repository knows, with AKind saying which.
+
+  THE ORDER OF THE KINDS IS THE ORDER THE FIVE SEPARATE SEARCHES USED TO RUN IN,
+  and it is load-bearing for exactly one word: `error` is both a keyword and a
+  core built-in, and the old chain asked about keywords first. The generator
+  applies the same priority when it merges the tables and PRINTS every word it had
+  to choose for, so a second overlap arriving from Phosphor is a line of output
+  rather than a colour that silently changed. }
+function PhosphorClassify(const AWord: String; out AKind: TPhosphorWordKind): Boolean;
+
 function IsPhosphorKeyword(const AWord: String): Boolean;
 function IsPhosphorOperatorWord(const AWord: String): Boolean;
 function IsPhosphorLiteralWord(const AWord: String): Boolean;
@@ -295,6 +324,63 @@ uses
 """
 
 
+# THE MERGE, AND THE ONE WORD IT HAS TO CHOOSE FOR.
+#
+# The editor used to ask five separate sorted indexes in turn -- operator,
+# literal, keyword, then the three built-in tiers -- so a word in none of them
+# paid for all five. One table answers in one binary search, but a table needs
+# one kind per word and the five tables are not disjoint: `error` is both a
+# keyword and a core built-in.
+#
+# THE MERGE THEREFORE APPLIES THE OLD CHAIN'S PRIORITY, in the order it asked,
+# and PRINTS every word it had to choose for. A second overlap arriving from a
+# new Phosphor release is then a line of output somebody reads, not a colour
+# that silently changed in an editor -- which is the failure roadmap item 29's
+# own hazard paragraph is about, and which no build and no screenshot catches.
+CLASS_KINDS = ('pwkOperator', 'pwkLiteral', 'pwkKeyword',
+               'pwkBuiltinCore', 'pwkBuiltinPackage', 'pwkBuiltinGui')
+
+
+def merge_classes(keywords, operators, literals, core, package, gui):
+    """[(word, kind_index)] sorted by the word's bytes, plus the overlaps."""
+    tables = [operators, literals, keywords, core, package, gui]
+    first = {}
+    overlaps = []
+    for kind, words in enumerate(tables):
+        for w in words:
+            if w in first:
+                overlaps.append((w, CLASS_KINDS[first[w]], CLASS_KINDS[kind]))
+            else:
+                first[w] = kind
+    # SORTED BY THE WORD'S BYTES, which is what CompareFolded compares and what
+    # the binary search in the unit depends on. Every word is already lower case
+    # and ASCII, so Python's own ordering IS that ordering; asserted rather than
+    # assumed, because a table sorted one way and searched another answers "not
+    # found" for real words and nothing says so.
+    for w in first:
+        assert w == w.lower(), 'table word is not lower case: %r' % w
+        assert all(ord(c) < 128 for c in w), 'table word is not ASCII: %r' % w
+    rows = sorted(first.items(), key=lambda kv: kv[0])
+    return rows, overlaps
+
+
+def pas_kind_array(name, kinds, indent='    '):
+    """The parallel kinds, as a byte array -- one per word, same index."""
+    out = ['  %s: array[0..%d] of Byte = (' % (name, len(kinds) - 1)]
+    line = indent
+    for i, k in enumerate(kinds):
+        item = str(k)
+        if i < len(kinds) - 1:
+            item += ','
+        if len(line) + len(item) > 78 and line.strip():
+            out.append(line.rstrip())
+            line = indent
+        line += item + ' '
+    out.append(line.rstrip())
+    out.append('  );')
+    return '\n'.join(out)
+
+
 def pas_array(name, words, indent='    '):
     """A Pascal const array of the words, wrapped to a readable width."""
     out = ['  %s: array[0..%d] of String = (' % (name, len(words) - 1)]
@@ -324,25 +410,67 @@ var
   { The initialization section's loop counter. A unit has nowhere else to put
     one. }
   SigRow: Integer;
-  { Sorted, case-insensitive indexes over the arrays above, built once at unit
-    load. A TStringList.Find is a binary search; the highlighter asks this
-    question once per identifier token on every visible line, so a linear scan
-    over 1141 names would be felt. }
-  FKeywordIndex: TStringList;
-  FOperatorIndex: TStringList;
-  FLiteralIndex: TStringList;
-  FBuiltinIndex: array[TPhosphorTier] of TStringList;
 
-function MakeIndex(const AWords: array of String): TStringList;
+{ COMPARE A PROBE AGAINST A TABLE ENTRY, FOLDING ASCII CASE AS IT GOES.
+
+  This replaced `TStringList.Find` on a case-insensitive list, whose comparison
+  is `AnsiCompareText` -- locale-aware, and about 100 ns for each of the ten
+  probes a binary search over 1205 words makes. Here the table entries are
+  already lower case (the generator writes them that way), so only the PROBE
+  needs folding, and folding one character is a compare and an add.
+
+  ASCII IS NOT AN APPROXIMATION HERE, IT IS THE LANGUAGE'S OWN RULE. A Phosphor
+  identifier is ASCII letters, digits and `_` (engine/PhosphorLexer.pas:90-98)
+  with one of `$ % @ ?` allowed as a suffix, and the lexer folds it with
+  LowerCase (engine/PhosphorLexer.pas:452). A word that could reach this function
+  with a non-ASCII letter in it is not a word the parser would accept.
+
+  Answers <0, 0 or >0, comparing byte by byte and then by length -- which is the
+  order `sorted()` gives the generator, so the table and the search agree by
+  construction rather than by convention. }
+function CompareFolded(const AProbe, AEntry: String): Integer;
 var
-  I: Integer;
+  I, LP, LE, N: Integer;
+  C: Char;
 begin
-  Result := TStringList.Create;
-  Result.CaseSensitive := False;
-  Result.Duplicates := dupIgnore;
-  for I := Low(AWords) to High(AWords) do
-    Result.Add(AWords[I]);
-  Result.Sorted := True;
+  LP := Length(AProbe);
+  LE := Length(AEntry);
+  if LP < LE then N := LP else N := LE;
+  for I := 1 to N do
+  begin
+    C := AProbe[I];
+    if (C >= 'A') and (C <= 'Z') then
+      C := Chr(Ord(C) + 32);
+    if C < AEntry[I] then Exit(-1);
+    if C > AEntry[I] then Exit(1);
+  end;
+  Result := LP - LE;
+end;
+
+function PhosphorClassify(const AWord: String; out AKind: TPhosphorWordKind): Boolean;
+var
+  Lo, Hi, Mid, C: Integer;
+begin
+  AKind := pwkNone;
+  Result := False;
+  if AWord = '' then
+    Exit;
+  Lo := Low(ClassWords);
+  Hi := High(ClassWords);
+  while Lo <= Hi do
+  begin
+    Mid := (Lo + Hi) shr 1;
+    C := CompareFolded(AWord, ClassWords[Mid]);
+    if C = 0 then
+    begin
+      AKind := TPhosphorWordKind(ClassKinds[Mid]);
+      Exit(True);
+    end;
+    if C < 0 then
+      Hi := Mid - 1
+    else
+      Lo := Mid + 1;
+  end;
 end;
 
 function ToArray(const AWords: array of String): TPhosphorWordList;
@@ -355,40 +483,51 @@ begin
     Result[I] := AWords[I];
 end;
 
+{ THE FIVE OLD QUESTIONS, EACH NOW ONE SEARCH AND ONE COMPARE. They are kept
+  because they are what reads well at a call site and because other code asks
+  them; what changed is that asking all five costs one search rather than five. }
 function IsPhosphorKeyword(const AWord: String): Boolean;
 var
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  Result := FKeywordIndex.Find(AWord, Dummy);
+  Result := PhosphorClassify(AWord, Kind) and (Kind = pwkKeyword);
 end;
 
 function IsPhosphorOperatorWord(const AWord: String): Boolean;
 var
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  Result := FOperatorIndex.Find(AWord, Dummy);
+  Result := PhosphorClassify(AWord, Kind) and (Kind = pwkOperator);
 end;
 
 function IsPhosphorLiteralWord(const AWord: String): Boolean;
 var
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  Result := FLiteralIndex.Find(AWord, Dummy);
+  Result := PhosphorClassify(AWord, Kind) and (Kind = pwkLiteral);
 end;
 
 function PhosphorBuiltinTier(const AWord: String; out ATier: TPhosphorTier): Boolean;
 var
-  Tier: TPhosphorTier;
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
-    if FBuiltinIndex[Tier].Find(AWord, Dummy) then
-    begin
-      ATier := Tier;
-      Exit(True);
-    end;
   ATier := ptCore;
   Result := False;
+  if not PhosphorClassify(AWord, Kind) then
+    Exit;
+  case Kind of
+    pwkBuiltinCore: ATier := ptCore;
+    pwkBuiltinPackage: ATier := ptPackage;
+    pwkBuiltinGui: ATier := ptGui;
+  else
+    { A keyword, an operator word or a literal is not a built-in, and `error` is
+      why this arm has to exist rather than being an else-of-convenience: it is
+      in BOTH the keyword table and the core table, the merge gave it to the
+      keyword, and IsPhosphorBuiltin('error') must therefore answer False --
+      exactly as the five-search chain answered it, which stopped at keywords. }
+    Exit;
+  end;
+  Result := True;
 end;
 
 function IsPhosphorBuiltin(const AWord: String): Boolean;
@@ -455,12 +594,9 @@ begin
 end;
 
 initialization
-  FKeywordIndex := MakeIndex(KeywordWords);
-  FOperatorIndex := MakeIndex(OperatorWords);
-  FLiteralIndex := MakeIndex(LiteralWords);
-  FBuiltinIndex[ptCore] := MakeIndex(BuiltinCoreWords);
-  FBuiltinIndex[ptPackage] := MakeIndex(BuiltinPackageWords);
-  FBuiltinIndex[ptGui] := MakeIndex(BuiltinGuiWords);
+  { NOTHING IS BUILT FOR CLASSIFICATION ANY MORE. ClassWords and ClassKinds are
+    constant arrays the generator sorted, so the first lookup costs what every
+    later one costs and the unit brings up six fewer TStringLists. }
   FSignatureIndex := TStringList.Create;
   FSignatureIndex.CaseSensitive := False;
   for SigRow := Low(SignatureNames) to High(SignatureNames) do
@@ -468,12 +604,6 @@ initialization
   FSignatureIndex.Sorted := True;
 
 finalization
-  FreeAndNil(FKeywordIndex);
-  FreeAndNil(FOperatorIndex);
-  FreeAndNil(FLiteralIndex);
-  FreeAndNil(FBuiltinIndex[ptCore]);
-  FreeAndNil(FBuiltinIndex[ptPackage]);
-  FreeAndNil(FBuiltinIndex[ptGui]);
   FreeAndNil(FSignatureIndex);
 
 end.
@@ -497,7 +627,15 @@ def signature_arrays(sigs):
 def render(tiers, sigs, source_label):
     core = sorted(set(tiers['core']) | set(SPECIAL_FORMS))
     sig_names, sig_codes = signature_arrays(sigs)
+    rows, overlaps = merge_classes(
+        sorted(KEYWORDS), sorted(OPERATORS), sorted(LITERALS),
+        core, sorted(tiers['package']), sorted(tiers['gui']))
+    for word, kept, dropped in overlaps:
+        print('  overlap: %r is %s and %s -- kept %s, the order the five '
+              'separate searches asked in' % (word, kept, dropped, kept))
     arrays = '\n\n'.join([
+        pas_array('ClassWords', [w for w, _ in rows]),
+        pas_kind_array('ClassKinds', [k + 1 for _, k in rows]),
         pas_array('KeywordWords', sorted(KEYWORDS)),
         pas_array('OperatorWords', sorted(OPERATORS)),
         pas_array('LiteralWords', sorted(LITERALS)),

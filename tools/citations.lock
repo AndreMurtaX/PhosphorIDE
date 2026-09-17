@@ -36,6 +36,7 @@
 ../Phosphor/engine/PhosphorLexer.pas:453-453	dc699a33e1c5eeb0	if s = 'rem' then
 ../Phosphor/engine/PhosphorLexer.pas:453-458	147a2ee81562459c	if s = 'rem' then
 ../Phosphor/engine/PhosphorLexer.pas:459-460	7999a00f5548372a	if s = 'mod' then
+../Phosphor/engine/PhosphorLexer.pas:90-98	6a6a9aff770908dc	function IsIdentStart(C: Char): Boolean; inline;
 ../Phosphor/engine/PhosphorOpcodes.pas:126-152	755a57f3bf67d78d	Entry: Integer;
 ../Phosphor/engine/PhosphorRegistry.pas:220-228	bc8777b940cab88f	{ The guards are the registry's own objects; nothing outside holds one, and a
 ../Phosphor/engine/PhosphorVM.pas:1585-1589	4429753f8e88dc45	begin
@@ -89,7 +90,7 @@ src/core/uphosphorhost.pas:8-24	fcaaac870a6f7c63	The search order below is not a
 src/core/uphosphorhost.pas:98-98	df8e39f2d3d9499e	function RunAndCapture(const AExe: String; const AArgs: array of String;
 src/core/uphosphorlang.pas:21-22	f82c3abd25a9bbef	A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
 src/core/uphosphorlang.pas:30-31	21cb6e7136468331	{ Which host a built-in needs. Ordered by how universally available it is, so
-src/core/uphosphorlang.pas:44-45	1ba731e293293133	{ The raw lists, for a completion box or a documentation lookup. Sorted, lower
+src/core/uphosphorlang.pas:73-74	1ba731e293293133	{ The raw lists, for a completion box or a documentation lookup. Sorted, lower
 src/core/uphosphorrun.pas:259-259	27b2dab379728398	AKind: TRunStream);
 src/core/uphosphorrun.pas:509-520	8a56c7366029e5d1	begin
 src/core/uphosphorrun.pas:527-535	d3d70e8b222b6937	function TPhosphorRunner.Start(const AExe: String; const AArgs: array of String;

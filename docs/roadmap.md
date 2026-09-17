@@ -529,7 +529,7 @@ from writing `left$$`.
 **What.** A completion box over all 1198 names -- 53 keywords, 538 core built-ins, 181 from
 host packages, 426 GUI -- served from `uphosphorlang`, which was built for this. The lists
 are sorted, lower case, suffixes included, and the header says so: "for a completion box or
-a documentation lookup" (`src/core/uphosphorlang.pas:44-45`). `TPhosphorTier` is ordered by
+a documentation lookup" (`src/core/uphosphorlang.pas:73-74`). `TPhosphorTier` is ordered by
 availability "so a completion list can be filtered with a single `<=` test"
 (`src/core/uphosphorlang.pas:30-31`).
 
@@ -2109,6 +2109,52 @@ never closed; the other, a `--release` build on Linux, belongs with it.
 ---
 
 ## 29. The 3.5 microsecond identifier
+
+**DONE 2026-09-17.** One sorted table and one binary search where there were five
+indexes asked in turn, and a comparison that folds ASCII case as it walks instead of
+calling `AnsiCompareText`.
+
+**MEASURED IN THE EDITOR, BEFORE AND AFTER, ON THE SAME MACHINE AND THE SAME DAY.**
+`phosphoride --measure-typing`, 21 passes, minimum and median, at 5000 lines:
+
+| | before | after |
+| --- | --- | --- |
+| the cascade, per line | **13,28 us** | **2,28 us** |
+| one cascading keystroke (min) | 69,19 ms | **13,76 ms** |
+| the worst single keystroke | 86,46 ms | **19,74 ms** |
+| eight keystrokes of `function` | 92,91 ms | **33,15 ms** |
+
+**And the measurement agrees with itself**, which is the part worth trusting:
+`ScanFoldLine` costs **0,47 us per line in both runs** -- it did not move, and could
+not have, since nothing touched it. Its SHARE went from 4% to 21% because the
+denominator shrank. That is exactly the claim this item opened with: item 19 found
+folding to be 4% of a keystroke and said most of the rest was this, and taking this
+away leaves folding as the biggest remaining piece of a much smaller number.
+
+**THE HAZARD WAS REAL AND IS NOW PINNED.** A misclassified word is painted as an
+identifier: no build catches it, no screenshot shows it, and nobody notices until
+they wonder why `next` is not blue. So `phosphoridetest` classifies **every word in
+every table -- 1205 of them**, read out of the unit's own lists rather than sampled,
+and names the first one that is wrong. Proven by breaking it: flipping one kind byte
+in the generated table turns it red with `1 wrong, first is "abs"`.
+
+**ONE WORD IS IN TWO TABLES.** `error` is both a keyword and a core built-in, and the
+five separate searches asked about keywords first. The merge keeps that order, the
+generator **prints every word it had to choose for**, and the test asserts the choice
+both ways -- `IsPhosphorKeyword('error')` true, `IsPhosphorBuiltin('error')` false,
+exactly as the old chain answered. A second overlap arriving from a new Phosphor
+release is then a line of output somebody reads rather than a colour that changed.
+
+**ASCII IS THE LANGUAGE'S OWN RULE, not an approximation.** A Phosphor identifier is
+ASCII letters, digits and `_` (`engine/PhosphorLexer.pas:90-98`) with one of
+`$ % @ ?` as a suffix, and the lexer folds it with `LowerCase`
+(`engine/PhosphorLexer.pas:452`). Folding one character is a compare and an add; the
+table entries are written lower case by the generator, so only the probe needs it.
+
+**And the citation gate caught this change, in the same session it was built.**
+Inserting the new enum into the interface moved a line `docs/roadmap.md` cited by
+number, and `tools/check-citations.py` said so and named where the text had gone --
+which is the first time item 27's gate has caught rot that was not already there.
 
 **What.** `uphosphorlang` classifies a word by asking six sorted `TStringList.Find` indexes
 in turn -- operator, literal, keyword, then each of the three built-in tiers. A word that is

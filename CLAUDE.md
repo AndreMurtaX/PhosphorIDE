@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 822 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 850 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -382,6 +382,17 @@ the bar.
   Roadmap item 19 is what found this out, and `MeasureHighlighter`'s four numbers survived
   only because each divides a loop of fifty or two thousand passes by its count.
 
+  **AND IT IS WHAT MADE ITEM 29 A LEVER RATHER THAN A GUESS.** Item 19 measured a
+  cascading keystroke at 12,45 us per line and found `ScanFoldLine` to be 4% of it, so
+  the interesting number was the other 96%: `uphosphorlang` asked FIVE sorted indexes in
+  turn, and a word in none of them -- a person's own names, which is most words --
+  paid for all five. One table and one binary search took the same measurement from
+  **13,28 us per line to 2,28**, and the worst single keystroke at 5000 lines from
+  86,46 ms to 19,74. `ScanFoldLine` costs 0,47 us in both runs; only its SHARE moved,
+  4% to 21%, because the denominator shrank. A measurement that agrees with itself
+  across a change nobody made to the thing being measured is worth more than either
+  number alone.
+
   **And a performance number about the editor is taken IN the editor.**
   `phosphoride --measure-typing <report> [file.bas]` times
   `TCustomSynEdit.CommandProcessor(ecChar, ...)` -- the call `KeyDown` itself makes -- over
@@ -656,10 +667,12 @@ over there is findable from here. Do not paraphrase a Phosphor rule from memory;
 the file.
 
 **AND A CITATION ROTS SILENTLY -- which is now a red build.**
-`tools/check-citations.py` is gate 4 above and exists because of the paragraph
-below. What it cannot do is check that the cited text still supports the SENTENCE
-beside it, and it cannot see a claim that has no citation at all. So: Every one of those four numbers was wrong on
-2026-09-16 -- `:361-366` had become the `strClosed` reasoning, and `:385-408`, cited
+`tools/check-citations.py` is gate 4 above and exists because of what follows.
+What it CANNOT do is check that the cited text still supports the sentence beside
+it, and it cannot see a claim that carries no citation at all -- so the habit below
+is still the job, and the gate only removes one way of failing at it.
+
+Every one of four numbers cited in this file was wrong on 2026-09-16 -- `:361-366` had become the `strClosed` reasoning, and `:385-408`, cited
 in seven places here for "the lexer has no keyword table", had become the
 backslash-escape table inside a string literal. The CLAIMS were all still true; the
 line numbers had drifted by roughly sixty as the sibling file grew, and nothing in

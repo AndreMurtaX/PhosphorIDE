@@ -2625,6 +2625,148 @@ end;
 { ------------------------------------------------------------ breakpoints --- }
 
 { ------------------------------------------------------- the watch list --- }
+{ ------------------------------------------- every word, every table --- }
+
+{ ONE TABLE ANSWERS FIVE QUESTIONS, AND A WRONG ANSWER IS INVISIBLE.
+
+  Roadmap item 29 replaced five sorted indexes, asked in turn, with one sorted
+  table and one binary search. Its own hazard paragraph is the reason this exists:
+  a keyword that stops being found is painted as an identifier, which no build
+  catches, no screenshot shows and nobody notices until they wonder why `next` is
+  not blue.
+
+  So EVERY word in EVERY table is classified and checked against the table it came
+  from -- 1205 of them, read out of the unit's own lists rather than sampled or
+  retyped. A check over a sample would pass the day the merge dropped the tail of
+  one table.
+
+  AND THE COUNT IS ASSERTED TOO, because a list that came back empty would make
+  every loop below vacuously green -- the shape of a test that passes by not
+  running, which this repository has paid for once already. }
+procedure TestClassify;
+var
+  I, Bad: Integer;
+  Kind: TPhosphorWordKind;
+  Words: TPhosphorWordList;
+  Tier: TPhosphorTier;
+  FirstBad, Since: String;
+  Ok: Boolean;
+
+  { True when every word in AWords classifies as AWant. AExcept is the one word
+    allowed to answer something else -- see `error` below. }
+  function AllAre(const AWords: TPhosphorWordList; AWant: TPhosphorWordKind;
+    const AExcept: String): Boolean;
+  var
+    J: Integer;
+    K: TPhosphorWordKind;
+  begin
+    Bad := 0;
+    FirstBad := '';
+    for J := 0 to High(AWords) do
+    begin
+      if (AExcept <> '') and (AWords[J] = AExcept) then
+        Continue;
+      if (not PhosphorClassify(AWords[J], K)) or (K <> AWant) then
+      begin
+        Inc(Bad);
+        if FirstBad = '' then
+          FirstBad := AWords[J];
+      end;
+    end;
+    Result := Bad = 0;
+    if Bad = 0 then
+      Since := ''
+    else
+      Since := Format(' -- %d wrong, first is "%s"', [Bad, FirstBad]);
+  end;
+
+begin
+  Group('uphosphorlang: one table answering for every word in it');
+
+  Words := PhosphorKeywords;
+  CheckEqInt('the keyword table is not empty', 53, Length(Words));
+  { THE NAME IS BUILT AFTER THE CALL, not around it. Reading FirstBad inside the
+    argument list would read it before AllAre had run and name whatever the
+    PREVIOUS table failed on -- a message that points at the wrong word is worse
+    than no message, because somebody will go and look. }
+  Ok := AllAre(Words, pwkKeyword, '');
+  Check('every keyword classifies as a keyword' + Since, Ok);
+
+  Words := PhosphorOperatorWords;
+  CheckEqInt('the operator table is not empty', 4, Length(Words));
+  Ok := AllAre(Words, pwkOperator, '');
+  Check('every operator word classifies as one' + Since, Ok);
+
+  Words := PhosphorLiteralWords;
+  CheckEqInt('the literal table is not empty', 3, Length(Words));
+  Ok := AllAre(Words, pwkLiteral, '');
+  Check('every literal word classifies as one' + Since, Ok);
+
+  { THE ONE OVERLAP, AND IT IS CHECKED BOTH WAYS. `error` is in the keyword table
+    AND the core table. The five separate searches asked about keywords first, so
+    it painted as a keyword; the merge keeps that order, and the generator PRINTS
+    the choice it made. If a future Phosphor adds a second overlap, that line of
+    output is the warning -- and this assertion is what turns a silent change of
+    mind into a red test. }
+  Words := PhosphorBuiltins(ptCore);
+  CheckEqInt('the core table is not empty', 538, Length(Words));
+  Ok := AllAre(Words, pwkBuiltinCore, 'error');
+  Check('every core built-in classifies as one, except the overlap' + Since, Ok);
+  Check('`error` is in the core table', PhosphorClassify('error', Kind));
+  Check('  and classifies as a KEYWORD, the order the old chain asked in',
+    Kind = pwkKeyword);
+  Check('  so it is not a built-in, exactly as before', not IsPhosphorBuiltin('error'));
+  Check('  and IS a keyword', IsPhosphorKeyword('error'));
+
+  Words := PhosphorBuiltins(ptPackage);
+  CheckEqInt('the package table is not empty', 181, Length(Words));
+  Ok := AllAre(Words, pwkBuiltinPackage, '');
+  Check('every package built-in classifies as one' + Since, Ok);
+
+  Words := PhosphorBuiltins(ptGui);
+  CheckEqInt('the gui table is not empty', 426, Length(Words));
+  Ok := AllAre(Words, pwkBuiltinGui, '');
+  Check('every gui built-in classifies as one' + Since, Ok);
+
+  { AND THE TIER STILL COMES BACK, because PhosphorBuiltinTier is what the
+    completion list cuts on and a tier that shifted would recommend a program
+    that works on its author's desktop and stops on a server. }
+  Check('a core name reports its tier',
+    PhosphorBuiltinTier('len', Tier) and (Tier = ptCore));
+  Words := PhosphorBuiltins(ptGui);
+  Check('a gui name reports its tier',
+    PhosphorBuiltinTier(Words[0], Tier) and (Tier = ptGui));
+
+  { CASE IS FOLDED, and it is folded the way the language folds it: the lexer
+    lower-cases every identifier at tokenisation (engine/PhosphorLexer.pas:452),
+    and an identifier is ASCII (:90-98). The compare does ASCII only, on purpose,
+    and these are the cases that would have caught it doing something else. }
+  Check('an upper-case keyword is still a keyword', IsPhosphorKeyword('FUNCTION'));
+  Check('a mixed-case one too', IsPhosphorKeyword('FuNcTiOn'));
+  Check('and a built-in', IsPhosphorBuiltin('LEN'));
+
+  { WORDS THAT ARE NOT IN ANY TABLE. The whole point of the change is that this
+    is now the CHEAPEST answer rather than the most expensive one, and it has to
+    stay the RIGHT one: a name a person invented must not collide into a kind. }
+  Check('a name nobody registered is nothing', not PhosphorClassify('zzmyvar', Kind));
+  Check('  and reports pwkNone', Kind = pwkNone);
+  Check('the empty string is nothing', not PhosphorClassify('', Kind));
+  Check('a prefix of a real word is not that word',
+    not PhosphorClassify('functio', Kind));
+  Check('nor is a real word with something after it',
+    not PhosphorClassify('functionx', Kind));
+  { A SUFFIX IS PART OF THE NAME, so `len$` is not `len`. }
+  Check('a suffixed spelling of a plain name is not it',
+    not PhosphorClassify('zzlen$', Kind));
+
+  I := 0;
+  for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
+    Inc(I, Length(PhosphorBuiltins(Tier)));
+  CheckEqInt('and 1205 words were checked, not a sample',
+    1205, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
+    Length(PhosphorLiteralWords));
+end;
+
 procedure TestWatches;
 var
   W: TWatchList;
@@ -3321,6 +3463,7 @@ begin
   MeasureHighlighter;
   TestBreakpoints;
   TestWatches;
+  TestClassify;
   TestCompletion;
   TestOutline;
   TestFindInFiles;

@@ -35,6 +35,35 @@ type
     TStringArray so this unit compiles unchanged against an FPC that predates it. }
   TPhosphorWordList = array of String;
 
+  { WHAT A WORD IS, in one answer.
+
+    The five questions below used to be five searches, asked in turn, over five
+    indexes -- so a word that is none of them, which is what a person's own names
+    are and therefore what most words in a program are, paid for all five before
+    being told no. Measured at -O3 on 2026-09-17: 3,5 us for a miss and 0,9 us for
+    a hit, against 0,04 us for the LowerCase(Copy(...)) that precedes it. Two
+    identifiers on a line is about 7 us, paid on every line of every rescan, every
+    file open and every scroll.
+
+    ONE SORTED TABLE, one binary search, one answer. The five questions still
+    exist and still mean what they meant; each is now a call to this and a compare.
+
+    pwkNone is a word this repository knows nothing about, which is the answer for
+    almost every word in almost every program -- and is now the CHEAPEST answer
+    rather than the most expensive one. }
+  TPhosphorWordKind = (pwkNone, pwkOperator, pwkLiteral, pwkKeyword,
+                       pwkBuiltinCore, pwkBuiltinPackage, pwkBuiltinGui);
+
+{ True when the word is one this repository knows, with AKind saying which.
+
+  THE ORDER OF THE KINDS IS THE ORDER THE FIVE SEPARATE SEARCHES USED TO RUN IN,
+  and it is load-bearing for exactly one word: `error` is both a keyword and a
+  core built-in, and the old chain asked about keywords first. The generator
+  applies the same priority when it merges the tables and PRINTS every word it had
+  to choose for, so a second overlap arriving from Phosphor is a line of output
+  rather than a colour that silently changed. }
+function PhosphorClassify(const AWord: String; out AKind: TPhosphorWordKind): Boolean;
+
 function IsPhosphorKeyword(const AWord: String): Boolean;
 function IsPhosphorOperatorWord(const AWord: String): Boolean;
 function IsPhosphorLiteralWord(const AWord: String): Boolean;
@@ -84,6 +113,351 @@ uses
 
 
 const
+  ClassWords: array[0..1203] of String = (
+    'abs', 'acos', 'acosh', 'alarmspath$', 'alcase$', 'alphacolor',
+    'altseparator$', 'and', 'app_processmessages', 'app_quit', 'app_run',
+    'append', 'arr_free', 'arr_get', 'arr_set@', 'arraysize', 'arraytype',
+    'arraytypename$', 'as', 'asc', 'asin', 'asinh', 'at$', 'atan', 'atan2',
+    'atanh', 'aucase$', 'base64_decode$', 'base64_decodefile',
+    'base64_encode$', 'base64_encodefile$', 'base64_error',
+    'base64_urldecode$', 'base64_urlencode$', 'base64_valid', 'bevel@',
+    'bevel_shape', 'bevel_shape@', 'bevel_style', 'bevel_style@', 'bg$',
+    'bin$', 'binary', 'bitbtn@', 'bitbtn_caption$', 'bitbtn_caption@',
+    'bitbtn_click@', 'bitbtn_onclick@', 'bitmap@', 'bitmap_height',
+    'bitmap_pixel', 'bitmap_width', 'blink$', 'bold$', 'break', 'breakpoint',
+    'buffer_clone@', 'buffer_copy', 'buffer_equal', 'buffer_fill',
+    'buffer_fillrange', 'buffer_free', 'buffer_fromstr@', 'buffer_get',
+    'buffer_getdbl', 'buffer_getint', 'buffer_getsng', 'buffer_getuint',
+    'buffer_indexof', 'buffer_len', 'buffer_new@', 'buffer_resize',
+    'buffer_set', 'buffer_setdbl', 'buffer_setint', 'buffer_setsng',
+    'buffer_slice$', 'buffer_tostr$', 'buffer_write', 'button@',
+    'button_caption$', 'button_caption@', 'button_click@', 'button_onclick@',
+    'byteat', 'bytelen', 'bytemid$', 'bytestr$', 'cachepath$', 'calendar@',
+    'calendar_date', 'calendar_date@', 'call', 'callfunc', 'callfunc$',
+    'callfunc%', 'callfunc?', 'callfunc@', 'camerapath$', 'canvas_arc@',
+    'canvas_brushcolor@', 'canvas_clear@', 'canvas_ellipse@',
+    'canvas_fillrect@', 'canvas_fontcolor@', 'canvas_fontsize@',
+    'canvas_line@', 'canvas_lineto@', 'canvas_moveto@', 'canvas_pencolor@',
+    'canvas_penwidth@', 'canvas_pie@', 'canvas_polygon@', 'canvas_polyline@',
+    'canvas_rectangle@', 'canvas_roundrect@', 'canvas_textheight',
+    'canvas_textout@', 'canvas_textwidth', 'case', 'center$', 'cfg_autosave@',
+    'cfg_clear@', 'cfg_delete@', 'cfg_deletekey@', 'cfg_exists',
+    'cfg_filename$', 'cfg_get$', 'cfg_getb', 'cfg_getbs', 'cfg_getn',
+    'cfg_getns', 'cfg_gets$', 'cfg_haskey', 'cfg_keycount', 'cfg_keys$',
+    'cfg_modified', 'cfg_open@', 'cfg_open_auto@', 'cfg_path$', 'cfg_reload@',
+    'cfg_save', 'cfg_section_delete@', 'cfg_section_exists',
+    'cfg_sectioncount', 'cfg_sections$', 'cfg_set@', 'cfg_setb@',
+    'cfg_setbs@', 'cfg_setn@', 'cfg_setns@', 'cfg_sets@', 'changefileext$',
+    'chdir', 'checkbox@', 'checkbox_caption$', 'checkbox_caption@',
+    'checkbox_checked', 'checkbox_checked@', 'checkbox_onchange@',
+    'checkgroup@', 'checkgroup_add@', 'checkgroup_caption$',
+    'checkgroup_caption@', 'checkgroup_checked', 'checkgroup_checked@',
+    'checkgroup_clear@', 'checkgroup_count', 'checkgroup_item$',
+    'checklist_add@', 'checklist_checked', 'checklist_checked@',
+    'checklist_count', 'checklist_item$', 'checklistbox@', 'chr$', 'cint',
+    'classname$', 'close', 'clreol$', 'clreos$', 'cls$', 'cmpval', 'color',
+    'color$', 'colorbutton@', 'colorbutton_color', 'colorbutton_color@',
+    'colordialog@', 'colordialog_color', 'colordialog_color@', 'colortostr$',
+    'combo_add@', 'combo_clear@', 'combo_count', 'combo_item$',
+    'combo_itemindex', 'combo_itemindex@', 'combo_onchange@', 'combo_text$',
+    'combobox@', 'const', 'containsstr', 'containstext', 'continue',
+    'control_align', 'control_align@', 'control_anchors$', 'control_anchors@',
+    'control_bold', 'control_bold@', 'control_bounds@',
+    'control_bringtofront@', 'control_color', 'control_color@',
+    'control_cursor', 'control_cursor@', 'control_enabled',
+    'control_enabled@', 'control_focused', 'control_fontcolor',
+    'control_fontcolor@', 'control_fontname$', 'control_fontname@',
+    'control_fontsize', 'control_fontsize@', 'control_free', 'control_get',
+    'control_get$', 'control_height', 'control_height@', 'control_hint$',
+    'control_hint@', 'control_invalidate@', 'control_italic',
+    'control_italic@', 'control_keydown@', 'control_keypress@',
+    'control_keyup@', 'control_left', 'control_left@', 'control_maxheight',
+    'control_maxheight@', 'control_maxwidth', 'control_maxwidth@',
+    'control_minheight', 'control_minheight@', 'control_minwidth',
+    'control_minwidth@', 'control_mousedown@', 'control_mousemove@',
+    'control_mouseup@', 'control_mousewheel', 'control_move@',
+    'control_onkeydown@', 'control_onkeypress@', 'control_onkeyup@',
+    'control_onmousedown@', 'control_onmousemove@', 'control_onmouseup@',
+    'control_onmousewheel@', 'control_parent@', 'control_sendtoback@',
+    'control_set@', 'control_setfocus@', 'control_size@', 'control_spacing',
+    'control_spacing@', 'control_taborder', 'control_taborder@',
+    'control_tabstop', 'control_tabstop@', 'control_tag', 'control_tag@',
+    'control_top', 'control_top@', 'control_underline', 'control_underline@',
+    'control_visible', 'control_visible@', 'control_width', 'control_width@',
+    'copytext$', 'cos', 'cosh', 'count', 'countstr', 'crt_done',
+    'crt_hideconsole', 'crt_init', 'crt_showconsole', 'data', 'date', 'date$',
+    'datetime$', 'datetimetostr$', 'datetostr$', 'dayof', 'dayofthemonth',
+    'dayoftheweek', 'dayoftheyear', 'dayofweek', 'daysbetween',
+    'daysinamonth', 'daysinayear', 'daysinmonth', 'daysinyear', 'dayspan',
+    'degtorad', 'delete$', 'dialog_execute', 'dialog_filename$',
+    'dialog_filename@', 'dialog_filter$', 'dialog_filter@',
+    'dialog_initialdir$', 'dialog_initialdir@', 'dialog_title$',
+    'dialog_title@', 'dict@', 'dict_clear@', 'dict_count', 'dict_exists',
+    'dict_get', 'dict_get$', 'dict_get%', 'dict_get?', 'dict_get@',
+    'dict_getdef', 'dict_getdef$', 'dict_getdef?', 'dict_getdef@',
+    'dict_haskey', 'dict_key$', 'dict_remove', 'dict_set@', 'dict_type',
+    'dict_typename$', 'dict_typeof', 'dict_typeof$', 'dim', 'dim@',
+    'dir_copy', 'dir_create', 'dir_delete', 'dir_exists',
+    'dir_getcreationtime', 'dir_getcurrent$', 'dir_getdirectories$',
+    'dir_getentries$', 'dir_getfiles$', 'dir_getlastaccesstime',
+    'dir_getlastwritetime', 'dir_getparent$', 'dir_isempty',
+    'dir_isrelativepath', 'dir_move', 'dir_setcreationtime', 'dir_setcurrent',
+    'dir_setlastaccesstime', 'dir_setlastwritetime', 'dirseparator$', 'do',
+    'documentspath$', 'downloadspath$', 'drawgrid@', 'drawgrid_col',
+    'drawgrid_colcount', 'drawgrid_colcount@', 'drawgrid_cursor@',
+    'drawgrid_drawcell@', 'drawgrid_fixedcols', 'drawgrid_fixedcols@',
+    'drawgrid_fixedrows', 'drawgrid_fixedrows@', 'drawgrid_ondrawcell@',
+    'drawgrid_row', 'drawgrid_rowcount', 'drawgrid_rowcount@', 'edit@',
+    'edit_clear@', 'edit_maxlength', 'edit_maxlength@', 'edit_onchange@',
+    'edit_readonly', 'edit_readonly@', 'edit_selectall@', 'edit_text$',
+    'edit_text@', 'else', 'elseif', 'encodedate', 'end', 'endfunction',
+    'endif', 'endselect', 'endsstr', 'endstext', 'endwhile', 'environ$',
+    'eof', 'erl', 'err', 'err_clear', 'errmsg$', 'error', 'exp',
+    'extractfileext$', 'extractfilename$', 'extractfilepath$', 'faint$',
+    'false', 'file_appendalltext', 'file_copy', 'file_createempty',
+    'file_delete', 'file_exists', 'file_getcreationtime',
+    'file_getlastaccesstime', 'file_getlastwritetime', 'file_getsize',
+    'file_move', 'file_readallbytes@', 'file_readalltext$',
+    'file_setcreationtime', 'file_setlastaccesstime', 'file_setlastwritetime',
+    'file_writeallbytes', 'file_writealltext', 'fileexists', 'fix',
+    'floatspinedit@', 'floatspinedit_decimals@', 'floatspinedit_value',
+    'floatspinedit_value@', 'fontdialog@', 'fontdialog_fontcolor',
+    'fontdialog_fontcolor@', 'fontdialog_fontname$', 'fontdialog_fontname@',
+    'fontdialog_fontsize', 'fontdialog_fontsize@', 'for', 'forcedirectories',
+    'form@', 'form_caption$', 'form_caption@', 'form_close@', 'form_height',
+    'form_height@', 'form_onclose@', 'form_onclosequery@', 'form_show@',
+    'form_visible', 'form_width', 'form_width@', 'formatdatetime$',
+    'formatsettings', 'formatsettings$', 'frac', 'funcexists?', 'function',
+    'getkey$', 'gettime', 'gosub', 'goto', 'groupbox@', 'groupbox_caption$',
+    'groupbox_caption@', 'gui_clearerror', 'gui_error', 'guidfilename$',
+    'gzip_compress$', 'gzip_compressfile', 'gzip_csize', 'gzip_decompress$',
+    'gzip_decompressfile', 'gzip_error', 'gzip_ratio', 'gzip_size',
+    'handlemessage', 'hex$', 'hex_decode$', 'hex_encode$', 'hidecursor$',
+    'home$', 'homepath$', 'hourof', 'hoursbetween', 'hourspan', 'http_accept',
+    'http_accept$', 'http_baseurl', 'http_baseurl$', 'http_basicauth',
+    'http_bearerauth', 'http_ca_file$', 'http_clearauth', 'http_clearerror',
+    'http_clearproxy', 'http_client@', 'http_contenttype',
+    'http_contenttype$', 'http_cookie', 'http_cookie$', 'http_cookieclear',
+    'http_cookiecount', 'http_cookieremove', 'http_customauth', 'http_error',
+    'http_followredirects', 'http_form@', 'http_formclear', 'http_formfield',
+    'http_formfieldcount', 'http_formfile', 'http_formfilecount',
+    'http_formfilenamed', 'http_formfiletype', 'http_formfree',
+    'http_formurlencoded$', 'http_free', 'http_get$', 'http_header',
+    'http_header$', 'http_headerclear', 'http_headercount',
+    'http_headerremove', 'http_htmldecode$', 'http_htmlencode$',
+    'http_maxredirects', 'http_param', 'http_param$', 'http_paramclear',
+    'http_paramcount', 'http_paramremove', 'http_post$', 'http_proxy',
+    'http_proxyauth', 'http_reset', 'http_responsetimeout', 'http_status',
+    'http_strerror$', 'http_timeout', 'http_urldecode$', 'http_urlencode$',
+    'http_useragent', 'http_useragent$', 'http_validatessl',
+    'http_verify_peer', 'idletimer@', 'if', 'image@', 'image_center',
+    'image_center@', 'image_empty', 'image_load@', 'image_picheight',
+    'image_picwidth', 'image_proportional', 'image_proportional@',
+    'image_setbitmap@', 'image_stretch', 'image_stretch@', 'imagelist@',
+    'imagelist_addbitmap', 'imagelist_addfile', 'imagelist_attach@',
+    'imagelist_clear@', 'imagelist_count', 'incday', 'inchour',
+    'incmillisecond', 'incminute', 'incmonth', 'incsecond', 'incweek',
+    'incyear', 'inkey$', 'input', 'input$', 'inputbox$', 'insert$', 'instr',
+    'instrrev', 'int', 'inverse$', 'ioerror', 'iostrerror$', 'isalnum',
+    'isalpha', 'isam', 'isassigned', 'isdigits', 'isinfinite', 'isinleapyear',
+    'islower', 'isnan', 'isnull', 'isnumeric', 'ispm', 'issameday', 'isspace',
+    'istoday', 'isupper', 'italic$', 'json_array@', 'json_bool@',
+    'json_clone@', 'json_count', 'json_get@', 'json_getb', 'json_getn',
+    'json_gets$', 'json_has', 'json_isarr', 'json_isbool', 'json_isnull',
+    'json_isnum', 'json_isobj', 'json_isstr', 'json_item@', 'json_itemb',
+    'json_itemn', 'json_items$', 'json_keys@', 'json_len', 'json_merge@',
+    'json_null@', 'json_number@', 'json_object@', 'json_parse@', 'json_path@',
+    'json_pathb', 'json_pathn', 'json_paths$', 'json_pop@', 'json_pretty$',
+    'json_push@', 'json_pushb@', 'json_pushn@', 'json_pushnull@',
+    'json_pushs@', 'json_pushval@', 'json_remove@', 'json_removeat@',
+    'json_set@', 'json_setb@', 'json_setn@', 'json_setnull@', 'json_sets@',
+    'json_setval@', 'json_string@', 'json_stringify$', 'json_type',
+    'json_typename$', 'json_value', 'json_value$', 'keypressed', 'kill',
+    'label@', 'label_caption$', 'label_caption@', 'lbound', 'lcase$', 'left$',
+    'len', 'let', 'lfill$', 'librarypath$', 'line', 'line$', 'list_add@',
+    'list_clear@', 'list_count', 'list_item$', 'list_itemindex',
+    'list_itemindex@', 'list_onclick@', 'list_selected$', 'listbox@',
+    'listitem@', 'listitem_caption$', 'listitem_caption@',
+    'listitem_subitem$', 'listitem_subitem@', 'listview@',
+    'listview_addcolumn@', 'listview_itemcount', 'ln', 'loc', 'local', 'lof',
+    'log10', 'log2', 'loop', 'ltab$', 'ltrim$', 'mainmenu@', 'maskedit@',
+    'maskedit_mask$', 'maskedit_mask@', 'maskedit_text$', 'maskedit_text@',
+    'max', 'memo@', 'memo_addline@', 'memo_clear@', 'memo_line$',
+    'memo_linecount', 'memo_onchange@', 'memo_readonly', 'memo_readonly@',
+    'memo_text$', 'memo_text@', 'memo_wordwrap', 'memo_wordwrap@',
+    'menuitem@', 'menuitem_caption$', 'menuitem_caption@', 'menuitem_click@',
+    'menuitem_onclick@', 'mid$', 'millisecondof', 'millisecondsbetween',
+    'millisecondspan', 'min', 'minuteof', 'minutesbetween', 'minutespan',
+    'mkdir', 'mod', 'monthof', 'monthoftheyear', 'monthsbetween', 'monthspan',
+    'movedown$', 'moveleft$', 'moveright$', 'moveup$', 'moviespath$',
+    'msgbox', 'msgbox_confirm', 'mulstring$', 'musicpath$', 'narr_get',
+    'narr_set@', 'ndims', 'next', 'not', 'now', 'null', 'number', 'oct$',
+    'on', 'open', 'opendialog@', 'openfile$', 'openpicture$', 'opentext$',
+    'or', 'os_architecture$', 'os_build', 'os_check', 'os_major', 'os_minor',
+    'os_name$', 'os_platform$', 'os_spmajor', 'os_spminor', 'output',
+    'pagecontrol@', 'pagecontrol_pagecount', 'pagecontrol_pageindex',
+    'pagecontrol_pageindex@', 'paintbox@', 'paintbox_onpaint@', 'panel@',
+    'panel_caption$', 'panel_caption@', 'paramcount', 'paramstr$',
+    'parr_get@', 'parr_set@', 'pastetext$', 'path_changeextension$',
+    'path_combine$', 'path_getdirectoryname$', 'path_getextension$',
+    'path_getfilename$', 'path_getfilenamenoext$', 'path_getfullpath$',
+    'path_getpathroot$', 'path_hasextension', 'path_hasvalidfilenamechars',
+    'path_hasvalidpathchars', 'path_ispathrooted', 'path_isrelativepath',
+    'path_matchespattern', 'pathseparator$', 'pause', 'pdict@', 'pdict_get@',
+    'pdict_getdef@', 'pdict_set@', 'pdim@', 'picturespath$', 'pnttonum',
+    'pointer@', 'popupmenu@', 'popupmenu_attach@', 'print', 'println',
+    'processmessages', 'progressbar@', 'progressbar_max', 'progressbar_max@',
+    'progressbar_min', 'progressbar_min@', 'progressbar_position',
+    'progressbar_position@', 'proper$', 'publicpath$', 'radio_caption$',
+    'radio_caption@', 'radio_checked', 'radio_checked@', 'radio_onchange@',
+    'radiobutton@', 'radiogroup@', 'radiogroup_add@', 'radiogroup_caption$',
+    'radiogroup_caption@', 'radiogroup_clear@', 'radiogroup_count',
+    'radiogroup_item$', 'radiogroup_itemindex', 'radiogroup_itemindex@',
+    'radiogroup_onchange@', 'radtodeg', 'rag@', 'rag_analyze$', 'rag_count',
+    'rag_doc$', 'rag_error', 'rag_free', 'rag_funccount', 'rag_functions$',
+    'rag_rebuild@', 'rag_retrieve$', 'rag_retrieve_budget$',
+    'rag_retrieve_json$', 'rag_summary$', 'rag_tags$', 'randomfilename$',
+    'randomize', 'read', 'regex_find$', 'regex_findall@', 'regex_findlen',
+    'regex_findpos', 'regex_group$', 'regex_groupcount', 'regex_groups@',
+    'regex_split@', 'repeat', 'replacestr$', 'replacetext$', 'reset$',
+    'restore', 'restorepos$', 'resume', 'return', 'reverse$', 'rfill$',
+    'right$', 'ringtonespath$', 'rmdir', 'rnd', 'round', 'rtab$', 'rtrim$',
+    'sandboxroot$', 'sarr_get$', 'sarr_set@', 'savedialog@', 'savefile$',
+    'savepicture$', 'savepos$', 'savetext$', 'scrollbar@', 'scrollbar_max',
+    'scrollbar_max@', 'scrollbar_min', 'scrollbar_min@', 'scrollbar_position',
+    'scrollbar_position@', 'scrollbox@', 'sdict@', 'sdict_get$',
+    'sdict_getdef$', 'sdict_set@', 'sdim@', 'secondof', 'secondsbetween',
+    'secondspan', 'seek', 'select', 'selectdir$', 'selectdirdialog@', 'sgn',
+    'shape@', 'shape_brushcolor', 'shape_brushcolor@', 'shape_kind',
+    'shape_kind@', 'shape_pencolor', 'shape_pencolor@', 'sharedalarmspath$',
+    'sharedcamerapath$', 'shareddocumentspath$', 'shareddownloadspath$',
+    'sharedmoviespath$', 'sharedmusicpath$', 'sharedpicturespath$',
+    'sharedringtonespath$', 'showcursor$', 'sign', 'sin', 'sinh', 'space$',
+    'speedbutton@', 'speedbutton_caption$', 'speedbutton_caption@',
+    'speedbutton_click@', 'speedbutton_down', 'speedbutton_down@',
+    'speedbutton_groupindex@', 'speedbutton_onclick@', 'spinedit@',
+    'spinedit_max@', 'spinedit_min@', 'spinedit_onchange@', 'spinedit_value',
+    'spinedit_value@', 'splitter@', 'sqlite_available', 'sqlite_backup',
+    'sqlite_begin', 'sqlite_bindjson', 'sqlite_bindnull', 'sqlite_bindnum',
+    'sqlite_bindstr', 'sqlite_changes', 'sqlite_clearbind',
+    'sqlite_clearerror', 'sqlite_close', 'sqlite_colcount', 'sqlite_colindex',
+    'sqlite_colname$', 'sqlite_coltype', 'sqlite_coltypename$',
+    'sqlite_columns@', 'sqlite_commit', 'sqlite_eof', 'sqlite_error',
+    'sqlite_errormsg$', 'sqlite_escape$', 'sqlite_exec', 'sqlite_fetchall@',
+    'sqlite_fetchone@', 'sqlite_finalize', 'sqlite_getn', 'sqlite_getnum',
+    'sqlite_gets$', 'sqlite_getstr$', 'sqlite_insertjson', 'sqlite_intrans',
+    'sqlite_isblob', 'sqlite_isn', 'sqlite_isnull', 'sqlite_isopen',
+    'sqlite_lastid', 'sqlite_open@', 'sqlite_path$', 'sqlite_prepare@',
+    'sqlite_query$', 'sqlite_query@', 'sqlite_quote$', 'sqlite_reset',
+    'sqlite_rollback', 'sqlite_row@', 'sqlite_scalar', 'sqlite_scalar$',
+    'sqlite_step', 'sqlite_strerror$', 'sqlite_tableexists', 'sqlite_tables@',
+    'sqlite_totalchanges', 'sqlite_updatejson', 'sqlite_vacuum',
+    'sqlite_version$', 'sqr', 'startsstr', 'startstext', 'statictext@',
+    'statictext_caption$', 'statictext_caption@', 'statusbar@',
+    'statusbar_text$', 'statusbar_text@', 'step', 'str$', 'strchar$',
+    'strcmp', 'strcmpi', 'strerror', 'stri$', 'string$', 'stringgrid@',
+    'stringgrid_cell$', 'stringgrid_cell@', 'stringgrid_clear@',
+    'stringgrid_colcount', 'stringgrid_colcount@', 'stringgrid_fixedrows',
+    'stringgrid_fixedrows@', 'stringgrid_rowcount', 'stringgrid_rowcount@',
+    'strings@', 'strings_add', 'strings_append', 'strings_beginupdate',
+    'strings_capacity', 'strings_casesensitive', 'strings_clear',
+    'strings_commatext', 'strings_commatext$', 'strings_count',
+    'strings_defaultencoding', 'strings_defaultencoding$', 'strings_delete',
+    'strings_delimitedtext', 'strings_delimitedtext$', 'strings_delimiter',
+    'strings_delimiter$', 'strings_duplicates', 'strings_duplicates$',
+    'strings_encoding$', 'strings_endupdate', 'strings_equals',
+    'strings_exchange', 'strings_find', 'strings_free', 'strings_indexof',
+    'strings_indexofname', 'strings_insert', 'strings_keynames$',
+    'strings_linebreak', 'strings_linebreak$', 'strings_load',
+    'strings_loadfromfile', 'strings_loadfromstream', 'strings_move',
+    'strings_names$', 'strings_namevalueseparator',
+    'strings_namevalueseparator$', 'strings_onchange', 'strings_onchange$',
+    'strings_onchanging', 'strings_onchanging$', 'strings_quotechar',
+    'strings_quotechar$', 'strings_save', 'strings_savetofile',
+    'strings_savetostream', 'strings_sort', 'strings_sorted',
+    'strings_strictdelimiter', 'strings_strings', 'strings_strings$',
+    'strings_text', 'strings_text$', 'strings_trailinglinebreak',
+    'strings_valuefromindex', 'strings_valuefromindex$', 'strings_values',
+    'strings_values$', 'strings_writebom', 'strline$', 'strtodate',
+    'strtodatetime', 'strtotime', 'stuffstring$', 'swap', 'swapcase$',
+    'tabcontrol@', 'tabcontrol_add@', 'tabcontrol_clear@', 'tabcontrol_count',
+    'tabcontrol_onchange@', 'tabcontrol_tab$', 'tabcontrol_tabindex',
+    'tabcontrol_tabindex@', 'tabsheet@', 'tabsheet_caption$',
+    'tabsheet_caption@', 'tan', 'tanh', 'tempfilename$', 'temppath$', 'then',
+    'time', 'time$', 'timer@', 'timer_enabled', 'timer_enabled@',
+    'timer_interval', 'timer_interval@', 'timer_ontimer@', 'timer_start@',
+    'timer_stop@', 'timetostr$', 'to', 'today', 'togglebox@',
+    'togglebox_caption$', 'togglebox_caption@', 'togglebox_checked',
+    'togglebox_checked@', 'togglebox_onchange@', 'tomorrow', 'toolbar@',
+    'trace', 'trackbar@', 'trackbar_max', 'trackbar_max@', 'trackbar_min',
+    'trackbar_min@', 'trackbar_onchange@', 'trackbar_position',
+    'trackbar_position@', 'trayicon@', 'trayicon_hide@', 'trayicon_hint$',
+    'trayicon_hint@', 'trayicon_onclick@', 'trayicon_show@',
+    'trayicon_visible', 'treenode@', 'treenode_caption$', 'treenode_caption@',
+    'treenode_childcount', 'treeview@', 'treeview_nodecount', 'trim$', 'true',
+    'ubound', 'ucase$', 'underline$', 'until', 'unzip_count', 'unzip_entry$',
+    'unzip_extract', 'updown@', 'updown_max', 'updown_max@', 'updown_min',
+    'updown_min@', 'updown_position', 'updown_position@', 'using', 'val',
+    'valcode', 'weekof', 'weekofthemonth', 'weekoftheyear', 'weeksbetween',
+    'weeksinayear', 'weeksinyear', 'weekspan', 'wend', 'while', 'word$',
+    'wordcount', 'yearof', 'yearsbetween', 'yearspan', 'yesterday',
+    'zip_addfile', 'zip_addstr', 'zip_close', 'zip_compress', 'zip_count',
+    'zip_create@', 'zip_entrysize', 'zip_error', 'zip_exists', 'zip_extract',
+    'zip_extractall', 'zip_list$', 'zip_open@', 'zip_quick', 'zip_read$'
+  );
+
+  ClassKinds: array[0..1203] of Byte = (
+    4, 4, 4, 4, 4, 4, 4, 1, 6, 6, 6, 3, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 5, 4, 4,
+    4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 5, 4, 3, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 5, 5, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 6, 6, 6, 3, 4, 4, 4, 4, 4, 4, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 3, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    4, 4, 4, 3, 5, 5, 5, 4, 4, 5, 6, 6, 6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 3, 4, 4, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 5, 5, 5, 5, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 3, 3, 4, 3, 3, 3, 3, 4, 4, 3, 4,
+    4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 5, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 3, 4, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 3, 5, 4, 3, 3, 6, 6, 6, 6, 6, 4, 5, 5, 5,
+    5, 5, 5, 5, 5, 4, 4, 5, 5, 5, 5, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    6, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4,
+    4, 4, 4, 5, 3, 4, 6, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 5, 4, 6, 6, 6, 4, 4, 4, 4, 3, 4, 4, 3, 4, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 3, 4, 4, 4, 3, 4, 4, 6, 6,
+    6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 1, 4, 4, 4, 4, 5, 5, 5, 5, 4, 6, 6, 4, 4, 4, 4, 4, 3, 1,
+    4, 2, 4, 4, 3, 3, 6, 6, 6, 4, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 6, 6, 3, 3, 4, 6, 6, 6, 6, 6, 6, 6, 4, 4, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 5, 3, 5, 3, 3, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 6, 6, 6, 5, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4,
+    4, 4, 4, 4, 4, 4, 3, 3, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4,
+    4, 5, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 4, 4, 4, 6, 6, 6, 6, 6, 6, 3, 4, 4, 4, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 3, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 3, 4,
+    6, 6, 6, 6, 6, 6, 4, 6, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 4, 2, 4, 4, 5, 3, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 3, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5
+  );
+
   KeywordWords: array[0..52] of String = (
     'append', 'as', 'binary', 'break', 'breakpoint', 'call', 'case', 'close',
     'const', 'continue', 'data', 'dim', 'do', 'else', 'elseif', 'end',
@@ -784,25 +1158,67 @@ var
   { The initialization section's loop counter. A unit has nowhere else to put
     one. }
   SigRow: Integer;
-  { Sorted, case-insensitive indexes over the arrays above, built once at unit
-    load. A TStringList.Find is a binary search; the highlighter asks this
-    question once per identifier token on every visible line, so a linear scan
-    over 1141 names would be felt. }
-  FKeywordIndex: TStringList;
-  FOperatorIndex: TStringList;
-  FLiteralIndex: TStringList;
-  FBuiltinIndex: array[TPhosphorTier] of TStringList;
 
-function MakeIndex(const AWords: array of String): TStringList;
+{ COMPARE A PROBE AGAINST A TABLE ENTRY, FOLDING ASCII CASE AS IT GOES.
+
+  This replaced `TStringList.Find` on a case-insensitive list, whose comparison
+  is `AnsiCompareText` -- locale-aware, and about 100 ns for each of the ten
+  probes a binary search over 1205 words makes. Here the table entries are
+  already lower case (the generator writes them that way), so only the PROBE
+  needs folding, and folding one character is a compare and an add.
+
+  ASCII IS NOT AN APPROXIMATION HERE, IT IS THE LANGUAGE'S OWN RULE. A Phosphor
+  identifier is ASCII letters, digits and `_` (engine/PhosphorLexer.pas:90-98)
+  with one of `$ % @ ?` allowed as a suffix, and the lexer folds it with
+  LowerCase (engine/PhosphorLexer.pas:452). A word that could reach this function
+  with a non-ASCII letter in it is not a word the parser would accept.
+
+  Answers <0, 0 or >0, comparing byte by byte and then by length -- which is the
+  order `sorted()` gives the generator, so the table and the search agree by
+  construction rather than by convention. }
+function CompareFolded(const AProbe, AEntry: String): Integer;
 var
-  I: Integer;
+  I, LP, LE, N: Integer;
+  C: Char;
 begin
-  Result := TStringList.Create;
-  Result.CaseSensitive := False;
-  Result.Duplicates := dupIgnore;
-  for I := Low(AWords) to High(AWords) do
-    Result.Add(AWords[I]);
-  Result.Sorted := True;
+  LP := Length(AProbe);
+  LE := Length(AEntry);
+  if LP < LE then N := LP else N := LE;
+  for I := 1 to N do
+  begin
+    C := AProbe[I];
+    if (C >= 'A') and (C <= 'Z') then
+      C := Chr(Ord(C) + 32);
+    if C < AEntry[I] then Exit(-1);
+    if C > AEntry[I] then Exit(1);
+  end;
+  Result := LP - LE;
+end;
+
+function PhosphorClassify(const AWord: String; out AKind: TPhosphorWordKind): Boolean;
+var
+  Lo, Hi, Mid, C: Integer;
+begin
+  AKind := pwkNone;
+  Result := False;
+  if AWord = '' then
+    Exit;
+  Lo := Low(ClassWords);
+  Hi := High(ClassWords);
+  while Lo <= Hi do
+  begin
+    Mid := (Lo + Hi) shr 1;
+    C := CompareFolded(AWord, ClassWords[Mid]);
+    if C = 0 then
+    begin
+      AKind := TPhosphorWordKind(ClassKinds[Mid]);
+      Exit(True);
+    end;
+    if C < 0 then
+      Hi := Mid - 1
+    else
+      Lo := Mid + 1;
+  end;
 end;
 
 function ToArray(const AWords: array of String): TPhosphorWordList;
@@ -815,40 +1231,51 @@ begin
     Result[I] := AWords[I];
 end;
 
+{ THE FIVE OLD QUESTIONS, EACH NOW ONE SEARCH AND ONE COMPARE. They are kept
+  because they are what reads well at a call site and because other code asks
+  them; what changed is that asking all five costs one search rather than five. }
 function IsPhosphorKeyword(const AWord: String): Boolean;
 var
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  Result := FKeywordIndex.Find(AWord, Dummy);
+  Result := PhosphorClassify(AWord, Kind) and (Kind = pwkKeyword);
 end;
 
 function IsPhosphorOperatorWord(const AWord: String): Boolean;
 var
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  Result := FOperatorIndex.Find(AWord, Dummy);
+  Result := PhosphorClassify(AWord, Kind) and (Kind = pwkOperator);
 end;
 
 function IsPhosphorLiteralWord(const AWord: String): Boolean;
 var
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  Result := FLiteralIndex.Find(AWord, Dummy);
+  Result := PhosphorClassify(AWord, Kind) and (Kind = pwkLiteral);
 end;
 
 function PhosphorBuiltinTier(const AWord: String; out ATier: TPhosphorTier): Boolean;
 var
-  Tier: TPhosphorTier;
-  Dummy: Integer;
+  Kind: TPhosphorWordKind;
 begin
-  for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
-    if FBuiltinIndex[Tier].Find(AWord, Dummy) then
-    begin
-      ATier := Tier;
-      Exit(True);
-    end;
   ATier := ptCore;
   Result := False;
+  if not PhosphorClassify(AWord, Kind) then
+    Exit;
+  case Kind of
+    pwkBuiltinCore: ATier := ptCore;
+    pwkBuiltinPackage: ATier := ptPackage;
+    pwkBuiltinGui: ATier := ptGui;
+  else
+    { A keyword, an operator word or a literal is not a built-in, and `error` is
+      why this arm has to exist rather than being an else-of-convenience: it is
+      in BOTH the keyword table and the core table, the merge gave it to the
+      keyword, and IsPhosphorBuiltin('error') must therefore answer False --
+      exactly as the five-search chain answered it, which stopped at keywords. }
+    Exit;
+  end;
+  Result := True;
 end;
 
 function IsPhosphorBuiltin(const AWord: String): Boolean;
@@ -915,12 +1342,9 @@ begin
 end;
 
 initialization
-  FKeywordIndex := MakeIndex(KeywordWords);
-  FOperatorIndex := MakeIndex(OperatorWords);
-  FLiteralIndex := MakeIndex(LiteralWords);
-  FBuiltinIndex[ptCore] := MakeIndex(BuiltinCoreWords);
-  FBuiltinIndex[ptPackage] := MakeIndex(BuiltinPackageWords);
-  FBuiltinIndex[ptGui] := MakeIndex(BuiltinGuiWords);
+  { NOTHING IS BUILT FOR CLASSIFICATION ANY MORE. ClassWords and ClassKinds are
+    constant arrays the generator sorted, so the first lookup costs what every
+    later one costs and the unit brings up six fewer TStringLists. }
   FSignatureIndex := TStringList.Create;
   FSignatureIndex.CaseSensitive := False;
   for SigRow := Low(SignatureNames) to High(SignatureNames) do
@@ -928,12 +1352,6 @@ initialization
   FSignatureIndex.Sorted := True;
 
 finalization
-  FreeAndNil(FKeywordIndex);
-  FreeAndNil(FOperatorIndex);
-  FreeAndNil(FLiteralIndex);
-  FreeAndNil(FBuiltinIndex[ptCore]);
-  FreeAndNil(FBuiltinIndex[ptPackage]);
-  FreeAndNil(FBuiltinIndex[ptGui]);
   FreeAndNil(FSignatureIndex);
 
 end.
