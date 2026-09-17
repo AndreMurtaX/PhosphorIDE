@@ -213,6 +213,17 @@ text() {
 # synthetic click nor F10 from XTest, and that was the one part of this program no
 # script could reach. AT-SPI reaches it: a menu item exposes one action and doing
 # it opens what a click would open.
+# `drag x1 y1 x2 y2` -- WINDOW-RELATIVE, like `at`, because the window is not
+# where it was last run: mutter gives it a different height every time, which is
+# the fact that cost two runs on 2026-09-16.
+drag() {
+    local x y
+    x=$(xwininfo -id "$WIN" | awk '/Absolute upper-left X/{print $4}')
+    y=$(xwininfo -id "$WIN" | awk '/Absolute upper-left Y/{print $4}')
+    printf 'drag %d %d %d %d\n' $((x + $1)) $((y + $2)) $((x + $3)) $((y + $4)) \
+        | "$HERE/xdrive" "$WIN" nofocus >/dev/null
+}
+
 menu() {
     if python3 "$HERE/readtext.py" --invoke "$1" >/dev/null 2>&1; then
         echo "MENU OK   $1"
@@ -235,6 +246,7 @@ while IFS= read -r line; do
         say\ *) flush; say "${line#say }" ;;
         text\ *) flush; text "${line#text }" ;;
         menu\ *) flush; menu "${line#menu }" ;;
+        drag\ *) flush; drag ${line#drag } ;;
         ''|'#'*) : ;;
         *) buf="$buf$line
 " ;;

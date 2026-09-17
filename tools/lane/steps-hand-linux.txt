@@ -1,0 +1,68 @@
+# USING THE EDITOR UNDER gtk2 -- roadmap item 1, the half that is not construction.
+#
+# Item 1 has said since it was written that the window had been BUILT under gtk2
+# and photographed, and that nobody had USED it there: fed a program's stdin,
+# stopped a runaway, dragged the splitter. Construction and layout are the cheap
+# half; the expensive half is behaviour that differs by widgetset, and none of it
+# shows in a form that is merely built.
+#
+# THIS CASE COULD NOT HAVE BEEN WRITTEN BEFORE 2026-09-17, and that is the point.
+# Every assertion below is about WORDS -- a prompt that must appear before an
+# answer, an answer that must come back, a pane that must still hold its text
+# after the splitter moved. Before item 28 gave this side a text reader, all of
+# it would have been screenshots for a person to squint at, which is exactly why
+# item 1 said "by hand".
+#
+# Run it as:
+#   bash tools/lane/lane-linux.sh tools/lane/blocked.bas \
+#        tools/lane/steps-hand-linux.txt
+raise
+wait 800
+
+# --- A PROGRAM THAT READS ITS STDIN ---------------------------------------
+# blocked.bas prints, then blocks on `line input`. F9 runs it.
+key F9
+wait 3500
+shot 480-waiting-for-input
+
+# THE PROMPT MUST BE THERE BEFORE THE ANSWER IS. `print "type something: "`
+# emits no newline, so the prompt only reaches the pane through the idle-flush
+# path in DrainTimer -- an unterminated line that has gone quiet is a prompt.
+# That path has never been asserted on this platform; a screenshot of a pane
+# showing the prompt cannot say whether it arrived before or after anything.
+text before the breakpoint
+text type something:
+
+# --- ANSWERED FROM THE INPUT ROW ------------------------------------------
+# The input row is at the bottom of the output panel, which is bottom-anchored:
+# mutter gives this window a different height on different runs, so every click
+# here is measured UP from the bottom edge.
+bot 300 14
+wait 400
+type lane-answered-me
+key Return
+wait 2500
+shot 481-answered
+text you typed lane-answered-me
+
+# --- AND THE WINDOW IS STILL A WINDOW --------------------------------------
+# Reading a control's text at all proves the UI thread came back: a frozen
+# editor answers no accessibility request either.
+text Watches
+
+# --- THE SPLITTER, AND A RESIZE -------------------------------------------
+# Dragged up by 60 px and back. The failure this guards against is the output
+# pane collapsing to nothing or the editor losing its gutter -- neither of which
+# is an error anywhere, and both of which are only visible by looking.
+drag 500 232 500 292
+wait 700
+shot 482-splitter-moved
+text you typed lane-answered-me
+drag 500 292 500 232
+wait 700
+shot 483-splitter-back
+
+# The text survived both moves, which is the assertion. A pane that collapsed
+# would still photograph as a window.
+text type something:
+text Watches

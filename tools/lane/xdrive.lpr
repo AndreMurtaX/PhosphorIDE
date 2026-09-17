@@ -247,6 +247,42 @@ begin
   end;
 end;
 
+{ DRAG, WHICH A SPLITTER NEEDS AND A CLICK CANNOT DO.
+
+  Press, MOVE IN STEPS, release. The steps are not decoration: a TSplitter tracks
+  motion events, and one jump from start to finish delivers a single motion the
+  toolkit may treat as a stray -- the pane then does not move and the shot looks
+  like a splitter that refuses to be dragged. Ten steps with a flush between them
+  is what a hand produces, near enough.
+
+  The sleep after the press is for the same reason the double-click has one:
+  gtk2 decides a drag has begun on the first motion AFTER a button-down it has
+  already seen, and a press and a motion in the same batch can arrive together. }
+procedure DragTo(AX1, AY1, AX2, AY2: Integer);
+const
+  Steps = 10;
+var
+  I: Integer;
+begin
+  XTestFakeMotionEvent(Dpy, -1, AX1, AY1, 0);
+  XFlush(Dpy);
+  Sleep(120);
+  XTestFakeButtonEvent(Dpy, 1, 1, 0);
+  XFlush(Dpy);
+  Sleep(120);
+  for I := 1 to Steps do
+  begin
+    XTestFakeMotionEvent(Dpy, -1,
+      AX1 + ((AX2 - AX1) * I) div Steps,
+      AY1 + ((AY2 - AY1) * I) div Steps, 0);
+    XFlush(Dpy);
+    Sleep(25);
+  end;
+  XTestFakeButtonEvent(Dpy, 1, 0, 0);
+  XFlush(Dpy);
+  Sleep(250);
+end;
+
 { Absolute screen coordinates, because that is what xwininfo reports and what a
   screenshot is measured in. `click 25 771` is the same arithmetic on both
   platforms. }
@@ -280,7 +316,8 @@ end;
 
 var
   Line, Cmd, Arg: String;
-  P: Integer;
+  P, X1, Y1, X2, Y2: Integer;
+  Nums: String;
 begin
   if ParamCount < 1 then
   begin
@@ -338,6 +375,23 @@ begin
       ClickAt(StrToIntDef(Copy(Arg, 1, P - 1), 0),
               StrToIntDef(Trim(Copy(Arg, P + 1, Length(Arg))), 0),
               Cmd = 'dblclick');
+    end
+    else if Cmd = 'drag' then
+    begin
+      { Four numbers: from x y to x y. }
+      Nums := Arg;
+      P := Pos(' ', Nums); X1 := StrToIntDef(Copy(Nums, 1, P - 1), -1);
+      Nums := Trim(Copy(Nums, P + 1, Length(Nums)));
+      P := Pos(' ', Nums); Y1 := StrToIntDef(Copy(Nums, 1, P - 1), -1);
+      Nums := Trim(Copy(Nums, P + 1, Length(Nums)));
+      P := Pos(' ', Nums); X2 := StrToIntDef(Copy(Nums, 1, P - 1), -1);
+      Y2 := StrToIntDef(Trim(Copy(Nums, P + 1, Length(Nums))), -1);
+      if (X1 < 0) or (Y1 < 0) or (X2 < 0) or (Y2 < 0) then
+      begin
+        WriteLn(StdErr, 'xdrive: drag needs four coordinates: fromx fromy tox toy');
+        Halt(2);
+      end;
+      DragTo(X1, Y1, X2, Y2);
     end
     else if Cmd = 'raise' then
       RaiseWindow
