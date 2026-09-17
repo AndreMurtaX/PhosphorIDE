@@ -48,3 +48,29 @@ type 1
 wait 900
 shot 464-edited-so-the-mark-is-gone
 outtab
+
+# --- AND THE JUMP FROM THE DIAGNOSTIC -------------------------------------
+# The last clause of roadmap item 1 that had only ever been driven on Windows:
+# "a diagnostic is double-clicked and the caret lands on the right line in the
+# right file". It could not be asserted here before 2026-09-17, because the
+# evidence is the STATUS BAR saying `4: 1` and this side could only photograph
+# it. `text` reads it.
+#
+# The caret is put somewhere else first, so landing on line 4 is a move and not
+# a coincidence: without this the assertion would pass on a double-click that
+# did nothing at all.
+key ctrl+g
+wait 500
+key ctrl+a
+type 1
+key Return
+wait 600
+text 1: 1
+
+# The Problems tab, and its first row.
+bot 210 151
+wait 500
+bot2 200 123
+wait 900
+shot 455-jumped-from-the-diagnostic
+text 4: 1
