@@ -1,4 +1,4 @@
-# The REPL pane under gtk2. The Linux driver has no text reader -- keys go in
+# The REPL pane under gtk2. The Linux driver had no text reader when this was written -- roadmap item 28 gave it one, and this case has not been rewritten to use it -- keys go in
 # through XTest and frames come out through xwd, because this VM has neither
 # xdotool nor ImageMagick -- so every assertion here is a screenshot rather than
 # a transcript read back. What it CAN check that the Windows side cannot as

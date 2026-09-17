@@ -59,6 +59,58 @@ The sibling repository's rule holds here: nothing is done on a claim.
 
 ## 1. Drive the editor by hand under gtk2
 
+**FIVE OF SIX DONE 2026-09-17. The sixth is written down rather than left open.**
+
+This was the first item on the list and the last one closed, and it did not close by
+somebody sitting at the VM: it closed because **item 28 gave this side a text reader**,
+and every clause below turned from something to look at into something to assert. The
+case is `tools/lane/steps-hand-linux.txt`, and its own header says it could not have
+been written the day before.
+
+- **A file is opened, run with F9, and its output appears** -- `steps-readtext-linux.txt`
+  asserts the Output pane's actual transcript, `lane-readtext-ok` and `total=42`.
+- **A program that reads `LINE INPUT` is answered from the input row, and its prompt is
+  seen BEFORE the answer.** `print "type something: "` emits no newline, so the prompt
+  only reaches the pane through the idle-flush path in `DrainTimer` -- an unterminated
+  line that has gone quiet is a prompt. That path had never been asserted on this
+  platform, and a photograph of a pane showing the prompt cannot say whether it arrived
+  before anything.
+- **A runaway is stopped with Ctrl+F2 while the window stays responsive.** `line input`
+  with nobody answering is a program that will not end on its own. After the stop the
+  lane's process table shows no `phosphor` child, and the window answers two more text
+  reads -- which is the half a screenshot cannot settle, because a frozen editor answers
+  no accessibility request either.
+- **The splitter is dragged and the window resized.** `xdrive` gained a `drag`, which it
+  had the primitives for and not the verb. It moves in ten steps rather than one jump:
+  a `TSplitter` tracks motion events, and a single motion can be treated as a stray, so
+  the pane does not move and the shot looks like a splitter that refuses to be dragged.
+  The assertion is that the panes still hold their text afterwards -- a collapsed one
+  would still photograph as a window.
+- **`xvfb-run -a bash scripts/build.sh` runs the selftest rather than skipping it** --
+  see item 28. Exit 0, every form constructed.
+- **`--release` produces a Release build there** -- item 28 again, and it was RED the
+  first time: `-O3` runs flow analysis the Default mode does not and found two warnings
+  that had been sitting in `uphosphorcomplete.pas` all along.
+
+**WHAT IS STILL WINDOWS-ONLY, AND WHY.** Half of the first clause: *a diagnostic is
+double-clicked and the caret lands on the right line*. The CARET half is assertable now
+-- the status bar says `4: 1` and `text` reads it. The DOUBLE-CLICK half is not, because
+reaching the Problems tab and its first row needs pixel coordinates and this window does
+not have stable ones: measured 2026-09-17, one run reported 1000x675 through `xwininfo`
+while its own `xwd` frame came back 1330x950, so an offset derived from a screenshot
+does not describe the window the click lands in. AT-SPI cannot be asked instead -- a
+page tab and a list row expose neither an action nor extents under gail, checked.
+
+Two attempts at guessing those coordinates failed and a third was not made. **A lane
+case that is red because its coordinates are wrong teaches people to ignore red**, which
+costs more than the clause is worth; the reason is in `steps-blame-linux.txt` where the
+next person will be standing when they wonder.
+
+**And the item's own closing line held.** "Touches: whatever it proves wrong. Nothing is
+expected; that is why it is worth doing." It proved two warnings wrong in a build mode
+nobody ran, and it proved that the thing standing between this project and a driven
+Linux editor was never the editor -- it was that nobody could ask it a question.
+
 **What.** `scripts/build.sh` has been run on Ubuntu with Lazarus 4.8: both projects build
 with zero errors, warnings and notes, `bin/phosphoridetest` is green, `gen-keywords.py
 --check` is clean, and `phosphoride --selftest` constructs all three forms **under gtk2**
