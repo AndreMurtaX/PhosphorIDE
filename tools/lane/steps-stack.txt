@@ -4,7 +4,8 @@
 # guessed: the output tabs sit at y 561, the list rows start at 603 and step 16.
 key ^g
 wait 700
-type 4{ENTER}
+type 4
+key {ENTER}
 wait 500
 key {F5}
 wait 500
@@ -29,7 +30,8 @@ shot 03-variables-of-frame-3
 # put the caret somewhere else, then jump back through the innermost frame
 key ^g
 wait 700
-type 12{ENTER}
+type 12
+key {ENTER}
 wait 600
 at 161 561
 wait 500

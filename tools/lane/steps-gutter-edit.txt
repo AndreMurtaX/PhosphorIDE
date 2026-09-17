@@ -4,14 +4,16 @@
 # top, and the mark must be on 11 -- not left behind on 10.
 key ^g
 wait 700
-type 10{ENTER}
+type 10
+key {ENTER}
 wait 500
 key {F5}
 wait 600
 shot 61-mark-on-10
 key ^g
 wait 700
-type 2{ENTER}
+type 2
+key {ENTER}
 wait 500
 key {HOME}
 wait 200

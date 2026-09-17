@@ -3,7 +3,8 @@
 # in `line input` forever, which is the longest a program is ever "running".
 key ^g
 wait 700
-type 3{ENTER}
+type 3
+key {ENTER}
 wait 500
 key {F5}
 wait 500

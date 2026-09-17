@@ -160,6 +160,18 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         # would otherwise read as syntax: + ^ % ~ ( ) { } [ ] each go in braces.
         # Paid for on 2026-09-16 -- "type s = mid$(" opened a modifier group and
         # ate the characters after it, and the line came out as "s = mid$ bc",".
+        #
+        # AND IT BROKE FIVE SCRIPTS THAT WERE ALREADY WRITTEN, silently, for a
+        # day. `type 10{ENTER}` was the idiom before this escaping existed, and
+        # afterwards it typed the eight characters `10{ENTER}` into the Go to
+        # line box and pressed nothing -- so the dialog stayed up, every step
+        # after it went into a modal nobody closed, and the run still produced
+        # its screenshots and reported no error. Found on 2026-09-17 by writing
+        # a sixth script with the same idiom and looking at the picture.
+        # `steps-gutter`, `-gutter-edit`, `-stack`, `-stack-jump` and
+        # `-stack-running` now say `type 10` then `key {ENTER}`, which is what
+        # the split between these two verbs was always for. A step file written
+        # against one version of its driver is not a fixture; it is a caller.
         'type'     {
             $lit = -join ($rest.ToCharArray() | ForEach-Object {
                 if ('+^%~(){}[]'.Contains($_)) { '{' + $_ + '}' } else { $_ } })
