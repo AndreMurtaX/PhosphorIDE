@@ -67,10 +67,12 @@ key Return
 wait 600
 text 1: 1
 
-# The Problems tab, and its first row.
-bot 210 151
-wait 500
-bot2 200 123
+# The Problems tab is the SECOND in the strip, and the strip sits at
+# bottom-184 -- the same row `outtab` clicks for the first one. Bottom-relative,
+# because mutter gives this window a different height on different runs.
+bot 90 184
+wait 600
+bot2 200 135
 wait 900
 shot 455-jumped-from-the-diagnostic
 text 4: 1
