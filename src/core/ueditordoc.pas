@@ -31,7 +31,7 @@ interface
 
 uses
   Classes, SysUtils, Controls, SynEdit, LazSynEditText, SynEditFoldedView,
-  ubreakpoints;
+  ubreakpoints, utextfile;
 
 type
   { Says the breakpoint SET moved, and whether an edit is what moved it. The
@@ -44,6 +44,9 @@ type
   private
     FEdit: TSynEdit;
     FFileName: String;
+    { WHAT THE FILE ON DISK USED, so that saving it gives it back. Both are set
+      by LoadFromFile and defaulted for a buffer that has never been one. }
+    FShape: TTextShape;
     FUntitledIndex: Integer;
     FBreakpoints: TBreakpointSet;
     FOnBreakpointsChanged: TBreakpointsChangedEvent;
@@ -80,7 +83,9 @@ type
       lexer has no BOM handling at all, and a leading BOM byte is the lexical
       error `unexpected character` on line 1 of an otherwise perfect program. Every
       Windows editor and `Set-Content -Encoding utf8` writes one, which is how
-      that trap earned its comment in the lexer. }
+      that trap earned its comment in the lexer.
+
+      AND IT GIVES THE FILE BACK THE LINE ENDINGS IT CAME WITH. See the body. }
     procedure SaveToFile(const APath: String);
 
     { The tab's caption: the file's name, or `untitled-3`, with a leading `*`
@@ -117,6 +122,10 @@ type
 
     property Edit: TSynEdit read FEdit;
     property FileName: String read FFileName write FFileName;
+    { The line ending this document will be written with -- the one its file
+      arrived with, or the platform's for a buffer that has never been saved.
+      Readable so that a caller rewriting the file by another route can match it. }
+    property Shape: TTextShape read FShape;
     property UntitledIndex: Integer read FUntitledIndex write FUntitledIndex;
     property Modified: Boolean read GetModified write SetModified;
     property CaretLine: Integer read GetCaretLine;
@@ -194,6 +203,10 @@ begin
   FEdit.WantTabs := True;
   FFileName := '';
   FUntitledIndex := 0;
+  { A buffer nobody loaded gets this machine's convention and a closing newline,
+    which is what a text file is expected to have. }
+  FShape.Ending := System.LineEnding;
+  FShape.FinalNewline := True;
   FBreakpoints := TBreakpointSet.Create;
   TSynEditAccess(FEdit).ViewedTextBuffer.AddChangeHandler(senrLineCount, @LinesChanged);
   { AND THE ONE FOLDING SENDS. `senrLineMappingChanged` is the notification a
@@ -304,10 +317,17 @@ end;
 procedure TEditorDoc.LoadFromFile(const APath: String);
 var
   Raw: TStringList;
+  Text: String;
 begin
+  { READ THE BYTES FIRST, because the shape has to be seen before anything
+    splits the text on it. TStringList.LoadFromFile would have thrown that away
+    before this object could look. }
+  Text := ReadWholeFile(APath);
+  FShape := DetectShape(Text);
+
   Raw := TStringList.Create;
   try
-    Raw.LoadFromFile(APath);
+    SplitLines(Text, Raw);
     FEdit.Lines.Assign(Raw);
   finally
     Raw.Free;
@@ -322,43 +342,14 @@ end;
 
 procedure TEditorDoc.SaveToFile(const APath: String);
 var
-  Stream: TFileStream;
-  Text, Temp: String;
+  Text: String;
 begin
-  Text := FEdit.Lines.Text;
-
-  { WRITE BESIDE THE FILE, THEN REPLACE IT. fmCreate truncates the target the
-    instant it is opened, so a disk that fills, a network share that drops or a
-    process killed mid-write leaves a file that is empty or half a program --
-    and the version that was there is gone. The user's only copy was the one just
-    destroyed by the act of trying to save it.
-
-    The temporary lives in the SAME directory, because a rename across a
-    filesystem is a copy and stops being atomic. }
-  Temp := APath + '.tmp-phosphoride';
-  Stream := TFileStream.Create(Temp, fmCreate);
-  try
-    try
-      if Length(Text) > 0 then
-        Stream.WriteBuffer(Text[1], Length(Text));
-    finally
-      Stream.Free;
-    end;
-
-    { RenameFileUTF8 does not overwrite on Windows, so the target goes first --
-      and only once the new bytes are known to be safely written. }
-    if FileExistsUTF8(APath) and not DeleteFileUTF8(APath) then
-      raise EWriteError.CreateFmt('cannot replace %s', [APath]);
-    if not RenameFileUTF8(Temp, APath) then
-      raise EWriteError.CreateFmt('wrote %s but could not rename it to %s',
-        [Temp, APath]);
-  except
-    { The half-written temporary is this unit's mess to clear up; leaving one
-      beside every failed save is its own small defect. }
-    if FileExistsUTF8(Temp) then
-      DeleteFileUTF8(Temp);
-    raise;
-  end;
+  { NOT `FEdit.Lines.Text`, WHICH REWRITES EVERY LINE OF THE FILE -- see
+    utextfile's header for what that cost and how it was measured. The shape this
+    document was loaded with is handed back, and the bytes go through the one
+    writer both halves of the program share. }
+  Text := JoinLines(FEdit.Lines, FShape);
+  WriteWholeFile(APath, Text);
 
   FFileName := ExpandFileNameUTF8(APath);
   FEdit.Modified := False;

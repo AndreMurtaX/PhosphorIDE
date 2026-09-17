@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 637 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 663 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -201,6 +201,27 @@ the bar.
   file and exact about a line, and this editor feeds it both. Every Windows editor and
   `Set-Content -Encoding utf8` writes a BOM. `TEditorDoc.SaveToFile` is the only writer;
   keep it that way.
+- **A FILE IS GIVEN BACK THE LINE ENDINGS IT CAME WITH, and the closing newline it
+  had.** `src/core/utextfile.pas` owns the rules and `TEditorDoc.SaveToFile` is its
+  caller; nothing else in the program writes a `.bas`. Until 2026-09-17 it did not do
+  this: `TStrings.Text` joins with `TextLineBreakStyle`, which defaults to the machine's
+  own convention (`stringl.inc`, `GetTextStr` -> `GetLineBreakCharLBS`) and which
+  `TSynEditStringList` does not override -- so a program written on Linux, opened on
+  Windows and saved with ONE CHARACTER CHANGED came back with every line ending rewritten,
+  and a file that did not end with a newline gained one. No error, no warning, and only
+  the bytes to show it. Measured through the real editor rather than read: Ctrl+S on
+  `rem a\nx = 1\n` returned `rem a\r\nx = 1\r\n`.
+
+  **The first break decides**, for a file whose endings are mixed: rewriting the majority
+  of such a file to match its minority is the worse answer, and remembering every line's
+  own ending is a second copy of the buffer for a case nobody has. That one shape is the
+  only one this unit changes, and `phosphoridetest` says so out loud rather than leaving
+  it to be discovered.
+
+  What `phosphoridetest` pins is the property the rewrite rests on: **split then join is
+  the identity**, over a table of shapes. A replace across a tree is exactly a split, a
+  change to some lines and a join, so if that holds, the lines nobody touched cannot move.
+
 - **Bytes from the child are passed through untouched.** The host emits UTF-8 and the
   LCL wants UTF-8. Any "helpful" conversion -- `SysToUTF8`, a CP1252 round trip --
   corrupts exactly the strings Phosphor is careful about.
@@ -374,6 +395,17 @@ marked 2026-09-16 were paid for driving it.
   directly.** `InterfaceBase` plus `Win32Int`/`Gtk2Int`, never `Interfaces`, whose
   initialisation opens the display before `main`. The technique is Phosphor's and the
   reason is the same: identical behaviour on a desktop, over a pipe, and in CI.
+
+  **AND IT MAY NOT LINK `SynEdit` EITHER, one unit further in.** `synedit.pp`'s
+  initialization calls `InitSynDefaultFont`, whose first act is `Screen.Fonts` -- the
+  system's font list, which needs a widgetset. A headless program that links it dies
+  BEFORE `main`, **silently, with exit code 0 and no output**: found on 2026-09-17 by
+  bisecting a probe that wrote a file as its very first statement and never wrote it.
+  `tests/phosphoridetest.lpr` has always named `SynEditHighlighter` and
+  `SynEditTextBuffer` and never `SynEdit`, without saying why; this is why. The
+  consequence for design is the useful half: **logic that must be checked headless cannot
+  live in a unit that touches `SynEdit`** -- which is why `utextfile` exists rather than
+  three functions inside `ueditordoc`.
 - **`TProcess.Executable` is converted through the Windows system code page,** so a
   non-ASCII path is mangled before the OS sees it. Use `TProcessUTF8` (`UTF8Process`,
   LazUtils) everywhere. Both `uphosphorrun` and `uphosphorhost` do.

@@ -69,6 +69,12 @@ uses
     highlighter adds and the one the other two numbers cannot see -- has a
     number on both sides of the change. }
   SynEditTextBuffer,
+  { What a text file's bytes look like. NOT `ueditordoc`, which owns the other
+    half of the same job and cannot be linked here at all: `synedit.pp`'s
+    initialization calls Screen.Fonts, which needs a widgetset, and a program
+    that links it dies before main with exit code 0 and no output. That is why
+    these rules live in a unit of their own. }
+  utextfile,
   { The clock those measurements are taken with. `Now` cannot see a keystroke:
     it steps on the scheduler's tick and it follows the wall clock, so it can
     run backwards. Roadmap item 19 is what found that out. }
@@ -1412,6 +1418,107 @@ begin
   Check('and is not private either', not HandleIsPrivate(0));
 end;
 
+{ -------------------------------------------------------- a file's bytes --- }
+
+{ A FILE IS GIVEN BACK THE ENDINGS IT CAME WITH, and until 2026-09-17 it was not.
+
+  `TStrings.Text` joins with TextLineBreakStyle, which defaults to the machine's
+  own convention and which TSynEditStringList does not override, so saving a
+  Linux-written program on Windows rewrote EVERY LINE of it -- a whole-file diff
+  for a one-character edit, with no error anywhere. Measured through the real
+  editor: Ctrl+S on `rem a\n x = 1\n` returned CRLF throughout, and a file with
+  no closing newline gained one.
+
+  What is pinned here is the property the rewrite rests on: SPLIT THEN JOIN IS
+  THE IDENTITY, for every shape a text file comes in. A replace across a tree is
+  exactly a split, a change to some lines, and a join -- so if this holds, the
+  lines nobody touched cannot move. }
+
+procedure TestTextFile;
+var
+  Lines: TStringList;
+  Shape: TTextShape;
+
+  { Split it, join it, and say whether the bytes came back. The one check that
+    matters, run over a table rather than over an example. }
+  procedure RoundTrips(const AWhat, AText: String);
+  var
+    Back: String;
+  begin
+    SplitLines(AText, Lines);
+    Back := JoinLines(Lines, DetectShape(AText));
+    CheckEq(AWhat, AText, Back);
+  end;
+
+  function Shown(const AText: String): String;
+  begin
+    Result := StringReplace(AText, #13, '\r', [rfReplaceAll]);
+    Result := StringReplace(Result, #10, '\n', [rfReplaceAll]);
+  end;
+
+begin
+  Group('utextfile: the bytes a file is given back');
+
+  Lines := TStringList.Create;
+  try
+    { --- what the shape reading says ---------------------------------------- }
+    Shape := DetectShape('a'#10'b'#10);
+    CheckEq('LF is LF', '\n', Shown(Shape.Ending));
+    Check('and it closed with one', Shape.FinalNewline);
+    Shape := DetectShape('a'#13#10'b'#13#10);
+    CheckEq('CRLF is CRLF', '\r\n', Shown(Shape.Ending));
+    Shape := DetectShape('a'#13'b'#13);
+    CheckEq('a lone CR is kept rather than converted', '\r', Shown(Shape.Ending));
+    Shape := DetectShape('a'#10'b');
+    Check('a file with no closing newline says so', not Shape.FinalNewline);
+    { THE FIRST BREAK DECIDES, because a mixed file is one somebody's tools
+      disagreed about and rewriting all of it is the worse answer. }
+    Shape := DetectShape('a'#10'b'#13#10'c'#10);
+    CheckEq('a mixed file follows its first break', '\n', Shown(Shape.Ending));
+    Shape := DetectShape('a'#13#10'b'#10'c'#13#10);
+    CheckEq('and the other way round', '\r\n', Shown(Shape.Ending));
+
+    { --- splitting ---------------------------------------------------------- }
+    SplitLines('a'#10'b'#10, Lines);
+    CheckEqInt('a trailing newline makes no empty last line', 2, Lines.Count);
+    SplitLines('a'#10'b', Lines);
+    CheckEqInt('and neither does its absence', 2, Lines.Count);
+    SplitLines('a'#10#10'b'#10, Lines);
+    CheckEqInt('an empty line in the middle is a line', 3, Lines.Count);
+    CheckEq('and it is empty', '', Lines[1]);
+    SplitLines('', Lines);
+    CheckEqInt('nothing splits into nothing', 0, Lines.Count);
+    SplitLines('one line', Lines);
+    CheckEqInt('and a line with no break is one line', 1, Lines.Count);
+
+    { --- AND THE ROUND TRIP, which is the whole point ----------------------- }
+    RoundTrips('LF, closed', 'a'#10'b'#10);
+    RoundTrips('LF, open', 'a'#10'b');
+    RoundTrips('CRLF, closed', 'a'#13#10'b'#13#10);
+    RoundTrips('CRLF, open', 'a'#13#10'b');
+    RoundTrips('CR alone', 'a'#13'b'#13);
+    RoundTrips('one line, no break', 'just the one');
+    RoundTrips('nothing at all', '');
+    RoundTrips('an empty line in the middle', 'a'#10#10'b'#10);
+    RoundTrips('empty lines at the end', 'a'#10#10#10);
+    RoundTrips('a line of spaces', 'a'#10'   '#10'b'#10);
+    { A file that is ONLY newlines, which is the shape most likely to lose one. }
+    RoundTrips('newlines and nothing else', #10#10#10);
+    RoundTrips('one newline', #10);
+
+    { A MIXED FILE DOES NOT ROUND TRIP, and that is written down rather than
+      pretended away: the second ending is rewritten to the first. It is the one
+      shape this unit changes, it is a file two tools already disagreed about,
+      and the alternative -- remembering every line's own ending -- is a second
+      copy of the buffer for a case nobody has. }
+    SplitLines('a'#10'b'#13#10'c'#10, Lines);
+    CheckEq('a mixed file is normalised to its first ending',
+            'a\nb\nc\n', Shown(JoinLines(Lines, DetectShape('a'#10'b'#13#10'c'#10))));
+  finally
+    Lines.Free;
+  end;
+end;
+
 { ------------------------------------------------------------- the clock --- }
 
 { A CLOCK IS SILENTLY WRONG OR IT IS RIGHT, and both look the same in a report.
@@ -2598,6 +2705,7 @@ begin
   TestMessages;
   TestLanguage;
   TestHighlighter;
+  TestTextFile;
   TestClock;
   TestWalk;
   TestFold;
