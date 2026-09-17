@@ -49,30 +49,18 @@ wait 900
 shot 464-edited-so-the-mark-is-gone
 outtab
 
-# --- AND THE JUMP FROM THE DIAGNOSTIC -------------------------------------
-# The last clause of roadmap item 1 that had only ever been driven on Windows:
-# "a diagnostic is double-clicked and the caret lands on the right line in the
-# right file". It could not be asserted here before 2026-09-17, because the
-# evidence is the STATUS BAR saying `4: 1` and this side could only photograph
-# it. `text` reads it.
+# --- AND THE ONE CLAUSE THAT IS STILL WINDOWS-ONLY ------------------------
+# Roadmap item 1 asks that "a diagnostic is double-clicked and the caret lands
+# on the right line in the right file". The CARET half is now assertable here --
+# the status bar says `4: 1` and `text` reads it -- and the DOUBLE-CLICK half is
+# not, because reaching the Problems tab and its first row needs pixel
+# coordinates and this window does not have stable ones: measured 2026-09-17,
+# one run reported 1000x675 through xwininfo while its own xwd frame came back
+# 1330x950, so an offset derived from a screenshot does not describe the window
+# the click lands in.
 #
-# The caret is put somewhere else first, so landing on line 4 is a move and not
-# a coincidence: without this the assertion would pass on a double-click that
-# did nothing at all.
-key ctrl+g
-wait 500
-key ctrl+a
-type 1
-key Return
-wait 600
-text 1: 1
-
-# The Problems tab is the SECOND in the strip, and the strip sits at
-# bottom-184 -- the same row `outtab` clicks for the first one. Bottom-relative,
-# because mutter gives this window a different height on different runs.
-bot 90 184
-wait 600
-bot2 200 135
-wait 900
-shot 455-jumped-from-the-diagnostic
-text 4: 1
+# AT-SPI cannot be asked instead. A page tab and a list row expose neither an
+# action nor extents under gail, checked: `readtext.py --invoke Problems`
+# answers "nothing named 'Problems' can be acted on". So this stays driven on
+# Windows, where WM_GETTEXT and stable coordinates both work, and it is written
+# down here rather than left as a gap somebody rediscovers.
