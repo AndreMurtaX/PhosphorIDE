@@ -187,10 +187,19 @@ the bar.
   `:<digits>: ` past any drive letter -- never by splitting on the first or last colon.
   There is never a column, and the line number **can exceed the file's line count** (an
   unterminated block in a three-line file reports line 4), so clamp before scrolling.
-- **A `.bas` is saved as UTF-8 with NO byte-order mark.** Not a preference: Phosphor's
-  lexer has no BOM handling, so a leading BOM is the lexical error `unexpected
-  character` on line 1 of an otherwise perfect program. Every Windows editor and
-  `Set-Content -Encoding utf8` writes one. `TEditorDoc.SaveToFile` is the only writer;
+- **A `.bas` is saved as UTF-8 with NO byte-order mark.** Still the rule, and its reason
+  was wrong: measured on 2026-09-16, `phosphor run` on a BOM-saved file works, because
+  the console host STRIPS a leading BOM when it reads a file
+  (`host/console/phosphor.lpr:787-806`) and has done since the first commit. What this
+  file used to say -- that a BOM is `unexpected character` on line 1 -- was never true of
+  that path.
+
+  It is true of the OTHER path, and roadmap item 16 is what gave this editor one. The
+  REPL reads LINES and nothing strips them: a BOM piped to a prompt is
+  `error: unexpected character #194 (0xC2) at column 1` and THAT LINE IS LOST, measured
+  the same day. So the rule stands and the reason is now: the host is generous about a
+  file and exact about a line, and this editor feeds it both. Every Windows editor and
+  `Set-Content -Encoding utf8` writes a BOM. `TEditorDoc.SaveToFile` is the only writer;
   keep it that way.
 - **Bytes from the child are passed through untouched.** The host emits UTF-8 and the
   LCL wants UTF-8. Any "helpful" conversion -- `SysToUTF8`, a CP1252 round trip --

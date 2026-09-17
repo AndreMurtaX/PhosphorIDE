@@ -23,6 +23,19 @@ Cheapness is the tie-break, not the organising principle. Item 13 is a morning's
 sits low because nothing depends on it; item 17 sits last because it has a cost the rest of
 the list does not, named where it is described.
 
+**That ordering is spent**, and the Phosphor lead time it was built around turned out to be
+a day rather than a season. Two things on the first list never closed, and neither is
+forgotten:
+
+- **Item 2a**, the contract test against the real binary, which has not moved at all.
+- **Two clauses of item 1**: `xvfb-run -a bash scripts/build.sh` has still never been run
+  by anyone here, and neither has a `--release` build on Linux. The rest of item 1 -- the
+  editor DRIVEN under gtk2 rather than merely constructed -- was answered many times over
+  by `tools/lane/`, which is why the item reads as finished and is not.
+
+The ordering of the SECOND list, from 18 on, is a different one and is stated where it
+starts.
+
 ## The bar, for every item on this list
 
 The sibling repository's rule holds here: nothing is done on a claim.
@@ -1097,6 +1110,351 @@ unchanged.
 
 **Touches.** `src/core/usynphosphor.pas`, the structural scanner unit from item 15,
 `src/umainform.pas`, `tests/phosphoridetest.lpr`.
+
+---
+
+---
+
+# What is next
+
+Items 1 to 17 are done. This is the list that replaces them, and its ordering is not the
+first list's.
+
+**Corrections come before features.** Items 18 to 20 are things this repository already
+knows are wrong or unmeasured; every one of them was found by building something else, and
+every one is cheaper to fix now than after the next thing is built on top of it. A known
+defect that survives one more increment stops being a defect and becomes a property.
+
+**Then what the editor is still missing**, 21 to 24, ordered by how often a person would
+reach for the absence.
+
+**Then what only the other repository can unlock**, 25 and 26, which are the last two
+things `docs/architecture.md` still lists as absent and which have a lead time this
+repository cannot compress.
+
+**And 27 and 28 are about keeping the answers honest**, which is where this project's
+defects have actually come from: not from code that was wrong when it was written, but
+from prose that stopped being true while nobody was reading it.
+
+**Item 2a is still open** and still worth doing; it has not moved, and it is the only gate
+on the first list that never closed.
+
+---
+
+## 18. One statement-position rule, not two
+
+**What.** `src/core/uphosphoroutline.pas` and `src/core/uphosphorfold.pas` each carry their
+own copy of "where may a statement begin". One of them should own it and the other should
+call it.
+
+**Why, and it is not tidiness.** THEY ALREADY DISAGREE. The outline tracks whether a
+statement position is a PROGRAM-LEVEL one, because an integer label is legal at program
+level and not after `then` -- `x = 1 : 20 function h()` runs and `if x > 0 then 20 function
+f()` is refused. The folder does not track it, so that second line opens a fold the outline
+does not list a function for.
+
+Today that costs nothing: the program does not compile, so the cost is a fold marker in a
+file that is already red. What it costs later is the thing that has bitten this repository
+twice. Phosphor's compound-keyword table (`engine/PhosphorLexer.pas:189-224`) is a moving
+part, `tools/gen-keywords.py --check` does not extract it, and a change there will be fixed
+in ONE of the two copies. From then on the outline pane and the fold gutter disagree about
+where the same `function` ends, in the same window, on the same buffer -- one jumps to a
+line and the other hides down to a different one.
+
+`uphosphorcomplete`'s header already names this shape: "two scanners that agree until they
+do not". `uphosphorfold`'s header currently CLAIMS to be the one copy. It is not, and that
+sentence is either made true or deleted.
+
+**Done when.** One unit owns the rule and the other calls it; the outline's checks and the
+fold unit's pass unchanged, which is the proof that the extraction was faithful rather than
+a rewrite; and the program-level difference above is a check on both sides rather than a
+difference nobody wrote down.
+
+**Touches.** `src/core/uphosphorfold.pas`, `src/core/uphosphoroutline.pas`,
+`tests/phosphoridetest.lpr`.
+
+---
+
+## 19. The keystroke that costs 66 ms
+
+**What.** Find out what folding actually costs a person typing, rather than what it costs a
+loop in the test program, and then decide.
+
+**Why.** Item 17 answered its own performance clause with NO and printed the numbers:
+scanning one line is unchanged, an ordinary edit is unchanged, and an edit that OPENS OR
+CLOSES a block in a 5000-line file went from 0.040 ms to 66 ms. That is honest but it is
+not yet useful, because it was measured in `MeasureHighlighter` -- a bare
+`ScanRanges` over an attached line store -- and three things about the real case are
+unknown:
+
+- **When SynEdit does it.** On the keystroke, or on idle before the next paint? A cost paid
+  where nobody is waiting is a different cost.
+- **How much of it is ours.** The rescan runs the highlighter over every line below the
+  edit; `ScanFoldLine` is a second pass over each of those lines, and its share has never
+  been separated from the base cost.
+- **Whether the file sizes that matter are affected at all.** 5000 lines was chosen because
+  the item said so. A Phosphor program of 300 lines would pay 4 ms, which is nothing.
+
+**The cheap mitigation, if one is needed**, is not a cleverer scanner: it is to stop
+scanning. `TSynCustomHighlighter` rescans until a line's range MATCHES the stored one, and
+two ranges match structurally -- so a fold stack that reaches the same depth by a different
+path still compares equal, and most edits at the top of a file settle within a few lines.
+Whether they do here is a question about `TSynCustomCodeFoldBlock`'s interning and has not
+been asked.
+
+**Done when.** The number is measured IN THE EDITOR -- a driven case that types `function`
+at the top of a large buffer and times what the user waits for -- and either it is under a
+threshold written down in this item, or something is done and re-measured. "It felt fine"
+does not close this.
+
+**Touches.** `tools/lane/`, `tests/phosphoridetest.lpr`, possibly
+`src/core/usynphosphor.pas`.
+
+---
+
+## 20. A breakpoint a fold hides
+
+**What.** Decide what the editor does when a fold hides a line that carries a breakpoint.
+
+**Why.** Today it does nothing, and that is recorded in `SyncGutterMarks` rather than
+fixed. `TSynGutterMarks` paints visible screen rows only, so the mark is simply not drawn;
+the breakpoint is still in the set, still armed and still fires, and the debugger's own
+stop calls `GotoSource`, which moves the caret and makes SynEdit unfold to reach it. So
+nothing is broken.
+
+What is unpleasant is the sequence a person actually performs: collapse a function, see no
+mark, conclude the breakpoint is gone, click the gutter on the collapsed header to set it
+again -- and get a SECOND breakpoint, on the header line, which then stops the run twice,
+once at a line with no mark on it.
+
+**The three answers, and none of them is obviously right.** Refuse to collapse a block that
+hides a breakpoint, which is a fold marker that argues with the user. Unfold when a
+breakpoint is set or moved, which is a caret that jumps for a reason nobody asked for. Or
+draw something in the gutter of the COLLAPSED header to say a mark is hidden inside it,
+which is the most informative and needs a mark image that means "not here, below".
+
+**Done when.** One of the three is chosen, the reason is written where the code is, and a
+lane case on both platforms performs the sequence above and shows what happens. The
+"present but blank" class of defect is what `--selftest` reports panel counts for; this is
+the same class, and a screenshot is what settles it.
+
+**Touches.** `src/umainform.pas`, possibly `tools/gen-icons.py` and
+`src/core/uphosphoricons.pas`, `tools/lane/`.
+
+---
+
+## 21. Replace in files
+
+**What.** The Find in Files pane can search a tree. It cannot change one.
+
+**Why.** Replace exists already (`ActReplace`, `ReplaceDialog1`) and is scoped to the
+active buffer, exactly as Find was before item 14. The asymmetry is the whole argument: a
+person who has just found eleven occurrences across six files is one dialog away from the
+thing they were going to do next, and the editor asks them to open six tabs.
+
+**And it is the first feature on this list that CHANGES TEXT**, which is why it is not
+cheap. Everything built in items 14 to 17 is allowed to be wrong about a rare legal
+program, because being wrong costs a row in a list or a fold nobody wanted. A replace that
+is wrong costs somebody their file. So: no scanner is involved, the match is the same
+literal `FindInLine` the search already uses, and the write goes through
+`TEditorDoc.SaveToFile` -- the one writer, which is the only thing that knows about the
+BOM rule -- or through an open buffer's own undo stack, never through a stream of its own.
+
+**Done when.** A replace across a tree changes exactly the occurrences the search listed
+and nothing else, verified by a before-and-after of a fixture directory; a file that is
+OPEN is changed through its buffer so that Undo works and the tab shows modified; a file
+that is read-only or vanished between the search and the write is reported and skipped
+rather than failing the whole run; nothing is written until the user has seen the list;
+and no file gains a BOM or changes its line endings.
+
+**Touches.** `src/core/ufindinfiles.pas`, `src/umainform.pas`, `src/umainform.lfm`,
+`tests/phosphoridetest.lpr`, `tools/lane/`.
+
+---
+
+## 22. The matching block, and jumping to it
+
+**What.** With the caret on `if`, show where its `endif` is -- and jump there.
+
+**Why it is cheap now and was not before.** `uphosphorfold` already answers, for every
+line, what it opens and what it closes; the fold stack already knows which block the caret
+is inside. The feature is a reading of a structure that exists, and it changes no text,
+which puts it on the safe side of the line item 21 has to cross.
+
+**Why it is worth doing at all.** Phosphor has no braces. The eye has nothing to match on,
+and a `next` eleven lines down is not visibly the partner of a `for` -- which is the same
+argument the outline pane won on, one level smaller.
+
+**Done when.** With the caret on a block keyword, its partner is marked in the text and a
+shortcut moves the caret to it; on a keyword that opens nothing -- `next = 5`, `function`
+as a variable, a word inside a literal -- nothing is marked and the status bar says so
+rather than the editor doing nothing; an unterminated block marks nothing and says which;
+and the marking survives the buffer being edited, because it is recomputed and not
+remembered.
+
+**Touches.** `src/core/uphosphorfold.pas`, `src/umainform.pas`, `src/umainform.lfm`,
+`tests/phosphoridetest.lpr`.
+
+---
+
+## 23. Send the selection to the REPL
+
+**What.** A shortcut that takes the selected lines -- or the current one -- and feeds them
+to the prompt.
+
+**Why.** The REPL keeps its variables across lines and Run starts from nothing; that is the
+whole of item 16's argument. The missing half is that a person editing a function has no
+way to try it without retyping it into the prompt, which is exactly the retyping the pane
+was built to remove.
+
+**The one thing to get right** is that a multi-line selection is several lines and the REPL
+reads one at a time: they are sent in order, the transcript echoes each, and a line that
+opens a block leaves the prompt on `     ...> ` exactly as typing it would. Nothing is
+special-cased and nothing is joined.
+
+**Done when.** A selected `function` definition of five lines reaches the prompt as five
+lines and the function is then callable from it; sending with no REPL running starts one
+first; sending while the prompt is mid-block continues that block; and the transcript
+afterwards is indistinguishable from the same lines typed by hand.
+
+**Touches.** `src/umainform.pas`, `src/umainform.lfm`, `tools/lane/`.
+
+---
+
+## 24. A diagnostic you can see in the text
+
+**What.** The line a failed run blamed is marked IN THE EDITOR, not only in the Problems
+pane.
+
+**Why.** `uphosphormsg` parses the location, `AddProblem` lists it, and
+`ListProblemsDblClick` jumps to it -- and then the editor shows a caret on an ordinary
+line. The information is in the window and not where the eye is. `EditorSpecialLineMarkup`
+already paints the current debug statement, so the seam exists and is one line wide.
+
+**What it must not become.** Not a live checker: nothing here compiles anything, and a mark
+that appears while somebody is typing is a mark that is wrong most of the time. It marks
+what the LAST run said, it is cleared when the next run starts, and a line that has since
+been edited loses its mark rather than keeping a claim about text that has changed.
+
+Note that the existing clear is not a model to copy: `StartHost` empties the Problems pane
+only when the `Clear output on run` preference is on (`src/umainform.pas:1319-1323`), and a
+mark in the TEXT that outlived the run that produced it would be a lie whatever that
+preference says. This one clears unconditionally.
+
+**Done when.** A run that fails marks the line it blamed in the active document and only
+there; the mark survives scrolling and is cleared by the next run; editing the marked line
+clears its mark; a diagnostic with no location (`file not found:`, a `--check` warning)
+marks nothing; and the debug current-statement band still wins over it, because "you are
+here" outranks "this was wrong last time".
+
+**Touches.** `src/umainform.pas`, `tests/phosphoridetest.lpr`, `tools/lane/`.
+
+---
+
+## 25. Phosphor: an expression the debugger can evaluate
+
+**What.** Work in `C:/Dev/Phosphor`. A PDBP `evaluate` request that answers the value of an
+expression in a chosen frame, and `capabilities.evaluate` set true when it exists.
+
+**Why it is not this repository's to do.** `docs/debug-protocol.md` specifies the request
+and `src/core/udebugproto.pas` can already encode it; `capabilities.evaluate` is false on
+every host today and the editor honours that. The reason the editor must not close the gap
+itself is the invariant at the top of `CLAUDE.md`: an expression evaluator here would be an
+interpreter here, and the one design decision the rest of the program is not allowed to
+trade away is that the engine is never linked.
+
+**The shape to ask for**, in the terms the two debts in `docs/phosphor-debugger-debts.md`
+were asked in: an expression, a frame index, and an answer that is a VALUE and an error
+string, never a formatted line -- because the formatting belongs to whoever displays it and
+a host that formats has to guess at a pane it cannot see.
+
+**Done when.** The host answers `evaluate` for a global, a local in a named frame, and an
+expression that faults; `capabilities.evaluate` is true; and this repository needs no
+change to discover it, because the capability probe already exists -- which is the test of
+whether the contract was drawn in the right place, exactly as it was for the two debts that
+came before.
+
+**Touches.** The Phosphor repository. Here: nothing, until it lands.
+
+---
+
+## 26. Watches, and a breakpoint with a condition
+
+**What.** The editor half of item 25, plus conditional breakpoints.
+
+**Why they are one item.** Both are the same request with a different caller: a watch
+evaluates an expression when the program stops, and a conditional breakpoint evaluates one
+to decide whether to stop. Neither is reachable without 25, and once 25 exists both are
+panes and a dialog rather than protocol work.
+
+**Done when.** A watch list shows expressions evaluated at each stop and says plainly when
+one cannot be evaluated rather than showing a stale value; a breakpoint carries an optional
+condition, the gutter shows that it has one, and a condition the host refuses is reported
+where it was typed; and `Debug > Why is stepping unavailable?` and the paragraph in
+`CLAUDE.md` about what is NOT built are both corrected in the same increment, because a
+limitation recorded in the present tense is a claim with an expiry date nobody set.
+
+**Touches.** `src/core/udebugsession.pas`, `src/core/udebugproto.pas`,
+`src/umainform.pas`, `src/umainform.lfm`, `CLAUDE.md`, `docs/architecture.md`.
+
+---
+
+## 27. A citation that cannot rot quietly
+
+**What.** A checker that fails the build when a `file:line` into `../Phosphor` no longer
+points at what it claimed.
+
+**IN FLIGHT.** This was spun off into its own session on 2026-09-16 and may already be
+done; check `tools/` before starting.
+
+**Why.** `CLAUDE.md`'s rule is that a fact about Phosphor is extracted, never retyped, and
+that where extraction is impossible the source is cited with a line number. On 2026-09-16
+sixteen of those citations, in eight files, pointed at the wrong lines: the sibling file had
+grown by about sixty lines and nothing in either repository could notice. The worst of them,
+cited in seven places for "the lexer has no keyword table", had become the backslash-escape
+table inside a string literal. They were found by accident.
+
+**And the same day produced a second instance of the same shape** with no line numbers in
+it at all: `CLAUDE.md` explained the no-BOM rule by saying a BOM is a lexical error on line
+one, which the console host has stripped since its first commit. The rule was right and the
+reason had never been true of that path. A checker cannot catch that one -- but it is why
+the item is worth more than its mechanism, and why the commit that closes it should say
+what class of thing it does NOT catch.
+
+**Done when.** The checker is green on the current tree, red when a citation is made stale,
+skipped cleanly when `../Phosphor` is not there, and run by both build scripts beside the
+two `--check` gates that already exist.
+
+**Touches.** `tools/`, `scripts/build.ps1`, `scripts/build.sh`, `docs/building.md`,
+`CLAUDE.md`.
+
+---
+
+## 28. Reading text back, on the machine that cannot
+
+**What.** A way for the Linux lane to read what a control SAYS, and a single run of
+`scripts/build.sh` under `xvfb-run`.
+
+**Why.** `tools/lane/lane-windows.ps1` asserts on TEXT -- it sends `WM_GETTEXT` and reads
+the transcript back, which is how the REPL's whole conversation was checked. The gtk2 side
+has no equivalent: keys go in through XTest and frames come out through `xwd`, so every
+assertion there is a screenshot a person has to look at. That is why the Linux half of the
+REPL case checks the process table and the Windows half checks the words.
+
+The second half is the last thing on the five-gate bar that has never been watched. Both
+build scripts have run green on both machines, and the `xvfb-run` branch of `build.sh` --
+the one CI uses -- has been read and never executed by anyone here. A virtual framebuffer
+and a real session are not quite the same thing, and that sentence has been in `CLAUDE.md`
+since 2026-09-10 without being settled.
+
+**Done when.** One lane case on Linux asserts on the TEXT of a control rather than on a
+picture of it -- through AT-SPI, or by reading the X selection after a select-all and copy,
+or by any route that does not need a package the VM does not have without Andre's say-so --
+and `xvfb-run -a bash scripts/build.sh` has been run once, with its output recorded here or
+in `docs/building.md`, green or not. That second half is one of the two clauses item 1
+never closed; the other, a `--release` build on Linux, belongs with it.
+
+**Touches.** `tools/lane/`, `docs/building.md`, `CLAUDE.md`.
 
 ---
 
