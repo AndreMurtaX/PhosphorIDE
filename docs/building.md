@@ -89,8 +89,15 @@ Each script does the same six things in the same order:
    The script checks that the binary exists and is executable before it says a word about
    success. This is Phosphor's rule and it is here for the same reason.
 4. **Run the unit checks** -- `bin/phosphoridetest`, which prints
-   `545 checks, all green.` and exits 0. A non-zero exit is the number of failures, each
+   `<n> checks, all green.` and exits 0. A non-zero exit is the number of failures, each
    already printed with what it expected and what it got.
+
+   THE NUMBER IS NOT WRITTEN DOWN HERE, and that is deliberate. It lived as a literal in
+   five places across three files, went up eight times, and was corrected in none of
+   them: on 2026-09-17 every one of them still said 545 against a real 778. A count in
+   prose is a citation with no line number. The one place that keeps a literal is
+   `CLAUDE.md`'s gate, where the number exists so that a DROP is visible -- if it went
+   down, something was deleted -- and that is a use no reader-facing document has.
 5. **Run `--selftest`, under a timeout.** `bin/phosphoride --selftest <report>` builds
    every form once and exits 0 or 1. The timeout is not caution, it is the fix for a
    defect; see "The checks" below.
@@ -170,7 +177,7 @@ program and already exercises the units where a leak would be worth finding.
 
 Three of them. They cover different things and none of them covers what the other two do.
 
-### `bin/phosphoridetest` -- 545 checks
+### `bin/phosphoridetest` -- the count it prints
 
 ```
 bin\phosphoridetest.exe          # Windows

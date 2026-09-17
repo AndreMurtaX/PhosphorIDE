@@ -43,7 +43,9 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 545 checks, exit code 0.
+- `bin\phosphoridetest` green: every check, exit code 0. The run prints its own
+  count; the literal lives in `CLAUDE.md`'s gate alone, where the number is there so a
+  DROP is visible.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.

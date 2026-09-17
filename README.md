@@ -19,6 +19,11 @@ in-process introspection, no shared heap, no cheap variable inspection, and a
 debugger that has to be a protocol rather than a function call. See
 [Debugging](#debugging) for what that costs today.
 
+> **New here, or handing this to someone else?** Read
+> [`docs/getting-started.md`](docs/getting-started.md) instead. It goes from nothing to
+> a running debug session across BOTH repositories, and it says plainly what does not
+> work yet.
+
 ## Quickstart
 
 Requires **Lazarus 3.6 or 4.8** with FPC 3.2.2 and the LCL, SynEdit and LazUtils
@@ -457,8 +462,14 @@ That was fixed in Phosphor the day it was reported, and **this editor needed no 
 for it** -- the Line cells filled themselves. The handling for a frame that reports no
 line is still here, because a conformant host is allowed to answer that way.
 
-What is **not** built: no watches and no evaluate -- `capabilities.evaluate` is false on
-every host, and an expression evaluator in here would be an interpreter in here.
+What is **not** built HERE: no watch pane. `evaluate` itself exists as of 2026-09-17 --
+the `phosphor` host answers it and advertises `capabilities.evaluate: true`, with a
+second key `evaluateCalls: false` saying that no call you write in an expression is
+performed. It answers names in scope, every operator and index syntax, and refuses
+`len(x$)` along with every other library name. The editor reads the capability and does
+nothing with it yet; the pane is roadmap item 26. The reason that work happened in the
+OTHER repository is the invariant this one is built on: an expression evaluator in here
+would be an interpreter in here.
 `docs/debugger-lane.md` records what each step was verified against, and what the first
 cut got wrong.
 
@@ -502,7 +513,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 545 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- it prints its own count and exits 0 -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

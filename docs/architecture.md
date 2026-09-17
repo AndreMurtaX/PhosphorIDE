@@ -284,8 +284,8 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 545 checks over the
-diagnostic parser, the generated tables, the highlighter's token stream and the
+That is what makes `tests/phosphoridetest.lpr` possible: several hundred checks over
+the diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
 without anyone noticing -- a parser that silently stops matching, a highlighter
@@ -940,7 +940,7 @@ another repository (`host/console/phosphor.lpr:3017`).
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 545 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless; it prints its own count |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |
