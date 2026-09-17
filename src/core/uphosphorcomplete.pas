@@ -421,6 +421,27 @@ begin
   Depth := 0;
   InStr := False;
   Pending := '';
+  { BOTH STACKS ARE CLEARED, and the compiler is why rather than the logic.
+
+    A slot is WRITTEN at `(` under `Depth < MaxCallDepth` and READ at the end
+    under `Depth > 0` and `Depth <= MaxCallDepth`, so no read can reach a slot no
+    write reached -- but `Inc(Depth)` is unconditional, the three guards are in
+    three different places, and nothing composes them for the reader or for FPC.
+    At `-O3` it says so: warnings 5036 and 5089, `Commas` and `Names` "does not
+    seem to be initialized", 2026-09-17, the first time this repository built in
+    Release mode on Linux. The Default mode had never mentioned it because that
+    flow analysis only runs optimised.
+
+    Clearing them is not silencing the warning. An invariant that holds because
+    three guards agree is one edit away from not holding, and `Names` is an array
+    of MANAGED values -- reading one that was never written is a different class
+    of wrong from reading a stale integer. Thirty-two assignments, once per
+    signature-help query, against a popup that only appears while somebody types. }
+  for I := 0 to MaxCallDepth - 1 do
+  begin
+    Names[I] := '';
+    Commas[I] := 0;
+  end;
   Len := Length(ALine);
   I := 1;
 
