@@ -60,7 +60,9 @@ uses
     checkable without a child process. }
   uphosphorrepl,
   { Where a block opens and where it closes: words and positions, and the one
-    rule that decides whether folding can hide somebody's code. }
+    rule that decides whether folding can hide somebody's code. Since item 18 it
+    is also where that rule LIVES -- TLineWalk -- and uphosphoroutline above is
+    its other consumer rather than a second copy of it. }
   uphosphorfold,
   { Only for the third measurement below: a line store the highlighter can be
     attached to, so that the cost of RESCANNING -- which is the cost a fold
@@ -1101,6 +1103,45 @@ begin
   CheckEqInt('and an unclosed one is not decidable', -1,
              CallArgCount('f(1,', 2));
 
+  { --- THE SAME ANSWER AS THE FOLDER, which is roadmap item 18 ------------- }
+  { The mirror of the two checks in TestFold. Read them together: one of these
+    four lines opens a fold and lists a definition, and the other does neither,
+    and before the rule was written once the second did one of the two. }
+  Funcs := ScanOutlineText('x = 1 : 20 function h()' + LE);
+  CheckEqInt('a labelled definition at program level is listed', 1, Length(Funcs));
+  Funcs := ScanOutlineText('if x > 0 then 20 function f()' + LE);
+  CheckEqInt('and after then it is not, as the folder opens nothing', 0,
+             Length(Funcs));
+  Funcs := ScanOutlineText('if x > 0 then function f()' + LE);
+  CheckEqInt('an unlabelled definition after then still is', 1, Length(Funcs));
+
+  { --- WHERE THE TWO COPIES HAD DISAGREED ABOUT AN ARITY ------------------- }
+  { Every one of these was answered one way by the outline's own scanner and the
+    other way by CallArgCount, in the same unit, until both were put on the one
+    counter. None of them is legal Phosphor -- a parameter list holds names --
+    but an editor sees a half-typed line on every keystroke, and -1 is the
+    answer that stops go-to-definition resolving on a guess. }
+  Funcs := ScanOutlineText('function f("x, y")' + LE);
+  CheckEqInt('a comma inside a string is not a separator here either', 1,
+             Funcs[0].ParamCount);
+  Funcs := ScanOutlineText('function f(g(1, 2))' + LE);
+  CheckEqInt('nor is one inside a nested list', 1, Funcs[0].ParamCount);
+  Funcs := ScanOutlineText('function f(a, b' + LE);
+  CheckEqInt('an unclosed header has an arity nobody knows', -1,
+             Funcs[0].ParamCount);
+  CheckEq('and its row does not draw a parenthesis nobody typed', 'f',
+          OutlineRowText(Funcs[0]));
+  { `'` IS A COMMENT AND THERE IS NO SINGLE-QUOTED STRING, so this list never
+    closes either. The old outline read it as one parameter called `'a'`. }
+  Funcs := ScanOutlineText('function f(''a'')' + LE);
+  CheckEqInt('a comment opens inside the list and it never closes', -1,
+             Funcs[0].ParamCount);
+  { And the same rule at a call site, which is where the count is used. }
+  CheckEqInt('commas separate, so two of them are three things', 3,
+             CallArgCount('f(1, 2, 3)', 2));
+  CheckEqInt('an argument list of nothing but commas is not empty', 2,
+             CallArgCount('f(,)', 2));
+
   { --- the word under the caret --------------------------------------------- }
   { PrefixAtCaret looks backwards because completion asks what has been TYPED.
     This asks what the word IS, so it reaches both ways from the caret. }
@@ -1329,6 +1370,156 @@ begin
   Check('and is not private either', not HandleIsPrivate(0));
 end;
 
+{ ------------------------------------------------- the rule, on its own ---- }
+
+{ THE ONE COPY OF "WHERE MAY A STATEMENT BEGIN", asked directly.
+
+  Until 2026-09-17 this rule was written twice -- once in uphosphorfold and once
+  in uphosphoroutline -- and the copies had already drifted: the outline knew
+  that a statement position can be a PROGRAM-LEVEL one and the folder did not.
+  Neither copy had a check of its own, because each was only ever asked through
+  its consumer, so the drift was invisible until somebody read both files.
+
+  These checks ask the walk and not a consumer, which is the point: a rule with
+  its own checks can be corrected in one place and the correction is visible. }
+
+procedure TestWalk;
+var
+  W: TLineWalk;
+  Col, N: Integer;
+
+  { The line's tokens, in order, as `word@col+len` -- with a `!` on one that is
+    at a statement position and a `^` when that position is program level. }
+  function Walked(const ALine: String): String;
+  var
+    R: String;
+  begin
+    R := '';
+    WalkLine(W, ALine);
+    while WalkNext(W) do
+    begin
+      if R <> '' then
+        R := R + ' ';
+      if W.Token = wtWord then
+        R := R + W.Word
+      else if W.Token = wtNumber then
+        R := R + '#'
+      else if W.Token = wtString then
+        R := R + '"'
+      else
+        R := R + W.Word;
+      { `!` at a statement position and `^` when that position is a program-level
+        one. The second only ever appears on a token that carries the first:
+        "program level" is a property OF a statement position, not a second
+        independent thing, and a check that expected them apart would be
+        pinning a shape this record does not have. }
+      if W.AtStatement then
+        R := R + '!';
+      if W.AtProgramLevel then
+        R := R + '^';
+    end;
+    Result := R;
+  end;
+
+begin
+  Group('uphosphorfold: the one rule, asked without a consumer');
+
+  { --- tokens, and the case folding --------------------------------------- }
+  CheckEq('a word is a word', 'x!^ = #', Walked('x = 1'));
+  CheckEq('and it arrives folded', 'println!^ "', Walked('PRINTLN "hi"'));
+  CheckEq('an empty line has nothing in it', '', Walked(''));
+  CheckEq('nor has one that is only spaces', '', Walked('   '));
+
+  { --- what a statement position IS ---------------------------------------- }
+  { Four of them, and the fourth is the one the two copies disagreed about. }
+  CheckEq('the start of a line', 'function!^', Walked('function'));
+  CheckEq('after a colon', 'x!^ = # : function!^',
+          Walked('x = 1 : function'));
+  CheckEq('after then, which is NOT program level', 'if!^ x > # then f!',
+          Walked('if x > 0 then f'));
+  CheckEq('after else, likewise', 'else!^ f!', Walked('else f'));
+
+  { --- AND AN INTEGER LABEL, WHICH IS WHY PROGRAM LEVEL IS TRACKED --------- }
+  { `x = 1 : 20 function h()` runs and `if x > 0 then 20 function f()` is
+    refused, because a label is legal where a program's statements are and not
+    inside a one-line if. The outline knew this and the folder did not, so the
+    second line opened a fold for a function the outline did not list -- one
+    window disagreeing with itself about the same buffer. }
+  CheckEq('a label at program level keeps the position', '#!^ function!^',
+          Walked('20 function'));
+  CheckEq('and after a colon too', 'x!^ = # : #!^ function!^',
+          Walked('x = 1 : 20 function'));
+  CheckEq('but a number after then is an expression', 'if!^ x then #! function',
+          Walked('if x then 20 function'));
+
+  { --- the lexer's merge table, which is why a token can span two words ---- }
+  { engine/PhosphorLexer.pas:189-224. The walk does this because a consumer that
+    saw `end` and `if` separately would have to redo it. }
+  CheckEq('end if is one token', 'endif!^', Walked('end if'));
+  CheckEq('and so is else if', 'elseif!^', Walked('else if'));
+  CheckEq('with any spacing', 'endif!^', Walked('end     if'));
+  { AND A WORD THAT DOES NOT MERGE IS HANDED BACK. Without the pushback the
+    second word would be eaten and `end x` would be one token. }
+  CheckEq('end and a word that does not merge are two tokens', 'end!^ x',
+          Walked('end x'));
+  CheckEq('end at the end of a line is alone', 'end!^', Walked('end'));
+  CheckEq('and the if that starts the next line is its own statement',
+          'if!^', Walked('if'));
+
+  { --- what hides text ----------------------------------------------------- }
+  CheckEq('a string is one token', 'println!^ "', Walked('println "a : b"'));
+  CheckEq('and a colon in it starts nothing', 'println!^ "',
+          Walked('println ":"'));
+  CheckEq('an unterminated string ends where the line does', 'println!^ "',
+          Walked('println "a'));
+  CheckEq('a comment ends the walk', 'x!^ = #', Walked('x = 1 '' function f()'));
+  CheckEq('and so does rem, which the lexer itself owns', 'x!^ = # :',
+          Walked('x = 1 : rem function f()'));
+
+  { --- depth, which is how a consumer knows it is inside a list ------------ }
+  WalkLine(W, 'f(g(1), 2)');
+  N := 0;
+  while WalkNext(W) do
+    if W.Depth > N then
+      N := W.Depth;
+  CheckEqInt('nesting is counted', 2, N);
+
+  { --- reading raw text after a token, which is the outline's half --------- }
+  WalkLine(W, 'function name$(a, b) local t');
+  Check('a walk starts before its first token', WalkNext(W));
+  CheckEq('the first word', 'function', W.Word);
+  WalkSkipSpace(W);
+  CheckEq('the name, suffix included', 'name$', WalkTakeIdent(W, Col));
+  CheckEqInt('and where it started', 10, Col);
+  CheckEq('the parameters as typed', 'a, b', WalkTakeParens(W, N));
+  CheckEqInt('and how many there are', 2, N);
+
+  { --- WalkTakeParens, which counts for BOTH consumers --------------------- }
+  { This is the merge that mattered most: the outline counted every comma in the
+    text and the call-site counter counted only the ones at this level, so one
+    of them was wrong about `f(g(1, 2))` and it was never the same one. }
+  WalkLine(W, '(g(1, 2))');
+  CheckEq('a nested list comes back whole', 'g(1, 2)', WalkTakeParens(W, N));
+  CheckEqInt('and counts as ONE thing at this level', 1, N);
+  WalkLine(W, '("a, b")');
+  WalkTakeParens(W, N);
+  CheckEqInt('a comma inside a string is not a separator', 1, N);
+  WalkLine(W, '()');
+  WalkTakeParens(W, N);
+  CheckEqInt('an empty list is none', 0, N);
+  WalkLine(W, '(   )');
+  WalkTakeParens(W, N);
+  CheckEqInt('and so is a blank one', 0, N);
+  { UNCLOSED IS NOT EMPTY. A list still being typed has an arity nobody knows,
+    and -1 is what every consumer already reads as "do not resolve on this". }
+  WalkLine(W, '(a, b');
+  WalkTakeParens(W, N);
+  CheckEqInt('an unclosed list has no count', -1, N);
+  WalkLine(W, '(a '' why');
+  WalkTakeParens(W, N);
+  CheckEqInt('and a comment inside one does not close it', -1, N);
+end;
+
 { ----------------------------------------------------------- where a block -- }
 
 procedure TestFold;
@@ -1473,6 +1664,23 @@ begin
   Ev := ScanFoldLine('if x > 0 then');
   CheckEqInt('  and an if hangs on the if itself', 1, Ev[0].Col);
   CheckEqInt('  two characters', 2, Ev[0].Len);
+
+  { --- THE SAME ANSWER AS THE OUTLINE, which is roadmap item 18 ----------- }
+  { Both of these lines are checked on the outline side too, with the mirror
+    expectation. Until 2026-09-17 the second one opened a fold here and listed
+    no function there -- the fold gutter and the outline pane disagreeing about
+    the same buffer in the same window, because the rule was written twice.
+    A label is legal at PROGRAM level: `x = 1 : 20 function h()` runs, and
+    `if x > 0 then 20 function f()` is refused by the compiler. }
+  CheckEq('a labelled definition at program level opens', '+function',
+          Folds('x = 1 : 20 function h()'));
+  CheckEq('and after then it opens nothing, as the outline lists nothing', '',
+          Folds('if x > 0 then 20 function f()'));
+  { The label is not what stops it -- the position is. }
+  CheckEq('an unlabelled definition after then still opens', '+function',
+          Folds('if x > 0 then function f()'));
+  CheckEq('and every other opener behaves the same way', '',
+          Folds('if x > 0 then 20 for i = 1 to 3'));
 
   { --- the tables, for a caller that wants to ask directly ----------------- }
   Check('if opens', BlockOpenedBy('if') = pbIf);
@@ -2170,6 +2378,7 @@ begin
   TestMessages;
   TestLanguage;
   TestHighlighter;
+  TestWalk;
   TestFold;
   TestFoldWired;
   MeasureHighlighter;

@@ -26,11 +26,12 @@ unit uphosphoroutline;
   may cost a row in a list; it may never cost a character of somebody's file.
 
   FOLDING IS A THIRD THING AND IT IS NOT DECIDED HERE. It changes no character
-  but it HIDES lines, which `docs/roadmap.md` item 17 weighs at length and
-  answers "only on a structural scanner, and only because a fold is visible and
-  reversible". If that item is ever taken up, this is the scanner it meant --
-  and whoever takes it up owes the reader the same paragraph about what it gets
-  wrong, in the place where the folding happens.
+  but it HIDES lines, which `docs/roadmap.md` item 17 weighed at length and
+  answered "only on a structural scanner, and only because a fold is visible and
+  reversible". That item was taken up, and `uphosphorfold` is where it landed --
+  with its own paragraph about what it gets wrong, as this one owed it. Since
+  item 18 the debt runs the other way as well: that unit is where THIS one's
+  statement-position rule lives now.
 
   WHAT WAS MEASURED RATHER THAN ASSUMED. Every one of these was compiled and run
   against `bin/phosphor.exe` on 2026-09-16, because each one breaks the obvious
@@ -53,8 +54,10 @@ unit uphosphoroutline;
       token of the line -- and lost both of those definitions.
       But `if x > 0 then 20 function f()` is REFUSED (`expected end of line`),
       because `then` opens a statement and not a program-level one. That is the
-      whole reason this scanner tracks WHY it is at a statement position and not
-      merely that it is.
+      whole reason the walk reports WHY it is at a statement position and not
+      merely that it is -- and until item 18 this unit was the only one of the
+      two scanners that asked, which is how the fold gutter came to open a block
+      here for a definition this pane did not list.
     - `end function`, two words, is the same token as `endfunction` -- the lexer
       merges them, but ONLY when they are adjacent, so an `end` at the end of one
       line and a `function` at the start of the next is not a terminator
@@ -79,6 +82,20 @@ unit uphosphoroutline;
   definition that matches on the name alone therefore sends the caret,
   confidently, into a function the call never reaches.
 
+  AND THE RULE ITSELF IS NOT HERE ANY MORE, which is roadmap item 18. Where a
+  statement may begin, how `end if` becomes one token, what a string and a
+  comment hide -- all of that is `uphosphorfold.TLineWalk`, and this unit is one
+  of its two consumers. It used to be a second copy, and the two had already
+  drifted: this one tracked whether a statement position was a PROGRAM-LEVEL
+  one, so that an integer after `then` closes it, and the folder did not. The
+  cost was small and the direction of travel was not, so the copy was removed
+  rather than corrected.
+
+  WHAT THE TWO CONSUMERS DO NOT SHARE is what they make of the answer, and that
+  is deliberate. A block that opens and closes on one line folds NOTHING, so the
+  folder drops the pair -- while `function f(n) return n endfunction` on one
+  line IS a definition, is callable, and must still appear here.
+
   WHAT IS DELIBERATELY ABSENT. Labels (`setup:`, `10`) are not collected and
   `gosub`/`goto` targets are not resolved. They are a second table in the
   compiler that never consults the function table, they would need a reserved-
@@ -94,7 +111,7 @@ unit uphosphoroutline;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, uphosphorfold;
 
 const
   { A buffer with more definitions than this is not a program anybody is reading
@@ -201,120 +218,6 @@ function CallArgCount(const ALine: String; ANameEnd: Integer): Integer;
 
 implementation
 
-const
-  IdentStart = ['A'..'Z', 'a'..'z', '_'];
-  IdentChar = ['A'..'Z', 'a'..'z', '0'..'9', '_'];
-  SuffixChar = ['$', '%', '@', '?'];
-  DigitChar = ['0'..'9'];
-  Space = [' ', #9, #13];
-
-{ ------------------------------------------------------------ the scanner --- }
-
-type
-  { One line's worth of position. A line is all the state this needs, which is a
-    property of the language and not a simplification: `'` and `rem` run to end
-    of line, and a string literal that reaches one is the error `unterminated
-    string` rather than a continuation (engine/PhosphorLexer.pas:420-435). }
-  TLineScan = record
-    Line: String;
-    Pos: Integer;        // 1-based, the next byte to look at
-    Len: Integer;
-    Depth: Integer;      // open ( [ {
-    AtStatement: Boolean;
-    { And WHY: a statement that begins a line, or follows a `:`, is at PROGRAM
-      LEVEL and may be labelled by an integer; one that follows `then` or `else`
-      is not, and `if x > 0 then 20 function f()` is a compile error. Two flags
-      because the difference is only ever visible to the digit branch. }
-    AtProgramLevel: Boolean;
-  end;
-
-{ Step over whitespace. }
-procedure SkipSpace(var S: TLineScan);
-begin
-  while (S.Pos <= S.Len) and (S.Line[S.Pos] in Space) do
-    Inc(S.Pos);
-end;
-
-{ The identifier starting at S.Pos, suffix included, or '' -- and S.Pos is left
-  just past it. The rule is the scanner's and the lexer's: one trailing
-  `$ % @ ?` is part of the name and there can only be one, so `a$b` is two
-  words. }
-function TakeIdent(var S: TLineScan; out AStart: Integer): String;
-begin
-  Result := '';
-  AStart := S.Pos;
-  if (S.Pos > S.Len) or not (S.Line[S.Pos] in IdentStart) then
-    Exit;
-  while (S.Pos <= S.Len) and (S.Line[S.Pos] in IdentChar) do
-    Inc(S.Pos);
-  if (S.Pos <= S.Len) and (S.Line[S.Pos] in SuffixChar) then
-    Inc(S.Pos);
-  Result := Copy(S.Line, AStart, S.Pos - AStart);
-end;
-
-{ Step over a string literal, S.Pos sitting on its opening quote. A backslash
-  eats whatever follows it, including a quote, and a doubled quote closes and
-  reopens -- which lands in the same place. An unterminated literal simply ends
-  at the end of the line, because that is where the language ends it too. }
-procedure SkipString(var S: TLineScan);
-begin
-  Inc(S.Pos);
-  while S.Pos <= S.Len do
-  begin
-    if S.Line[S.Pos] = '\' then
-      Inc(S.Pos, 2)
-    else if S.Line[S.Pos] = '"' then
-    begin
-      Inc(S.Pos);
-      Exit;
-    end
-    else
-      Inc(S.Pos);
-  end;
-end;
-
-{ Take the parameter list, S.Pos on its opening parenthesis. Answers the raw
-  text between the parentheses and how many names are in it; S.Pos is left past
-  the closing one. An unclosed list ends at the end of the line. }
-function TakeParams(var S: TLineScan; out ACount: Integer): String;
-var
-  Start, D: Integer;
-begin
-  Inc(S.Pos);
-  Start := S.Pos;
-  D := 1;
-  while (S.Pos <= S.Len) and (D > 0) do
-  begin
-    if S.Line[S.Pos] = '"' then
-    begin
-      SkipString(S);
-      Continue;
-    end;
-    if S.Line[S.Pos] in ['(', '[', '{'] then
-      Inc(D)
-    else if S.Line[S.Pos] in [')', ']', '}'] then
-      Dec(D);
-    if D > 0 then
-      Inc(S.Pos);
-  end;
-  Result := Copy(S.Line, Start, S.Pos - Start);
-  if S.Pos <= S.Len then
-    Inc(S.Pos);          // past the ')'
-
-  if Trim(Result) = '' then
-    ACount := 0
-  else
-  begin
-    { Commas at the top level of the list. A parameter list holds names and
-      nothing else (engine/PhosphorCompiler.pas:601-645), so there is no nesting
-      to allow for -- but counting this way costs nothing and does not care. }
-    ACount := 1;
-    for Start := 1 to Length(Result) do
-      if Result[Start] = ',' then
-        Inc(ACount);
-  end;
-end;
-
 procedure AddFunc(var AFuncs: TOutlineFuncs; const AFunc: TOutlineFunc);
 var
   N: Integer;
@@ -328,13 +231,10 @@ end;
 
 function ScanOutline(ALines: TStrings): TOutlineFuncs;
 var
-  S: TLineScan;
-  LineNo, I, NameAt, IdentAt, Open: Integer;
-  { W and not Word: Word is a type in this dialect, and a local that shadows one
-    compiles and then reads as a mistake to everybody who meets it. }
-  W, Nm: String;
+  W: TLineWalk;
+  LineNo, I, NameAt, LocalAt, Open: Integer;
+  Nm: String;
   F: TOutlineFunc;
-  PendingEnd: Boolean;
 begin
   Result := nil;
   if ALines = nil then
@@ -343,154 +243,73 @@ begin
 
   for LineNo := 1 to ALines.Count do
   begin
-    S.Line := ALines[LineNo - 1];
-    S.Len := Length(S.Line);
-    S.Pos := 1;
-    S.Depth := 0;
-    S.AtStatement := True;
-    S.AtProgramLevel := True;
-    { `end` seen as the previous token, waiting for a `function` NEXT TO IT. The
-      lexer's merge pass requires the two to be adjacent in the token stream, so
-      this is cleared by any other token and does not survive the line. }
-    PendingEnd := False;
-
-    while S.Pos <= S.Len do
+    WalkLine(W, ALines[LineNo - 1]);
+    while WalkNext(W) do
     begin
-      if S.Line[S.Pos] in Space then
-      begin
-        Inc(S.Pos);
+      if W.Token <> wtWord then
         Continue;
-      end;
 
-      { A comment ends the line, whichever of the two it is. }
-      if S.Line[S.Pos] = '''' then
-        Break;
-
-      if S.Line[S.Pos] = '"' then
+      { --- a terminator ------------------------------------------------- }
+      if W.Word = 'endfunction' then
       begin
-        SkipString(S);
-        S.AtStatement := False;
-        PendingEnd := False;
-        Continue;
-      end;
-
-      if S.Line[S.Pos] in IdentStart then
-      begin
-        W := LowerCase(TakeIdent(S, IdentAt));
-
-        if W = 'rem' then
-          Break;
-
-        { --- a terminator ------------------------------------------------- }
-        if (W = 'endfunction') or (PendingEnd and (W = 'function')) then
+        { CLOSES WHEREVER IT APPEARS, not only at a statement position.
+          `function a() return 1 : end function` puts it after a complete
+          statement, and the word can otherwise only be a function NAME -- which
+          the header reader below has already eaten -- or a variable nobody
+          writes. The walk has already merged `end function` into this one
+          word, so both spellings arrive here the same. }
+        if Open > 0 then
         begin
-          { CLOSES WHEREVER IT APPEARS, not only at a statement position.
-            `function a() return 1 : end function` puts it after a complete
-            statement, and the word can otherwise only be a function NAME --
-            which the header reader below has already eaten -- or a variable
-            nobody writes. }
-          if Open > 0 then
-          begin
-            for I := High(Result) downto 0 do
-              if Result[I].EndLine = 0 then
-              begin
-                Result[I].EndLine := LineNo;
-                Break;
-              end;
-            Dec(Open);
-          end;
-          S.AtStatement := False;
-          PendingEnd := False;
-          Continue;
-        end;
-
-        if W = 'end' then
-        begin
-          { Not a terminator on its own, and not a statement opener either; it
-            is one half of a token that may be completed by the next one. }
-          PendingEnd := True;
-          S.AtStatement := False;
-          Continue;
-        end;
-        PendingEnd := False;
-
-        { --- a definition ------------------------------------------------- }
-        if S.AtStatement and (W = 'function') and (S.Depth = 0) then
-        begin
-          SkipSpace(S);
-          Nm := TakeIdent(S, NameAt);
-          if Nm <> '' then
-          begin
-            F := Default(TOutlineFunc);
-            F.Name := LowerCase(Nm);
-            F.Display := Nm;
-            F.Line := LineNo;
-            F.Column := NameAt;
-            F.Nested := Open > 0;
-            SkipSpace(S);
-            if (S.Pos <= S.Len) and (S.Line[S.Pos] = '(') then
+          for I := High(Result) downto 0 do
+            if Result[I].EndLine = 0 then
             begin
-              F.Params := TakeParams(S, F.ParamCount);
-              SkipSpace(S);
-              if LowerCase(Copy(S.Line, S.Pos, 5)) = 'local' then
-              begin
-                Inc(S.Pos, 5);
-                { To the end of the line, or to the `:` that ends the header's
-                  statement. Whatever is here is a list of names. }
-                IdentAt := S.Pos;
-                while (S.Pos <= S.Len) and (S.Line[S.Pos] <> ':') and
-                      (S.Line[S.Pos] <> '''') do
-                  Inc(S.Pos);
-                F.Locals := Trim(Copy(S.Line, IdentAt, S.Pos - IdentAt));
-              end;
-            end
-            else
-              F.ParamCount := -1;
-            AddFunc(Result, F);
-            Inc(Open);
-          end;
-          S.AtStatement := False;
-          Continue;
+              Result[I].EndLine := LineNo;
+              Break;
+            end;
+          Dec(Open);
         end;
-
-        { --- the words that open a statement ------------------------------ }
-        S.AtStatement := (W = 'then') or (W = 'else');
-        S.AtProgramLevel := False;
         Continue;
       end;
 
-      if S.Line[S.Pos] in DigitChar then
+      { --- a definition ------------------------------------------------- }
+      if W.AtStatement and (W.Word = 'function') and (W.Depth = 0) then
       begin
-        { AN INTEGER AT A PROGRAM-LEVEL STATEMENT POSITION IS A LABEL, so it
-          does not close the statement it labels: `10 function h()`,
-          `x = 1 : 20 function h()` and `setup: 30 function pick$(a$)` all
-          define a function and all compile. After `then` it is not a label and
-          the whole line is refused, so the position does not survive there; and
-          a number anywhere else is an ordinary token, where AtStatement is
-          already False. }
-        while (S.Pos <= S.Len) and (S.Line[S.Pos] in DigitChar) do
-          Inc(S.Pos);
-        S.AtStatement := S.AtStatement and S.AtProgramLevel;
-        PendingEnd := False;
-        Continue;
+        { THE NAME, THE PARAMETERS AND THE LOCALS ARE NOT TOKENS THE WALK HAS AN
+          OPINION ABOUT, so this reads them straight out of the line and hands
+          the walk back where it finished. }
+        WalkSkipSpace(W);
+        Nm := WalkTakeIdent(W, NameAt);
+        if Nm <> '' then
+        begin
+          F := Default(TOutlineFunc);
+          F.Name := LowerCase(Nm);
+          F.Display := Nm;
+          F.Line := LineNo;
+          F.Column := NameAt;
+          F.Nested := Open > 0;
+          WalkSkipSpace(W);
+          if (W.At <= W.Len) and (W.Line[W.At] = '(') then
+          begin
+            F.Params := WalkTakeParens(W, F.ParamCount);
+            WalkSkipSpace(W);
+            if LowerCase(Copy(W.Line, W.At, 5)) = 'local' then
+            begin
+              Inc(W.At, 5);
+              { To the end of the line, or to the `:` that ends the header's
+                statement. Whatever is here is a list of names. }
+              LocalAt := W.At;
+              while (W.At <= W.Len) and (W.Line[W.At] <> ':') and
+                    (W.Line[W.At] <> '''') do
+                Inc(W.At);
+              F.Locals := Trim(Copy(W.Line, LocalAt, W.At - LocalAt));
+            end;
+          end
+          else
+            F.ParamCount := -1;
+          AddFunc(Result, F);
+          Inc(Open);
+        end;
       end;
-
-      case S.Line[S.Pos] of
-        '(', '[', '{': Inc(S.Depth);
-        ')', ']', '}': if S.Depth > 0 then Dec(S.Depth);
-      end;
-      { A `:` AT TOP LEVEL SEPARATES STATEMENTS, and that is also what puts the
-        scanner back at a statement after a label: `head: function a%()` reaches
-        the definition through this line and not through a label rule. }
-      if (S.Line[S.Pos] = ':') and (S.Depth = 0) then
-      begin
-        S.AtStatement := True;
-        S.AtProgramLevel := True;
-      end
-      else
-        S.AtStatement := False;
-      PendingEnd := False;
-      Inc(S.Pos);
     end;
   end;
 end;
@@ -627,58 +446,26 @@ end;
 
 function CallArgCount(const ALine: String; ANameEnd: Integer): Integer;
 var
-  S: TLineScan;
-  D: Integer;
-  Any: Boolean;
+  W: TLineWalk;
 begin
   Result := -1;
-  S.Line := ALine;
-  S.Len := Length(ALine);
-  S.Pos := ANameEnd;
-  if (S.Pos < 1) or (S.Pos > S.Len) then
+  if (ANameEnd < 1) or (ANameEnd > Length(ALine)) then
     Exit;
+  WalkLine(W, ALine);
+  W.At := ANameEnd;
   { A CALL IS AN IDENTIFIER WHOSE NEXT TOKEN IS `(`, and "token" is the word that
     matters: the lexer has already dropped the whitespace, so `f (7)` is a call
     and prints 70. Measured. The first version of this required the parenthesis
     to be the very next BYTE, which is a rule Phosphor does not have and which
     cost the arity of every call written with a space. }
-  while (S.Pos <= S.Len) and (S.Line[S.Pos] in Space) do
-    Inc(S.Pos);
-  if (S.Pos > S.Len) or (S.Line[S.Pos] <> '(') then
+  WalkSkipSpace(W);
+  if (W.At > W.Len) or (W.Line[W.At] <> '(') then
     Exit;
-
-  Inc(S.Pos);
-  D := 1;
-  Any := False;
-  Result := 0;
-  while (S.Pos <= S.Len) and (D > 0) do
-  begin
-    if S.Line[S.Pos] = '''' then
-      Break;               // a comment inside an unclosed call: not decidable
-    if S.Line[S.Pos] = '"' then
-    begin
-      Any := True;
-      SkipString(S);
-      Continue;
-    end;
-    if S.Line[S.Pos] in ['(', '[', '{'] then
-      Inc(D)
-    else if S.Line[S.Pos] in [')', ']', '}'] then
-      Dec(D)
-    else if (S.Line[S.Pos] = ',') and (D = 1) then
-      Inc(Result)
-    else if not (S.Line[S.Pos] in Space) then
-      Any := True;
-    if D > 0 then
-      Inc(S.Pos);
-  end;
-
-  if D > 0 then
-    Exit(-1);              // it never closed on this line
-  if Any then
-    Inc(Result)            // n commas at this level means n+1 arguments
-  else
-    Result := 0;           // `f()`
+  { AND THE COUNTING ITSELF IS THE WALK'S, which is the whole of item 18 in one
+    line: a parameter list and an argument list are the same shape, they were
+    read by two copies of one loop, and only one of the two had ever been told
+    that `f(g(1, 2))` is one argument. }
+  WalkTakeParens(W, Result);
 end;
 
 end.

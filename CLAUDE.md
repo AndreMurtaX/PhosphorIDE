@@ -271,6 +271,28 @@ the bar.
   string is a hard error rather than a continuation. And **the tier is a cut**: a
   core-only list may not contain a package or GUI name, or the editor is
   recommending a program that works on its author's desktop and stops on a server.
+- **"WHERE MAY A STATEMENT BEGIN" IS WRITTEN ONCE, in `uphosphorfold.TLineWalk`.**
+  The outline pane and the fold gutter both need it, both had their own copy, and on
+  2026-09-17 the copies had already drifted: the outline knew that a statement position
+  can be a PROGRAM-LEVEL one -- `x = 1 : 20 function h()` runs, `if x > 0 then 20
+  function f()` is refused -- and the folder did not, so the second line opened a fold
+  for a definition the outline listed nothing for, in the same window, on the same
+  buffer. That cost nothing yet. What was coming is that Phosphor's compound-keyword
+  table (`engine/PhosphorLexer.pas:189-224`) is a moving part which
+  `tools/gen-keywords.py --check` does not extract, so a change there would have been
+  fixed in ONE copy. **A third consumer calls the walk; it does not write a third
+  scanner.** `TestWalk` in `phosphoridetest.lpr` pins the rule directly, without a
+  consumer, which is what neither copy ever had.
+
+  **And an extraction is measured, not asserted.** "I only moved it" is the claim every
+  refactor makes. The one above was checked by linking the units from before and after
+  the change into one harness and running both over 4229 inputs -- 911359 field
+  comparisons, including the 176 real `.bas` programs in this repository and in
+  `../Phosphor`, on which there was no difference in any field. Every difference at all
+  was on illegal or half-typed input, and each is now a check. That harness is the
+  cheapest honest answer to "is this the same code", and it is worth rebuilding for the
+  next one.
+
 - **Every path comparison goes through `CompareFilenames`** (`LazFileUtils`). It
   already knows that Windows is case-insensitive and Linux is not, which is one fewer
   platform rule spelled out by hand. Three sites depend on it:

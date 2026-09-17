@@ -1143,6 +1143,38 @@ on the first list that never closed.
 
 ## 18. One statement-position rule, not two
 
+**DONE 2026-09-17.** The rule is `uphosphorfold.TLineWalk` -- a public record and five
+procedures -- and `uphosphoroutline` is one of its two consumers rather than a second copy.
+`ScanFoldLine` and `ScanOutline` are both written on it, and so is `CallArgCount`.
+
+The divergence this item was filed for is gone, and it was wider than the one line above:
+EVERY opener after a label after `then` opened a fold the outline listed nothing for --
+`if x > 0 then 20 for i = 1 to 3`, `... 20 while`, `... 20 repeat`, all seven kinds.
+
+**The extraction was measured rather than asserted**, which is the part worth keeping. A
+harness linked the units from before the change and from after it into one program and ran
+both over 4229 inputs -- every block word in every statement position, every spelling of
+every terminator, the half-typed and illegal shapes an editor actually sees, and the 176
+real `.bas` programs in this repository and in `../Phosphor`. **911359 field comparisons.
+On the 176 real programs: no difference in any field, anywhere.** Every difference at all
+was on illegal or half-typed input and fell into six classes:
+
+| input | before | after |
+| --- | --- | --- |
+| `if x > 0 then 20 <opener>` | folded, outline listed nothing | neither |
+| `function f("x, y")` | 2 parameters | 1 -- the comma is inside a string |
+| `function f(g(1, 2))` | 2 | 1 -- the commas are a level down |
+| `function f(a, b` | 2 | unknown, which is what -1 already meant everywhere |
+| `function f('a')` | one parameter named `'a'` | unknown -- `'` is a COMMENT |
+| `f(,)` | 0 arguments | 2, which is the rule the old comment stated |
+
+In five of the six the two copies had ALREADY disagreed with each other inside the one
+unit: `CallArgCount` knew about comments and counted separators a level at a time, and the
+outline's own parameter reader did neither. Nothing chose which of the two was right; the
+merge did. Each of the six is now a check, as is the walk itself -- `TestWalk` asks the
+rule directly, without a consumer, which is what neither copy ever had. 545 checks before,
+595 after, and the 545 pass unchanged.
+
 **What.** `src/core/uphosphoroutline.pas` and `src/core/uphosphorfold.pas` each carry their
 own copy of "where may a statement begin". One of them should own it and the other should
 call it.
