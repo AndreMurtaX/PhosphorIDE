@@ -1,4 +1,4 @@
-# PhosphorIDE -- working rules
+﻿# PhosphorIDE -- working rules
 
 PhosphorIDE is a small desktop editor for **Phosphor BASIC**, written in Free Pascal
 against Lazarus 3.6 or 4.8 with FPC 3.2.2, and the LCL and SynEdit. Windows and Linux, MIT, by
@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 663 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 701 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -147,7 +147,7 @@ the bar.
   line that has gone quiet is a prompt. The `ACompleteLine` flag says which of the two
   it is, and a partial is never handed to the diagnostic parser.
 - **`src/core/uphosphoricons.pas` is GENERATED. Never hand-edit it.** The toolbar's
-  nine icons are DRAWN by `tools/gen-icons.py` — a few hundred bytes of PNG each,
+  nine icons are DRAWN by `tools/gen-icons.py` â€” a few hundred bytes of PNG each,
   at 16 and at 24, decoded into an empty `TImageList` at `FormCreate`. They are not in
   the `.lfm` because a `TImageList` streams its pictures as one binary blob, and a blob
   in a form file people edit by hand cannot be reviewed or diffed. `tools/icons-preview.png`
@@ -157,7 +157,7 @@ the bar.
 
   **Two resolutions, drawn twice, never scaled once.** A single-resolution image list is
   scaled by the widgetset, the two widgetsets scale differently, one gives a blurred
-  mark and the other a missing one, and neither is a build failure — so nobody finds
+  mark and the other a missing one, and neither is a build failure â€” so nobody finds
   out until a screenshot arrives from the other platform. The geometry is written in
   EIGHTHS of the box, because 16 and 24 are both divisible by 8 and every coordinate
   then lands on a whole pixel at both sizes. `--selftest` reports the widths, not just
@@ -237,8 +237,8 @@ the bar.
   it puts the new marks in BEFORE that adjustment runs, and the adjustment then shifts
   them a second time: on 2026-09-16 one line typed above a breakpoint on line 10 left
   the mark on **12** while the statement went to 11. So `OnBreakpointsChanged` carries
-  an `AFromEdit` flag, an edit only raises `FMarksDirty`, and `EditorChange` — which
-  SynEdit fires once the change is finished — does the rebuild. A toggle is not an
+  an `AFromEdit` flag, an edit only raises `FMarksDirty`, and `EditorChange` â€” which
+  SynEdit fires once the change is finished â€” does the rebuild. A toggle is not an
   edit and is rebuilt on the spot.
 - **Breakpoints are line numbers, and they must follow edits.** A mark that stays put
   while text is inserted above it points at a statement the user did not choose.
@@ -285,7 +285,7 @@ the bar.
   Three rules in it are load-bearing. **A type suffix is part of the name**, so the
   prefix under the caret is scanned by the highlighter's own character sets and
   `OnCodeCompletion` replaces the range THAT measured rather than the one
-  `TSynCompletion` derives from SynEdit's identifier characters — the two agree
+  `TSynCompletion` derives from SynEdit's identifier characters â€” the two agree
   today, and depending on that is one change away from writing `left$$`.
   **Nothing is offered inside a string or a comment**, which is decidable from the
   current line alone because `'` and `rem` run to end of line and an unterminated
@@ -474,7 +474,7 @@ What is still absent, and must not be described otherwise:
   today, and the editor must never close that gap in-process: an expression evaluator
   here would be an interpreter here. See the invariant at the top.
 - **No conditional breakpoints.** A breakpoint the host could not arm IS drawn, as a
-  **hollow ring in the gutter** beside the solid dot of one that will fire — the
+  **hollow ring in the gutter** beside the solid dot of one that will fire â€” the
   convention every debugger uses, and what roadmap item 13's image list was for. The
   full-row maroon and grey it replaced were a stand-in the code said so about at the
   time: a band of colour behind a line of code is a line of code that is harder to

@@ -1429,6 +1429,58 @@ the same class, and a screenshot is what settles it.
 
 ## 21. Replace in files
 
+**DONE 2026-09-17.** The Find in Files pane has a Replace row, and it changes the lines the
+search listed and nothing else.
+
+**IT NEEDED A DEFECT FIXED FIRST, and finding it was most of the work.** The item says the
+write must go through `TEditorDoc.SaveToFile`, and that no file may change its line endings
+-- and those two could not both be true, because `SaveToFile` wrote `FEdit.Lines.Text`.
+`TStrings.Text` joins with `TextLineBreakStyle`, which defaults to the machine's own
+convention and which `TSynEditStringList` does not override. Measured through the real
+editor: **Ctrl+S on a file of `rem a\nx = 1\n` returned CRLF throughout, and a file with no
+closing newline gained one.** A program written on Linux and saved on Windows came back as a
+whole-file diff for a one-character edit. `src/core/utextfile.pas` now owns the rules and
+`SaveToFile` is its caller; see the commit before this one.
+
+**The two rules the feature rests on**, both checked against the bytes of a fixture
+directory rather than against a screenshot:
+
+* **No line the search did not list is touched.** The search deposits ONE hit per line, so
+  a row means "this line matches"; every occurrence ON that line is replaced, and a file
+  that matched nothing is never opened.
+* **A file keeps the endings and the closing newline it arrived with.**
+
+**Two routes, decided by the tab strip.** A file OPEN in a tab is changed through its buffer
+inside one `BeginUndoBlock` using `TextBetweenPoints` -- so **one Ctrl+Z takes the whole
+replace back**, the tab shows modified, and its bytes on disk do not move until the user
+saves. Writing such a file behind its own editor would leave the buffer holding the old text
+and the next save would put it back. A file that is NOT open goes through
+`ufindinfiles.ReplaceInFile`, which goes through `utextfile`.
+
+**A file that cannot be written is reported and skipped**, never a reason to stop: a run
+that has already rewritten four files and then meets a read-only fifth must finish the other
+six. `phosphoridetest` checks the read-only case, the vanished case, a line number past the
+end of a file, and a line that no longer matches -- each of which leaves the file exactly as
+it was and the run going.
+
+**Nothing is written until the user has seen the list**: the button is dead until a search
+has produced rows, dead again the moment a new search starts, and the confirmation carries
+the counts. Afterwards the rows are cleared, because a second Replace over lines already
+changed is how `a` becomes `bb`.
+
+**One rule was decided here rather than inherited**: `ReplaceInLine` never looks at what it
+just wrote. Replacing `foo` with `xfoox` in a scanner that rescans from the start of the
+replacement does not terminate; this one advances past it, so that case is `xfoox` and not a
+hang. It is a check.
+
+**Driven on both platforms** by `tools/lane/replace-tree.ps1` and `replace-tree.sh`, which
+build a four-file tree in the temp directory, run the real editor over it and compare the
+bytes. They are scripts rather than `steps-*.txt` because this case CHANGES files, and a
+fixture under `tools/lane` that is rewritten on every run leaves the repository dirty. Both
+report `REPLACE TREE OK` and both agree byte for byte: `a.bas` intact on disk (open in a
+tab), `b.bas` rewritten with its CRLF, `sub/c.bas` rewritten with no closing newline gained,
+`d.bas` untouched.
+
 **What.** The Find in Files pane can search a tree. It cannot change one.
 
 **Why.** Replace exists already (`ActReplace`, `ReplaceDialog1`) and is scoped to the
