@@ -26,6 +26,7 @@ uses
   ActnList, ExtCtrls, StdCtrls, LCLType, SynEdit, SynEditTypes,
   SynEditMiscClasses, SynEditMarkupSpecialLine, SynEditMarks, SynGutter,
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
+  SynEditHighlighter,
   usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
   uphosphorcomplete, uphosphoroutline, uphosphorrepl, ufindinfiles, SynCompletion;
 
@@ -527,6 +528,15 @@ type
     property HostPath: String read FHostPath;
     property HostVersion: String read FHostVersion;
     procedure SettingsChanged;
+
+    { WHAT --SELFTEST ASKS ABOUT, and nothing else reads either of them. Folding
+      is turned on by a CLASS TEST on the highlighter and by nothing else, so a
+      highlighter that quietly stopped being a fold one would fold nothing with
+      no error anywhere; and the fold column is one of the five gutter parts
+      SynEdit creates by default, so a gutter that lost a part is the same class
+      of silent defect as a status bar with no panels. }
+    function Highlighter: TSynCustomHighlighter;
+    function GutterPartCount: Integer;
   end;
 
 var
@@ -2693,6 +2703,21 @@ begin
     SyncGutterMarks(TEditorDoc(Sender));
 end;
 
+{ AND A BREAKPOINT INSIDE A COLLAPSED BLOCK IS INVISIBLE. Decided on 2026-09-16
+  with folding, and recorded rather than fixed.
+
+  TSynGutterMarks paints VISIBLE screen rows only (synguttermarks.pp:353-357), so
+  a mark on a line hidden by a fold is simply not drawn. Nothing below is wrong --
+  the mark is still in the set, BreakpointIsArmed still answers, the run still
+  stops -- and the debugger's own stop calls GotoSource, which moves the caret and
+  makes SynEdit unfold to reach it. What is lost is the PICTURE, between edits.
+
+  The alternative was an editor that refuses to collapse a block containing a
+  breakpoint, which is a surprising thing for a fold marker to do and needs a
+  reach into the folded view that SynEdit exposes only through the caret. The
+  cost of leaving it is a user who collapses a function, sees no mark, clicks the
+  collapsed header and gets a SECOND breakpoint on the header line. That is worth
+  knowing about; it is not worth an editor that argues with its own gutter. }
 procedure TFrmMain.SyncGutterMarks(ADoc: TEditorDoc);
 var
   I: Integer;
@@ -3337,6 +3362,24 @@ var
 begin
   for I := 0 to FDocs.Count - 1 do
     ApplyEditorSettings(TEditorDoc(FDocs[I]));
+end;
+
+function TFrmMain.Highlighter: TSynCustomHighlighter;
+begin
+  Result := FHighlighter;
+end;
+
+function TFrmMain.GutterPartCount: Integer;
+var
+  Doc: TEditorDoc;
+begin
+  Result := 0;
+  Doc := ActiveDoc;
+  if (Doc <> nil) and (Doc.Edit <> nil) then
+    { Gutter.Parts.Count and not Gutter.PartCount: the second is protected in
+      TSynGutterBase (syngutterbase.pp:78) and the first is the public list
+      (syngutterbase.pp:115) that answers the same number. }
+    Result := Doc.Edit.Gutter.Parts.Count;
 end;
 
 procedure TFrmMain.SettingsChanged;

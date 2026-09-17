@@ -30,7 +30,7 @@ The sibling repository's rule holds here: nothing is done on a claim.
 - `powershell -NoProfile -File scripts\build.ps1` green, which means `lazbuild -B` with
   **zero errors, zero warnings and zero notes** -- the script greps lazbuild's text as well
   as its exit code, because lazbuild has answered 0 where the compiler did not.
-- `bin\phosphoridetest` green: 456 checks, exit code 0.
+- `bin\phosphoridetest` green: 545 checks, exit code 0.
 - `bin\phosphoride --selftest <file>` exit 0, **under a timeout**. A GUI-subsystem binary
   that hangs instead of answering is almost always a modal dialog nobody can dismiss; that
   happened twice on 2026-09-10, from two different causes.
@@ -989,6 +989,76 @@ silently redirected every existing `memo` step.
 ---
 
 ## 17. Folding
+
+**DONE 2026-09-16, and one clause of its own done-when is answered NO.** Seven block
+kinds fold from the gutter, not the five this item named: `do while ... loop` and
+`repeat ... until` are blocks too, both measured.
+
+**This item argued it might not be worth doing, and it was right about the danger and
+wrong about only one thing.** Both of its costs were real:
+
+- *It changes the highlighter's base class and its cost model.* Unavoidable, and paid.
+  `TSynEditFoldedView` refuses a highlighter that is not a `TSynCustomFoldHighlighter`
+  (`syneditfoldedview.pp:3570-3576`) and there is no seam that accepts fold ranges from
+  outside, so the instruction "build it on the structural scanner rather than by
+  promoting the highlighter" cannot be followed as written. What CAN be followed, and
+  was, is the half that matters: the base class is promoted and the DECISIONS are still
+  the structural scanner's.
+- *It rests on the assumption the highlighter refuses to make.* This was the right
+  warning and it understated the case. Six legal Phosphor programs were compiled and run
+  that an obvious folder hides code in, and every one of them is now a check in
+  `src/core/uphosphorfold.pas`:
+
+| legal Phosphor | what an obvious folder does |
+| --- | --- |
+| `for i = 1 to 2 println i next` | opens a fold that never closes -- a WHOLE BLOCK ON ONE LINE with no colon, and six of the seven kinds do it |
+| `function f(n) return n + 1 endfunction` | the same |
+| `while i < 2 i = i + 1 wend` | the same |
+| `if x = 1 then println then` | `then` is a legal VARIABLE, so the line ends with the word `then` and is the inline form, which takes no endif |
+| `else if n = 2 then ... endif` | `else if` is ONE token, so the chain needs exactly one endif; treating that `if` as an opener leaves the first unclosed |
+| `if n = 1 then / ... / end if` | the two-word terminator is judged where the `end` is, not where the `if` is |
+
+The rule that makes them safe is an asymmetry: **a terminator is recognised wherever it
+appears and an opener only where a statement may begin.** A missed close hides text just
+as surely as a wrong open -- the block then runs to the end of the file -- and the
+language makes the asymmetry safe, because a terminator word used as a variable while its
+block is open is a compile error.
+
+**The done-when, clause by clause.** The block kinds fold and unfold, driven from the
+gutter on both platforms; a `function` inside a string literal and a `for` inside a
+comment produce no fold, and so do four more cases the item did not think to ask for;
+fold state survives an edit, which SynEdit maintains itself; and the highlighter's
+existing headless checks pass unchanged -- 545 in total now, 89 of them new.
+
+**And the performance clause is answered NO, which is the reason it demanded a
+measurement.** `MeasureHighlighter` prints three numbers on every run and they were taken
+on both sides of the change:
+
+| | before | after |
+| --- | --- | --- |
+| scanning the whole buffer, 5000 lines | 64.0 ms | 67.3 ms |
+| scanning one line | 0.0130 ms | 0.0130 ms |
+| an edit at the top that does not change the block structure | 0.040 ms | 0.040 ms |
+| an edit at the top that OPENS OR CLOSES a block | 0.040 ms | **66.2 ms** |
+
+`PerformScan` rescans forward until a line's range matches the stored one; before the
+promotion no range ever differed, so every edit stopped one line later. It is ONE
+keystroke and not every keystroke -- `fun`, `func`, `funct` are identifiers and cost
+nothing -- but "not measurably slower" is false for the keystroke that completes or
+breaks a block word, and the honest thing is to say so rather than quote the two numbers
+that did not move.
+
+**The three things a reader should know that are not in the item.** The fold gutter part
+was already there: SynEdit creates five parts by default and the fold column is the
+fifth, so the form needed no change at all and what turned folding on was the class test
+alone. `select`'s ARMS are deliberately not folded, because `case` is a legal assignment
+target wherever a select is not the innermost block. And **a breakpoint inside a
+collapsed block is invisible while still armed and still firing** -- `TSynGutterMarks`
+paints visible rows only -- which is recorded here and in `SyncGutterMarks` rather than
+fixed, because the debugger's own stop unfolds to reach the line and the alternative is
+an editor that refuses to collapse over a mark.
+
+**Was:**
 
 **What.** Collapsible `if`/`endif`, `for`/`next`, `while`/`wend`, `select`/`endselect`,
 `function`/`endfunction`.

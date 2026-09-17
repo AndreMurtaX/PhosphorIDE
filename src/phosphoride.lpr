@@ -17,6 +17,7 @@ uses
               // RTL has no threading and those reads deadlock the UI.
   {$ENDIF}
   Interfaces, Forms, Classes, SysUtils,
+  SynEditHighlighterFoldBase,
   umainform, uaboutform, upreferencesform,
   uphosphorlang, uphosphormsg, uphosphorhost, uphosphorsettings,
   uphosphorrun, usynphosphor, udebugproto, udebugsession, uphosphorcomplete,
@@ -136,6 +137,18 @@ begin
         that constructing the window starts nothing. 24658 is Ctrl+Shift+R. }
       Report.Add(Format('repl: shortcut %d, transcript %d lines',
         [FrmMain.ActRepl.ShortCut, FrmMain.MemoRepl.Lines.Count]));
+      { FOLDING IS TURNED ON BY A CLASS TEST AND NOTHING ELSE.
+        TSynEditFoldedView.SetHighLighter drops any highlighter that is not a
+        TSynCustomFoldHighlighter (syneditfoldedview.pp:3570-3576) -- there is no
+        capability flag and no eo* option involved -- so a highlighter that
+        quietly stopped being one would fold nothing, with no error anywhere and
+        no change a screenshot could show. The gutter part count is reported
+        beside it because the fold column is one of the five parts SynEdit
+        creates by default, and a gutter that lost a part is the same class of
+        silent defect as a status bar with no panels. }
+      Report.Add(Format('folding: highlighter folds=%s, gutter parts=%d',
+        [BoolToStr(FrmMain.Highlighter is TSynCustomFoldHighlighter, True),
+         FrmMain.GutterPartCount]));
 
       Application.CreateForm(TFrmAbout, FrmAbout);
       Report.Add(Format('about form: ok, %d components', [FrmAbout.ComponentCount]));

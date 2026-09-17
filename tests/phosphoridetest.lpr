@@ -1485,6 +1485,108 @@ begin
   CheckEq('and none for none', '', BlockName(pbNone));
 end;
 
+{ -------------------------------------------------------- folding, wired ---- }
+
+{ THAT THE HIGHLIGHTER ACTUALLY FOLDS, which is a different question from
+  whether uphosphorfold answers correctly.
+
+  The base class can be promoted, the overrides written, the stack balanced --
+  and nothing fold at all, silently, because TSynCustomFoldHighlighter's
+  GetFoldConfigInstance sets Enabled := False and a highlighter that does not
+  turn it back on scans perfectly and offers no fold node anywhere
+  (synedithighlighterfoldbase.pas:2030-2035).
+
+  READING FoldBlockEndLevel NEEDS THE LINES ATTACHED. SetCurrentLines fills the
+  range list from AValue.Ranges[...], which is nil until AttachToLines has run,
+  and ScanAllRanges is what fills it -- without both, this either dies inside
+  Lazarus or, worse, scans every line as if nothing were open above it and
+  passes while verifying that openers open at depth zero forever. }
+
+procedure TestFoldWired;
+var
+  Hl: TSynPhosphorSyn;
+  L: TSynEditStringList;
+
+  function EndLevel(ALine: Integer): Integer;
+  begin
+    Result := Hl.FoldBlockEndLevel(ALine);
+  end;
+
+begin
+  Group('usynphosphor: that it folds, and where');
+
+  Hl := TSynPhosphorSyn.Create(nil);
+  L := TSynEditStringList.Create;
+  try
+    L.Text :=
+      'rem a header'         + LineEnding +   { 0 }
+      'function f(a)'        + LineEnding +   { 1 }
+      '  for i = 1 to 3'     + LineEnding +   { 2 }
+      '    if a > 0 then'    + LineEnding +   { 3 }
+      '      println i'      + LineEnding +   { 4 }
+      '    endif'            + LineEnding +   { 5 }
+      '  next'               + LineEnding +   { 6 }
+      '  return a'           + LineEnding +   { 7 }
+      'end function'         + LineEnding +   { 8 }
+      'println f(1)'         + LineEnding;    { 9 }
+
+    Hl.AttachToLines(L);
+    Hl.CurrentLines := L;
+    Hl.ScanAllRanges;
+
+    CheckEqInt('nothing is open on the header', 0, EndLevel(0));
+    CheckEqInt('the function opens one', 1, EndLevel(1));
+    CheckEqInt('the for makes two', 2, EndLevel(2));
+    CheckEqInt('the if makes three', 3, EndLevel(3));
+    CheckEqInt('the body stays at three', 3, EndLevel(4));
+    CheckEqInt('endif closes back to two', 2, EndLevel(5));
+    CheckEqInt('next closes back to one', 1, EndLevel(6));
+    CheckEqInt('the return is still inside', 1, EndLevel(7));
+    { `end function`, two words, and it must close as surely as `endfunction`. }
+    CheckEqInt('end function closes the last one', 0, EndLevel(8));
+    CheckEqInt('and the line after it is outside', 0, EndLevel(9));
+
+    { --- AND THE NEGATIVE CASE, so that an all-flat answer cannot pass ------- }
+    { Every one of these is a legal program that must fold NOTHING. If the
+      numbers above ever go flat because folding quietly stopped working, these
+      would keep passing -- which is why they are here with them rather than
+      instead of them. }
+    L.Text :=
+      'for i = 1 to 2 println i next'         + LineEnding +   { 0 one line }
+      'if x = 1 then println then'            + LineEnding +   { 1 inline }
+      'y = function + 1'                      + LineEnding +   { 2 a variable }
+      'println "function g()"'                + LineEnding +   { 3 a literal }
+      'rem for i = 1 to 3'                    + LineEnding +   { 4 a comment }
+      'println 1'                             + LineEnding;    { 5 }
+    Hl.ScanAllRanges;
+    CheckEqInt('a whole block on one line opens nothing', 0, EndLevel(0));
+    CheckEqInt('an inline if opens nothing', 0, EndLevel(1));
+    CheckEqInt('function as a variable opens nothing', 0, EndLevel(2));
+    CheckEqInt('a block word in a literal opens nothing', 0, EndLevel(3));
+    CheckEqInt('and one in a comment opens nothing', 0, EndLevel(4));
+    CheckEqInt('so the file is flat', 0, EndLevel(5));
+
+    { --- an unmatched terminator must not pop somebody else's block --------- }
+    L.Text :=
+      'function f()'   + LineEnding +   { 0 }
+      '  next'         + LineEnding +   { 1 a `next` with no `for` }
+      '  endselect'    + LineEnding +   { 2 and an endselect with no select }
+      'endfunction'    + LineEnding +   { 3 }
+      'println 1'      + LineEnding;    { 4 }
+    Hl.ScanAllRanges;
+    CheckEqInt('the function opens', 1, EndLevel(0));
+    CheckEqInt('a next with no for pops nothing', 1, EndLevel(1));
+    CheckEqInt('nor does an endselect with no select', 1, EndLevel(2));
+    CheckEqInt('and the endfunction still closes it', 0, EndLevel(3));
+    CheckEqInt('leaving the file flat', 0, EndLevel(4));
+
+    Hl.DetachFromLines(L);
+  finally
+    L.Free;
+    Hl.Free;
+  end;
+end;
+
 { ------------------------------------------------ what scanning costs ------- }
 
 { MEASURED, NOT ASSUMED, and printed rather than asserted.
@@ -1519,7 +1621,7 @@ var
   Buf: TStringList;
   I, P, Tokens: Integer;
   T0: TDateTime;
-  Whole, Single, Rescan: Double;
+  Whole, Single, Rescan, Quiet: Double;
   L: TSynEditStringList;
 begin
   Group('usynphosphor: what a scan costs, printed for the record');
@@ -1593,20 +1695,43 @@ begin
       T0 := Now;
       for P := 1 to 50 do
       begin
-        { An edit at the TOP, which is the worst place for it: everything below
-          has to be reconsidered. }
-        L[0] := Format('rem block 1 -- edit %d', [P]);
+        { AN EDIT AT THE TOP THAT OPENS OR CLOSES A BLOCK, alternating, because
+          that is the only edit that cascades. The first version of this loop
+          rewrote the comment on line 0 into another comment: the structure was
+          unchanged, every line's range still matched the stored one, the scan
+          stopped at once and the number was nothing -- before AND after the
+          promotion. It measured the balanced case and called it the worst one. }
+        if Odd(P) then
+          L[0] := 'function measured()'
+        else
+          L[0] := 'rem block 1 -- a comment again';
         Hl.ScanRanges;
       end;
       Rescan := (Now - T0) * 24 * 60 * 60 * 1000 / 50;
+
+      { AND THE SAME EDIT THAT DOES NOT CHANGE THE STRUCTURE, because that is
+        what almost every keystroke is. `fun`, `func`, `funct` are identifiers;
+        only the keystroke that COMPLETES or BREAKS a block word cascades, and
+        the pair of numbers is what makes that honest rather than alarming. }
+      L[0] := 'rem block 1 -- a comment';
+      Hl.ScanRanges;
+      T0 := Now;
+      for P := 1 to 50 do
+      begin
+        L[0] := Format('rem block 1 -- edit %d', [P]);
+        Hl.ScanRanges;
+      end;
+      Quiet := (Now - T0) * 24 * 60 * 60 * 1000 / 50;
       Hl.DetachFromLines(L);
     finally
       L.Free;
     end;
 
-    WriteLn(Format('      %d lines, %d tokens: whole buffer %.1f ms, one line %.4f ms, ' +
-                   'an edit at the top %.3f ms',
-                   [Buf.Count, Tokens div Passes, Whole, Single, Rescan]));
+    WriteLn(Format('      %d lines, %d tokens: whole buffer %.1f ms, one line %.4f ms',
+                   [Buf.Count, Tokens div Passes, Whole, Single]));
+    WriteLn(Format('      an edit at the top: %.3f ms when it opens or closes a block, ' +
+                   '%.3f ms when it does not',
+                   [Rescan, Quiet]));
     Check('the 5000-line scan produced tokens', (Tokens div Passes) > 10000);
   finally
     Hl.Free;
@@ -2046,6 +2171,7 @@ begin
   TestLanguage;
   TestHighlighter;
   TestFold;
+  TestFoldWired;
   MeasureHighlighter;
   TestBreakpoints;
   TestCompletion;

@@ -284,7 +284,7 @@ it hands the UI to explain why.
 `usynphosphor` reaches only `Graphics`, because a highlighter's colours are
 `TColor`, and it never touches a canvas or a window.
 
-That is what makes `tests/phosphoridetest.lpr` possible: 456 checks over the
+That is what makes `tests/phosphoridetest.lpr` possible: 545 checks over the
 diagnostic parser, the generated tables, the highlighter's token stream and the
 protocol codec, in a console program that runs identically on a desktop, over a
 pipe, and on a headless CI machine. These are exactly the parts that can be wrong
@@ -417,10 +417,11 @@ start failure: that is an exit code, and it arrives through `OnFinished`.
 
 ## 4. The highlighter
 
-`TSynPhosphorSyn` is a `TSynCustomHighlighter` with **no range state**, which is
-unusual enough to explain.
+`TSynPhosphorSyn` is a `TSynCustomFoldHighlighter` that carries **no LEXICAL
+range state**, which is unusual enough to explain -- and the distinction between
+the two halves of that sentence is the whole of roadmap item 17.
 
-### Why no range state is needed
+### Why no lexical range state is needed
 
 A SynEdit highlighter normally has to carry state from line to line, because a
 block comment or a multi-line string opened on line 10 changes how line 400 is
@@ -435,9 +436,43 @@ Phosphor has neither construct:
 - A string literal that reaches a newline is not a continuation. It is the hard
   lexical error `unterminated string` (`engine/PhosphorLexer.pas:420-435`).
 
-So every line can be coloured by looking at that line alone. `GetRange` and
-`SetRange` stay the base class's no-ops, editing line 10 never repaints line 400,
-and there is no state to get wrong.
+So every line can be coloured by looking at that line alone, and there is no
+lexical state to get wrong.
+
+### What folding cost, and what it did not
+
+Until 2026-09-16 the sentence above ended "`GetRange` and `SetRange` stay the base
+class's no-ops, editing line 10 never repaints line 400". Folding is not reachable
+without the other base class -- `TSynEditFoldedView` refuses a highlighter that is
+not a `TSynCustomFoldHighlighter` (`syneditfoldedview.pp:3570-3576`), and there is
+no seam that accepts fold ranges from outside -- so the class was promoted and a
+per-line FOLD stack is carried whether or not anything is folded.
+
+`GetRange`, `SetRange` and `ResetRange` are still not overridden here: they are
+the base class's, shuttling the fold stack and nothing else. The colouring is
+still a function of one line.
+
+What it cost was measured on both sides of the change rather than argued about,
+on 5000 lines of nested blocks (`MeasureHighlighter` prints all of it on every
+run of `bin/phosphoridetest`):
+
+| | before | after |
+| --- | --- | --- |
+| scanning the whole buffer | 64.0 ms | 67.3 ms |
+| scanning one line | 0.0130 ms | 0.0130 ms |
+| an edit at the top that does NOT change the block structure | 0.040 ms | 0.040 ms |
+| an edit at the top that OPENS OR CLOSES a block | 0.040 ms | **66.2 ms** |
+
+The last row is the objection, and it is real. `PerformScan` rescans forward until
+a line's range matches the stored one (`synedithighlighter.pp:1752-1770`); before
+the promotion no line's range ever differed, so every edit stopped one line later.
+Now an edit that changes the structure rescans to the end of the file.
+
+It is one keystroke and not every keystroke: `fun`, `func` and `funct` are
+identifiers and cost nothing; only the one that completes or breaks a block word
+pays. But "typing in a 5000-line file is not measurably slower" -- which is what
+the roadmap asked for -- is **false for that keystroke**, and saying otherwise
+would have been easy, because the two obvious numbers to quote did not move.
 
 `FInString` exists but is *within* a line only -- it is reset by `SetLine`, and it
 says whether this call is opening a literal or resuming one.
@@ -753,17 +788,21 @@ for focus once there is somewhere to put it.
 
 Each of these is a decision, not a backlog entry.
 
-**Code folding.** It needs `TSynCustomFoldHighlighter` as an ancestor -- a
-different base class, with range state and fold-node bookkeeping -- and, more
-importantly, a parser good enough to be *trusted* about block structure. Phosphor
-makes that expensive in a specific way: the grammar decides keywords by position,
-so `next` and `endif` are ordinary identifiers until the parser says otherwise
-(section 4). A folding highlighter that assumed a coloured `if` was a real `if`
-would mis-fold any program that used `if` as a variable, and mis-folded code
-*hides lines*, which is a far worse failure than mis-coloured code. Getting it
-right means writing enough of Phosphor's parser to be sure -- in this repository,
-in a second implementation, kept in step with the first. That is a large piece of
-work whose payoff is a triangle in the gutter, so it is not v1.
+**Code folding** was in this list until 2026-09-16, and the paragraph it replaces
+was right about every cost it named. It said a folding highlighter that assumed a
+coloured `if` was a real `if` would mis-fold any program that used `if` as a
+variable, and that mis-folded code *hides lines*.
+
+It does, and six legal Phosphor programs were compiled that prove it -- they are
+in `src/core/uphosphorfold.pas`'s header and each is a check. The answer was not
+to write enough of Phosphor's parser to be sure: it was to decide folds
+STRUCTURALLY from the line's text, a line at a time, and never from what the
+highlighter painted. A terminator is honoured only when its own kind is the block
+actually open; an opener fires only where a statement may begin; and a block that
+opens and closes on the same line folds nothing.
+
+The cost the paragraph named second -- the base class and its range state -- was
+real and was paid; section 4 has the measurement.
 
 **Code completion** was in this list until 2026-09-16, and the paragraph it
 replaces said a useful one needs a parser this repository does not have. Half of
@@ -881,7 +920,7 @@ another repository (`host/console/phosphor.lpr:3017`).
 | Project | `src/phosphoride.lpi`, build modes `Default` and `Release` |
 | Compiler options | `-vewn` -- zero errors, warnings and notes is the bar |
 | Windows subsystem | GUI (`GraphicApplication`), which is section 7 |
-| Tests | `tests/phosphoridetest.lpi` -- console, headless, 456 checks |
+| Tests | `tests/phosphoridetest.lpi` -- console, headless, 545 checks |
 | Build script | `scripts/build.ps1`, `scripts/build.sh` |
 | Licence | MIT, by AndreMurtaX |
 | Sibling repository | https://github.com/AndreMurtaX/Phosphor |

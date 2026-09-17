@@ -1,0 +1,28 @@
+# Folding. folding.bas has four nested blocks and four lines that only LOOK like
+# blocks -- each of the four is legal Phosphor that an obvious folder would fold,
+# and each would then hide everything below it.
+#
+# The gutter's fold column is the fifth part SynEdit creates by default and it
+# has always been there; what turns it on is a CLASS TEST on the highlighter and
+# nothing else, so the markers appearing at all is the proof that the promotion
+# took.
+wait 600
+shot 170-the-markers-and-the-four-that-have-none
+
+# Collapse the function at line 6. The marker is in the fold column, which sits
+# at the right-hand end of the gutter.
+at 60 187
+wait 800
+shot 171-the-function-collapsed
+
+# And expand it again: the lines come back, and nothing below moved.
+at 60 187
+wait 800
+shot 172-and-back
+
+# Collapse the for at line 8 instead -- a block inside a block.
+at 60 217
+wait 800
+shot 173-an-inner-block-collapsed
+at 60 217
+wait 600

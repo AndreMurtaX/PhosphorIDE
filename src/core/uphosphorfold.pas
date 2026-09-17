@@ -90,14 +90,20 @@ type
   { The seven kinds, plus none. The roadmap names five; `do while ... loop` and
     `repeat ... until` are blocks too, both measured. }
   TPhosphorBlock = (
-    pbNone,
     pbIf,         // if <cond> then <end of line> ... endif / end if
     pbFor,        // for ... next
     pbWhile,      // while ... wend / endwhile / end while
     pbDo,         // do while ... loop
     pbRepeat,     // repeat ... until
     pbSelect,     // select case ... endselect / end select
-    pbFunction    // function ... endfunction / end function
+    pbFunction,   // function ... endfunction / end function
+    { LAST, AND NOT FIRST, which is a fact about SynEdit rather than about
+      Phosphor. A fold highlighter's configurable block types must occupy the
+      ordinals 0..FoldConfigCount-1 (synedithighlighterfoldbase.pas:2014-2022),
+      and the "no block" value is the root's type -- an internal one. Putting it
+      first would shift every real kind by one and silently drop the last of
+      them out of the configuration array. }
+    pbNone
   );
 
   TFoldEventKind = (feOpen, feClose);

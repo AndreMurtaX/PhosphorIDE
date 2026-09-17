@@ -207,11 +207,12 @@ way `print` is not, and it is coloured differently for that reason. Lookup is
 case-insensitive because Phosphor lowercases every identifier as it scans, and a type
 suffix is part of the name -- `left$` is the word, and `left` alone is not a built-in.
 
-There is **no range state**. A SynEdit highlighter normally carries state across lines
-for block comments and multi-line strings; Phosphor has neither -- `'` and `rem` run to
-end of line, and a string literal that reaches a newline is the hard lexical error
-`unterminated string`. So every line is coloured by looking at that line alone, and
-editing line 10 never repaints line 400.
+There is **no lexical range state**. A SynEdit highlighter normally carries state across
+lines for block comments and multi-line strings; Phosphor has neither -- `'` and `rem` run
+to end of line, and a string literal that reaches a newline is the hard lexical error
+`unterminated string`. So every line is coloured by looking at that line alone. (The
+highlighter does carry a FOLD stack, because folding is not reachable without it; see
+Folding below for what that cost.)
 
 Two things get painted that a keyword list cannot reach, and they were chosen because
 Phosphor's own documentation names them as what beginners hit most:
@@ -344,6 +345,39 @@ Labels and `gosub` targets are deliberately absent. They are a second table in
 the compiler that never consults the function table, and an absence that is
 written down beats a jump that is wrong and looks right.
 
+## Folding
+
+`if`/`endif`, `for`/`next`, `while`/`wend`, `do`/`loop`, `repeat`/`until`,
+`select`/`endselect` and `function`/`endfunction` fold from the gutter. Seven kinds,
+where the roadmap that asked for this named five: `do while ... loop` and
+`repeat ... until` are blocks too.
+
+**What the folder refuses to fold is the interesting half.** Phosphor decides keywords by
+POSITION -- the lexer has no keyword table at all -- so `next = 5` is a legal assignment
+and `function` is a legal variable name. A folder built on the colouring would hide code,
+and mis-folded code hides lines, which is far worse than a wrong colour. So these are all
+legal Phosphor, all compile and run, and **none of them gets a fold marker**:
+
+```
+for i = 1 to 2 println i next     a whole block on one line -- it folds nothing
+if 1 = 1 then println 7           an inline if, which takes no endif
+y = function + 1                  `function` as an ordinary variable
+println "for i = 1 to 3 endif"    a block word inside a literal
+```
+
+The rules are in `src/core/uphosphorfold.pas`, which has no LCL in it and is checked
+headless: a terminator is honoured only when its own kind is the block actually open, an
+opener fires only where a statement may begin, an `if` opens a block only when nothing
+follows its `then`, and `else if` is one token rather than a second `if`.
+
+**It cost something, and the number is written down.** Folding needs a different
+highlighter base class, and with it a per-line fold stack. Scanning one line is unchanged
+at 0.013 ms and an ordinary edit is unchanged at 0.04 ms -- but an edit that OPENS OR
+CLOSES a block in a 5000-line file rescans to the end of the file, and that keystroke went
+from 0.04 ms to 66 ms. It is one keystroke and not every keystroke: `fun`, `func` and
+`funct` are identifiers and cost nothing. `bin/phosphoridetest` prints all of it on every
+run.
+
 ## The REPL
 
 `Ctrl+Shift+R`, or **Run > REPL**, starts `phosphor` with no arguments and feeds
@@ -468,7 +502,7 @@ already survives editing is what the other half will need the day the host can a
 
 Two harnesses, and between them they leave a gap that is worth naming.
 
-**`bin/phosphoridetest`** -- 456 checks, all green -- covers the logic that can be
+**`bin/phosphoridetest`** -- 545 checks, all green -- covers the logic that can be
 wrong without anyone noticing: the diagnostic parser (every input string in it was
 captured from a real `phosphor` run, not invented), the exit-code taxonomy, the
 generated word lists against their asserted counts, what the highlighter's scanner

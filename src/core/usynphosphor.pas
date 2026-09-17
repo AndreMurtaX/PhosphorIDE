@@ -31,14 +31,49 @@ unit usynphosphor;
   may be built on the assumption that a coloured keyword IS a keyword.
 
   The two words the LEXER itself owns, `rem` and `mod`, are the exception: those
-  can never be variables, and this unit treats them as absolute. }
+  can never be variables, and this unit treats them as absolute.
+
+  AND IT FOLDS NOW, WHICH COST SOMETHING THIS HEADER USED TO PROMISE.
+
+  Until 2026-09-16 this class derived from TSynCustomHighlighter and the two
+  paragraphs above were the whole story: no range state, so editing line 10 never
+  repainted line 400. Folding is not reachable without the other base class --
+  TSynEditFoldedView refuses a highlighter that is not a TSynCustomFoldHighlighter
+  (syneditfoldedview.pp:3570-3576) and there is no seam that accepts fold ranges
+  from outside -- so the class was promoted, and a per-line fold stack is now
+  carried whether or not anything is folded.
+
+  WHAT THAT COSTS, MEASURED ON BOTH SIDES rather than argued about, 5000 lines:
+
+                        before          after
+    whole buffer        64.0 ms         see tests/phosphoridetest.lpr
+    one line            0.0130 ms       (MeasureHighlighter prints all three
+    an edit at the top  0.040 ms         on every run)
+
+  The third number is the one that moves, and the first two cannot see it: the
+  new cost is in PerformScan, which rescans forward until a line's range matches
+  the stored one (synedithighlighter.pp:1752-1770). An edit inside a balanced
+  block stops one line later; an edit that OPENS or CLOSES a block rescans to
+  the end of the file.
+
+  WHAT IT DID NOT COST is the thing the range state was avoided for. There is
+  still no lexical state across lines: no block comment, no multi-line string,
+  and GetRange/SetRange/ResetRange are the base class's, carrying the fold stack
+  and nothing else. A line is still coloured by looking at that line alone.
+
+  AND THE FOLD DECISIONS ARE NOT MADE HERE. They are `uphosphorfold`'s, computed
+  structurally from the line's text -- not from what this unit painted. That is
+  the roadmap's own instruction and the reason is the paragraph above about
+  keywords by position: a fold built on the colouring would hide code in six
+  legal programs, each of which that unit names and pins. }
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  Classes, SysUtils, Graphics, SynEditHighlighter, SynEditTypes, uphosphorlang;
+  Classes, SysUtils, Graphics, SynEditHighlighter, SynEditHighlighterFoldBase,
+  SynEditTypes, uphosphorlang, uphosphorfold;
 
 type
   TPhosphorTokenKind = (
@@ -61,7 +96,7 @@ type
 
   { TSynPhosphorSyn }
 
-  TSynPhosphorSyn = class(TSynCustomHighlighter)
+  TSynPhosphorSyn = class(TSynCustomFoldHighlighter)
   private
     FLine: String;
     FLineLen: Integer;
@@ -70,6 +105,13 @@ type
     FTokenKind: TPhosphorTokenKind;
     FInString: Boolean;     // mid-literal, between two emitted pieces
     FFirstOnLine: Boolean;  // no code token emitted on this line yet
+
+    { What this line does to the block structure, decided once in SetLine by
+      uphosphorfold and then drained in Next at the token each event names. The
+      event carries a real column, so a fold node gets real bounds instead of a
+      zero-width point at the end of the line. }
+    FFoldEvents: TFoldEvents;
+    FFoldNext: Integer;
 
     FCommentAttri: TSynHighlighterAttributes;
     FStringAttri: TSynHighlighterAttributes;
@@ -93,9 +135,19 @@ type
     procedure ScanString;
     procedure ScanSymbol;
     function LooksLikeLabel: Boolean;
+    procedure DrainFoldEvents;
+    function TopPhosphorBlock: TPhosphorBlock;
   protected
     function GetIdentChars: TSynIdentChars; override;
     function GetSampleSource: String; override;
+
+    { The four SynEdit asks of a fold highlighter, and only four: this unit
+      carries no other range state, so GetRange, SetRange and ResetRange are the
+      base class's untouched -- they shuttle the fold stack and nothing else. }
+    procedure CreateRootCodeFoldBlock; override;
+    function GetFoldConfigCount: Integer; override;
+    function GetFoldConfigInternalCount: Integer; override;
+    function GetFoldConfigInstance(Index: Integer): TSynCustomFoldConfig; override;
   public
     constructor Create(AOwner: TComponent); override;
 
@@ -273,7 +325,40 @@ begin
   FRun := 1;
   FInString := False;
   FFirstOnLine := True;
+  { ONCE PER LINE, BEFORE ANY TOKEN. The decisions need the whole line -- an
+    `if` opens a block only when nothing follows its `then`, and a block that
+    opens and closes here folds nothing -- so they cannot be made token by
+    token. See uphosphorfold's header for the six legal programs that proved it. }
+  FFoldEvents := ScanFoldLine(NewValue);
+  FFoldNext := 0;
   Next;
+end;
+
+function TSynPhosphorSyn.TopPhosphorBlock: TPhosphorBlock;
+begin
+  Result := TPhosphorBlock(PtrUInt(TopCodeFoldBlockType));
+end;
+
+procedure TSynPhosphorSyn.DrainFoldEvents;
+begin
+  { Every event whose word IS the token just scanned. Called after the scan, so
+    FTokenPos..FRun is that token and the node the base class builds from
+    GetTokenBounds covers it. }
+  while (FFoldNext <= High(FFoldEvents)) and
+        (FFoldEvents[FFoldNext].Col = FTokenPos) do
+  begin
+    if FFoldEvents[FFoldNext].Kind = feOpen then
+      StartCodeFoldBlock(Pointer(PtrInt(Ord(FFoldEvents[FFoldNext].Block))))
+    else
+      { ONLY WHEN IT IS THE BLOCK THAT IS ACTUALLY OPEN. EndCodeFoldBlock pops
+        whatever is on top (synedithighlighterfoldbase.pas:2155-2165), so an
+        unmatched terminator -- a `next` at top level, an `endif` in a file
+        somebody is still writing -- would pop somebody else's block and every
+        fold below it would be wrong. }
+      if TopPhosphorBlock = FFoldEvents[FFoldNext].Block then
+        EndCodeFoldBlock;
+    Inc(FFoldNext);
+  end;
 end;
 
 procedure TSynPhosphorSyn.ScanSpace;
@@ -524,7 +609,39 @@ begin
     ScanSymbol;
   finally
     FFirstOnLine := False;
+    DrainFoldEvents;
   end;
+end;
+
+{ ---------------------------------------------------------------- folding -- }
+
+procedure TSynPhosphorSyn.CreateRootCodeFoldBlock;
+begin
+  inherited CreateRootCodeFoldBlock;
+  { The type TopCodeFoldBlockType answers when nothing is open. It has to be a
+    value no real block uses, which is why pbNone is last in the enum. }
+  RootCodeFoldBlock.InitRootBlockType(Pointer(PtrInt(Ord(pbNone))));
+end;
+
+function TSynPhosphorSyn.GetFoldConfigCount: Integer;
+begin
+  { The CONFIGURABLE prefix: the seven real kinds, without pbNone. }
+  Result := Ord(pbNone);
+end;
+
+function TSynPhosphorSyn.GetFoldConfigInternalCount: Integer;
+begin
+  { Every value, pbNone included -- this is what sizes the array. }
+  Result := Ord(pbNone) + 1;
+end;
+
+function TSynPhosphorSyn.GetFoldConfigInstance(Index: Integer): TSynCustomFoldConfig;
+begin
+  Result := inherited GetFoldConfigInstance(Index);
+  { THE BASE CLASS SETS THIS FALSE, and a fold highlighter that does not turn it
+    on compiles, scans, balances its stack and folds absolutely nothing -- with
+    no error anywhere (synedithighlighterfoldbase.pas:2030-2035). }
+  Result.Enabled := True;
 end;
 
 { ------------------------------------------------------------ SynEdit's asks - }
