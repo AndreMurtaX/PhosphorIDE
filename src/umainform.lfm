@@ -209,12 +209,12 @@ object FrmMain: TFrmMain
       ClientWidth = 992
       object PanelFind: TPanel
         Left = 0
-        Height = 60
+        Height = 88
         Top = 0
         Width = 992
         Align = alTop
         BevelOuter = bvNone
-        ClientHeight = 60
+        ClientHeight = 88
         ClientWidth = 992
         TabOrder = 0
         object LblFindWhat: TLabel
@@ -299,6 +299,32 @@ object FrmMain: TFrmMain
           Hint = 'A semicolon-separated list like *.bas;*.txt. Empty searches every file.'
           Text = '*.bas'
           TabOrder = 6
+        end
+        object LblFindReplace: TLabel
+          Left = 8
+          Height = 15
+          Top = 64
+          Width = 44
+          Caption = 'Replace'
+        end
+        object EditFindReplace: TEdit
+          Left = 56
+          Height = 23
+          Top = 60
+          Width = 300
+          Hint = 'What to put in place of it. Plain text, not a pattern.'
+          TabOrder = 7
+        end
+        object BtnFindReplace: TButton
+          Left = 368
+          Height = 25
+          Top = 59
+          Width = 192
+          Caption = 'Replace in the listed lines'
+          Enabled = False
+          Hint = 'Changes only the lines the search listed, and asks first.'
+          OnClick = BtnFindReplaceClick
+          TabOrder = 8
         end
       end
       object ListFind: TListBox

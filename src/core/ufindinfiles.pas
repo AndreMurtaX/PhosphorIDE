@@ -139,6 +139,42 @@ type
   match at either end -- is decided here where a test can reach it. }
 function FindInLine(const ALine, APattern: String; AMatchCase: Boolean): Integer;
 
+{ The mirror of it: every occurrence of APattern in ALine, left to right, and how
+  many there were.
+
+  THE SEARCH LISTS A LINE, NOT AN OCCURRENCE. `TFindThread.Scan` deposits one hit
+  per line and stops looking at that line, so a row in the results pane means
+  "this line matches" and nothing finer. Replacing only the first occurrence
+  would leave the line still matching and the person running it again; replacing
+  all of them is what the row means and what every editor does. What the rule
+  guarantees is the half that can be checked: NO LINE THE SEARCH DID NOT LIST IS
+  TOUCHED.
+
+  AND WHAT IS WRITTEN IS NEVER LOOKED AT AGAIN. Replacing `foo` with `xfoox` in a
+  scanner that rescans from the start of what it just wrote does not terminate;
+  this one advances past the replacement, so that case is `xfoox` and not a hang.
+  An empty pattern matches nothing and returns the line unchanged, because the
+  alternative is a replacement between every pair of characters. }
+function ReplaceInLine(const ALine, APattern, AReplacement: String;
+  AMatchCase: Boolean; out ACount: Integer): String;
+
+{ Rewrite APath, changing only the 1-based lines in ALines. Returns the number of
+  OCCURRENCES replaced and sets ALinesChanged to the number of lines that really
+  changed -- a line whose text no longer matches, because the file moved under
+  the search, counts as neither.
+
+  NOTHING IS RAISED. A file that is read-only, locked, gone or binary is a thing
+  to report beside the others and skip, not a reason to abandon a run that has
+  already rewritten four files: AError is set and the result is 0. That is
+  roadmap item 21's own done-when, and it is the difference between a tool
+  somebody trusts with a tree and one they run once.
+
+  The bytes go through `utextfile`, so the file keeps the line endings and the
+  closing newline it arrived with. }
+function ReplaceInFile(const APath, APattern, AReplacement: String;
+  AMatchCase: Boolean; const ALines: array of Integer;
+  out ALinesChanged: Integer; out AError: String): Integer;
+
 { Does this buffer look like something a person wrote? A NUL byte says no. }
 function LooksBinary(const ABuffer: String): Boolean;
 
@@ -154,7 +190,7 @@ function MatchesFileMask(const AName, AMask: String): Boolean;
 implementation
 
 uses
-  Math, FileUtil, LazFileUtils, LazUTF8, Masks;
+  Math, FileUtil, LazFileUtils, LazUTF8, Masks, utextfile;
 
 const
   { How deep the walk goes. A tree deeper than this is a symlink loop or a
@@ -513,6 +549,100 @@ begin
 
   if Assigned(FOnDone) then
     FOnDone(Self, Files, Count, Cancelled, Err);
+end;
+
+function ReplaceInLine(const ALine, APattern, AReplacement: String;
+  AMatchCase: Boolean; out ACount: Integer): String;
+var
+  Rest: String;
+  P: Integer;
+begin
+  Result := '';
+  ACount := 0;
+  if (APattern = '') or (ALine = '') then
+    Exit(ALine);
+  Rest := ALine;
+  repeat
+    P := FindInLine(Rest, APattern, AMatchCase);
+    if P = 0 then
+      Break;
+    { Everything before the match, then the replacement -- and the walk resumes
+      PAST what was written, never inside it. }
+    Result := Result + Copy(Rest, 1, P - 1) + AReplacement;
+    Delete(Rest, 1, P - 1 + Length(APattern));
+    Inc(ACount);
+  until False;
+  Result := Result + Rest;
+end;
+
+function ReplaceInFile(const APath, APattern, AReplacement: String;
+  AMatchCase: Boolean; const ALines: array of Integer;
+  out ALinesChanged: Integer; out AError: String): Integer;
+var
+  Lines: TStringList;
+  Shape: TTextShape;
+  Text, Fresh: String;
+  I, Idx, N: Integer;
+begin
+  Result := 0;
+  ALinesChanged := 0;
+  AError := '';
+  if Length(ALines) = 0 then
+    Exit;
+
+  Lines := TStringList.Create;
+  try
+    try
+      Text := ReadWholeFile(APath);
+    except
+      on E: Exception do
+      begin
+        { Gone, locked, or unreadable between the search and now. Reported and
+          skipped -- see the header. }
+        AError := E.Message;
+        Exit;
+      end;
+    end;
+    Shape := DetectShape(Text);
+    SplitLines(Text, Lines);
+
+    for I := Low(ALines) to High(ALines) do
+    begin
+      Idx := ALines[I] - 1;
+      { A LINE NUMBER FROM A SEARCH THAT HAS GONE STALE. The file may have been
+        edited, or truncated, since the row was listed; a number past the end is
+        skipped rather than being an error, because the other lines of the same
+        file are still exactly what was listed. }
+      if (Idx < 0) or (Idx >= Lines.Count) then
+        Continue;
+      Fresh := ReplaceInLine(Lines[Idx], APattern, AReplacement, AMatchCase, N);
+      if N = 0 then
+        Continue;
+      Lines[Idx] := Fresh;
+      Inc(ALinesChanged);
+      Inc(Result, N);
+    end;
+
+    if Result = 0 then
+      Exit;
+
+    try
+      WriteWholeFile(APath, JoinLines(Lines, Shape));
+    except
+      on E: Exception do
+      begin
+        { READ-ONLY IS FOUND HERE AND NOT BEFORE, deliberately. Asking the
+          filesystem whether a write will succeed and then writing is two
+          answers with a gap between them; attempting it is one. The count is
+          reset because nothing reached the disk. }
+        AError := E.Message;
+        Result := 0;
+        ALinesChanged := 0;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
 end;
 
 end.

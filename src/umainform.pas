@@ -48,9 +48,12 @@ type
     EditRepl: TEdit;
     BtnFindBrowse: TButton;
     BtnFindGo: TButton;
+    BtnFindReplace: TButton;
     BtnFindStop: TButton;
     ChkFindCase: TCheckBox;
     EditFindMask: TEdit;
+    EditFindReplace: TEdit;
+    LblFindReplace: TLabel;
     EditFindRoot: TEdit;
     EditFindWhat: TEdit;
     LblFindMask: TLabel;
@@ -200,6 +203,7 @@ type
       Shift: TShiftState);
     procedure BtnFindBrowseClick(Sender: TObject);
     procedure BtnFindGoClick(Sender: TObject);
+    procedure BtnFindReplaceClick(Sender: TObject);
     procedure BtnFindStopClick(Sender: TObject);
     procedure EditFindWhatKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
@@ -1978,7 +1982,182 @@ begin
   FFindTimer.Enabled := True;
   BtnFindGo.Enabled := False;
   BtnFindStop.Enabled := True;
+  { NOTHING IS WRITTEN UNTIL THE USER HAS SEEN THE LIST, which is roadmap item
+    21's own done-when, and this is the whole of how it is kept: the button is
+    dead while there is no list, and dead again the moment a new search starts
+    and the old rows go. }
+  BtnFindReplace.Enabled := False;
   StatusBar1.Panels[3].Text := 'searching...';
+end;
+
+{ REPLACE, ACROSS THE TREE THE SEARCH JUST WALKED. Roadmap item 21, and the
+  first thing in this editor that changes a file it is not showing.
+
+  WHAT IT IS ALLOWED TO TOUCH is the lines in FFindRows and nothing else. The
+  search deposits ONE hit per line (ufindinfiles, TFindThread.Scan), so a row
+  means "this line matches"; every occurrence ON that line is replaced, and no
+  line that was not listed is opened, read or written.
+
+  TWO ROUTES, AND WHICH ONE IS TAKEN IS DECIDED BY THE TAB STRIP.
+
+    OPEN IN A TAB -> through the buffer, inside one BeginUndoBlock, using
+    TextBetweenPoints. That is what makes Ctrl+Z undo the whole replace as one
+    act and what makes the tab show modified. Writing such a file behind its own
+    editor would leave the buffer holding the old text and the next save would
+    put it back.
+
+    NOT OPEN -> ufindinfiles.ReplaceInFile, which goes through utextfile and so
+    gives the file back the line endings and closing newline it arrived with.
+
+  A FILE THAT CANNOT BE WRITTEN IS REPORTED AND SKIPPED, never a reason to stop:
+  a run that has already rewritten four files and then meets a read-only fifth
+  must finish the other six. The count at the end says what happened and the
+  Problems tab is not involved -- this is not a diagnostic. }
+procedure TFrmMain.BtnFindReplaceClick(Sender: TObject);
+var
+  Files: TStringList;
+  LinesOf: TStringList;
+  I, J, Bar, Line, Occurrences, LinesTouched, FilesTouched, N, M, Each: Integer;
+  Path, Entry, Fresh, Err, Skipped: String;
+  Doc: TEditorDoc;
+  Nums: array of Integer;
+begin
+  if (FFindRows.Count = 0) or (EditFindWhat.Text = '') then
+    Exit;
+
+  { GROUPED BY FILE, because a file is opened, rewritten and closed once. The
+    rows arrive in walk order, so a plain lookup keeps them that way. }
+  Files := TStringList.Create;
+  try
+    Files.Sorted := False;
+    for I := 0 to FFindRows.Count - 1 do
+    begin
+      Entry := FFindRows[I];
+      Bar := Pos('|', Entry);
+      if Bar < 2 then
+        Continue;
+      Line := StrToIntDef(Copy(Entry, 1, Bar - 1), 0);
+      Path := Copy(Entry, Bar + 1, MaxInt);
+      if (Line < 1) or (Path = '') then
+        Continue;
+      J := -1;
+      for M := 0 to Files.Count - 1 do
+        if CompareFilenames(Files[M], Path) = 0 then
+        begin
+          J := M;
+          Break;
+        end;
+      if J < 0 then
+      begin
+        J := Files.AddObject(Path, TStringList.Create);
+      end;
+      TStringList(Files.Objects[J]).Add(IntToStr(Line));
+    end;
+
+    if Files.Count = 0 then
+      Exit;
+
+    { AND IT ASKS FIRST, with the counts in the question. The list has been on
+      screen since the search finished; this is the last look before bytes move. }
+    if MessageDlg('PhosphorIDE',
+         Format('Replace %s with %s on %d line(s) in %d file(s)?',
+                [QuotedStr(EditFindWhat.Text), QuotedStr(EditFindReplace.Text),
+                 FFindRows.Count, Files.Count]),
+         mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+      Exit;
+
+    Occurrences := 0;
+    LinesTouched := 0;
+    FilesTouched := 0;
+    Skipped := '';
+
+    for I := 0 to Files.Count - 1 do
+    begin
+      Path := Files[I];
+      LinesOf := TStringList(Files.Objects[I]);
+      SetLength(Nums, LinesOf.Count);
+      for J := 0 to LinesOf.Count - 1 do
+        Nums[J] := StrToIntDef(LinesOf[J], 0);
+
+      Doc := nil;
+      for J := 0 to FDocs.Count - 1 do
+        if (not TEditorDoc(FDocs[J]).IsUntitled) and
+           (CompareFilenames(TEditorDoc(FDocs[J]).FileName, Path) = 0) then
+        begin
+          Doc := TEditorDoc(FDocs[J]);
+          Break;
+        end;
+
+      N := 0;
+      M := 0;
+      Err := '';
+      if Doc <> nil then
+      begin
+        { ONE UNDO ENTRY FOR THE WHOLE FILE. TextBetweenPoints is what records
+          it; assigning to Lines[] would change the text and leave Ctrl+Z with
+          nothing to undo. }
+        Doc.Edit.BeginUndoBlock;
+        try
+          for J := 0 to High(Nums) do
+          begin
+            if (Nums[J] < 1) or (Nums[J] > Doc.Edit.Lines.Count) then
+              Continue;
+            Fresh := ReplaceInLine(Doc.Edit.Lines[Nums[J] - 1],
+                       EditFindWhat.Text, EditFindReplace.Text,
+                       ChkFindCase.Checked, Each);
+            if Each = 0 then
+              Continue;
+            Doc.Edit.TextBetweenPoints[
+              Point(1, Nums[J]),
+              Point(Length(Doc.Edit.Lines[Nums[J] - 1]) + 1, Nums[J])] := Fresh;
+            Inc(N, Each);
+            Inc(M);
+          end;
+        finally
+          Doc.Edit.EndUndoBlock;
+        end;
+        if M > 0 then
+          RefreshTabCaption(Doc);
+      end
+      else
+        N := ReplaceInFile(Path, EditFindWhat.Text, EditFindReplace.Text,
+                           ChkFindCase.Checked, Nums, M, Err);
+
+      if Err <> '' then
+      begin
+        if Skipped <> '' then
+          Skipped := Skipped + ', ';
+        Skipped := Skipped + ExtractFileName(Path);
+      end
+      else if N > 0 then
+      begin
+        Inc(Occurrences, N);
+        Inc(LinesTouched, M);
+        Inc(FilesTouched);
+      end;
+    end;
+
+    if Skipped = '' then
+      StatusBar1.Panels[3].Text :=
+        Format('replaced %d on %d line(s) in %d file(s)',
+               [Occurrences, LinesTouched, FilesTouched])
+    else
+      StatusBar1.Panels[3].Text :=
+        Format('replaced %d on %d line(s) in %d file(s); skipped %s',
+               [Occurrences, LinesTouched, FilesTouched, Skipped]);
+
+    { THE LIST IS NOW ABOUT A TREE THAT NO LONGER SAYS THAT. Leaving the rows up
+      invites a second Replace over lines that have already been changed, which
+      is how `a` becomes `bb`. }
+    ListFind.Items.Clear;
+    FFindRows.Clear;
+    BtnFindReplace.Enabled := False;
+    RepaintEditors;
+  finally
+    for I := 0 to Files.Count - 1 do
+      Files.Objects[I].Free;
+    Files.Free;
+  end;
 end;
 
 procedure TFrmMain.BtnFindStopClick(Sender: TObject);
@@ -2034,6 +2213,7 @@ begin
   FFindTimer.Enabled := False;
   BtnFindGo.Enabled := True;
   BtnFindStop.Enabled := False;
+  BtnFindReplace.Enabled := FFindRows.Count > 0;
 
   if AError <> '' then
     What := 'the search failed: ' + AError

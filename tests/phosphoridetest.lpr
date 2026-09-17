@@ -712,6 +712,205 @@ end;
 
 { --------------------------------------------------------- find in files --- }
 
+{ ------------------------------------------------------ replace in files --- }
+
+{ THE FIRST THING IN THIS EDITOR THAT CHANGES SOMEBODY'S FILE, which is why it is
+  checked harder than anything that only draws.
+
+  Everything items 14 to 17 built is allowed to be wrong about a rare legal
+  program: being wrong costs a row in a list or a fold nobody wanted. A replace
+  that is wrong costs a file. So there is no scanner in it -- the match is the
+  same literal FindInLine the search already uses -- and the two properties below
+  are the ones the whole feature rests on:
+
+    NO LINE THE SEARCH DID NOT LIST IS TOUCHED, and
+    A FILE KEEPS THE ENDINGS AND THE CLOSING NEWLINE IT ARRIVED WITH.
+
+  Both are checked against the BYTES of a fixture directory, before and after. }
+
+procedure TestReplaceInFiles;
+var
+  Root: String;
+
+  procedure Put(const ARel, AContent: String);
+  var
+    F: TFileStream;
+    Full, Dir: String;
+  begin
+    Full := Root + PathDelim + ARel;
+    Dir := ExtractFilePath(Full);
+    if not DirectoryExists(Dir) then
+      ForceDirectories(Dir);
+    F := TFileStream.Create(Full, fmCreate);
+    try
+      if AContent <> '' then
+        F.Write(AContent[1], Length(AContent));
+    finally
+      F.Free;
+    end;
+  end;
+
+  function Get(const ARel: String): String;
+  var
+    F: TFileStream;
+  begin
+    Result := '';
+    F := TFileStream.Create(Root + PathDelim + ARel, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(Result, F.Size);
+      if F.Size > 0 then
+        F.ReadBuffer(Result[1], F.Size);
+    finally
+      F.Free;
+    end;
+  end;
+
+  function Shown(const AText: String): String;
+  begin
+    Result := StringReplace(AText, #13, '\r', [rfReplaceAll]);
+    Result := StringReplace(Result, #10, '\n', [rfReplaceAll]);
+  end;
+
+  function Replaced(const ALine, APattern, AWith: String;
+    AMatchCase: Boolean): String;
+  var
+    N: Integer;
+  begin
+    Result := ReplaceInLine(ALine, APattern, AWith, AMatchCase, N);
+  end;
+
+  function Count(const ALine, APattern, AWith: String;
+    AMatchCase: Boolean): Integer;
+  begin
+    ReplaceInLine(ALine, APattern, AWith, AMatchCase, Result);
+  end;
+
+var
+  N, Lines: Integer;
+  Err: String;
+begin
+  Group('ufindinfiles: replacing, which is the half that changes a file');
+
+  { --- one line at a time -------------------------------------------------- }
+  CheckEq('one occurrence', 'x = 2', Replaced('x = 1', '1', '2', False));
+  CheckEq('every occurrence on the line', 'b b b',
+          Replaced('a a a', 'a', 'b', False));
+  CheckEqInt('and it says how many', 3, Count('a a a', 'a', 'b', False));
+  CheckEq('none leaves the line alone', 'x = 1',
+          Replaced('x = 1', 'zzz', 'q', False));
+  CheckEqInt('and counts nothing', 0, Count('x = 1', 'zzz', 'q', False));
+
+  { --- case ---------------------------------------------------------------- }
+  CheckEq('case-insensitive by default', 'qq', Replaced('Aa', 'a', 'q', False));
+  CheckEq('and exact when asked', 'Aq', Replaced('Aa', 'a', 'q', True));
+
+  { --- THE ONE THAT DOES NOT TERMINATE IF IT IS WRITTEN WRONGLY ------------ }
+  { A replacement that contains the pattern. A loop that rescans from the start
+    of what it just wrote never finishes; this walks past it. }
+  CheckEq('a replacement containing the pattern', 'xfoox',
+          Replaced('foo', 'foo', 'xfoox', False));
+  CheckEqInt('exactly once', 1, Count('foo', 'foo', 'xfoox', False));
+  CheckEq('and twice over', 'xfooxyxfoox',
+          Replaced('fooyfoo', 'foo', 'xfoox', False));
+
+  { --- the edges ----------------------------------------------------------- }
+  CheckEq('an empty pattern changes nothing', 'x = 1',
+          Replaced('x = 1', '', 'q', False));
+  CheckEqInt('and counts nothing', 0, Count('x = 1', '', 'q', False));
+  CheckEq('an empty replacement deletes', ' = 1',
+          Replaced('x = 1', 'x', '', False));
+  CheckEq('an empty line stays empty', '', Replaced('', 'a', 'b', False));
+  CheckEq('at the start', 'qbc', Replaced('abc', 'a', 'q', False));
+  CheckEq('at the end', 'abq', Replaced('abc', 'c', 'q', False));
+  CheckEq('the whole line', 'q', Replaced('abc', 'abc', 'q', False));
+  { OVERLAPPING, LEFT TO RIGHT. `aa` in `aaa` is one match and a leftover `a`,
+    which is what every editor does and the only answer that terminates. }
+  CheckEq('overlapping matches go left to right', 'qa',
+          Replaced('aaa', 'aa', 'q', False));
+  CheckEqInt('one of them', 1, Count('aaa', 'aa', 'q', False));
+
+  { --- and now a real directory -------------------------------------------- }
+  Root := IncludeTrailingPathDelimiter(GetTempDir) + 'phosphoride-replace-test';
+  if DirectoryExists(Root) then
+    DeleteDirectory(Root, False);
+  ForceDirectories(Root);
+  try
+    { A FILE WITH LF ENDINGS ON A MACHINE THAT WRITES CRLF. If the rewrite goes
+      through anything that joins with the platform's convention, this is the
+      check that catches it. }
+    Put('lf.bas', 'rem one'#10'x = 1'#10'rem three'#10);
+    N := ReplaceInFile(Root + PathDelim + 'lf.bas', '1', '2', False, [2],
+                       Lines, Err);
+    CheckEqInt('one occurrence replaced', 1, N);
+    CheckEqInt('on one line', 1, Lines);
+    CheckEq('no error', '', Err);
+    CheckEq('and the file kept its LF endings',
+            'rem one\nx = 2\nrem three\n', Shown(Get('lf.bas')));
+
+    { NO LINE THE SEARCH DID NOT LIST IS TOUCHED. Line 1 and line 3 both match
+      `rem`, and only line 3 is asked for. }
+    Put('only.bas', 'rem one'#10'x = 1'#10'rem three'#10);
+    N := ReplaceInFile(Root + PathDelim + 'only.bas', 'rem', 'REM', False, [3],
+                       Lines, Err);
+    CheckEqInt('only the listed line', 1, N);
+    CheckEq('and the one above it is untouched',
+            'rem one\nx = 1\nREM three\n', Shown(Get('only.bas')));
+
+    { A file with no closing newline keeps not having one. }
+    Put('open.bas', 'rem one'#10'x = 1');
+    ReplaceInFile(Root + PathDelim + 'open.bas', '1', '9', False, [2], Lines, Err);
+    CheckEq('a file with no closing newline gains none',
+            'rem one\nx = 9', Shown(Get('open.bas')));
+
+    { CRLF stays CRLF. }
+    Put('crlf.bas', 'rem one'#13#10'x = 1'#13#10);
+    ReplaceInFile(Root + PathDelim + 'crlf.bas', '1', '9', False, [2], Lines, Err);
+    CheckEq('and CRLF stays CRLF',
+            'rem one\r\nx = 9\r\n', Shown(Get('crlf.bas')));
+
+    { --- A SEARCH THAT HAS GONE STALE ------------------------------------- }
+    { A line number past the end of the file. The other lines of the same file
+      are still exactly what was listed, so this is skipped and not an error. }
+    Put('short.bas', 'x = 1'#10);
+    N := ReplaceInFile(Root + PathDelim + 'short.bas', '1', '2', False, [1, 99],
+                       Lines, Err);
+    CheckEqInt('a line past the end is skipped', 1, N);
+    CheckEq('and no error is raised for it', '', Err);
+    CheckEq('while the line that is there is done',
+            'x = 2\n', Shown(Get('short.bas')));
+
+    { A line that no longer matches counts as neither. }
+    Put('moved.bas', 'x = 1'#10'y = 2'#10);
+    N := ReplaceInFile(Root + PathDelim + 'moved.bas', 'zzz', 'q', False, [1, 2],
+                       Lines, Err);
+    CheckEqInt('a line that no longer matches replaces nothing', 0, N);
+    CheckEqInt('and changes no line', 0, Lines);
+    CheckEq('and the file is not rewritten at all',
+            'x = 1\ny = 2\n', Shown(Get('moved.bas')));
+
+    { --- A FILE THAT VANISHED --------------------------------------------- }
+    N := ReplaceInFile(Root + PathDelim + 'never-existed.bas', 'a', 'b', False,
+                       [1], Lines, Err);
+    CheckEqInt('a file that is gone replaces nothing', 0, N);
+    Check('and says why', Err <> '');
+
+    { --- AND ONE THAT IS READ-ONLY ---------------------------------------- }
+    { The run must survive it: this is the difference between a tool somebody
+      trusts with a tree and one they run once. }
+    Put('locked.bas', 'x = 1'#10);
+    FileSetAttr(Root + PathDelim + 'locked.bas', faReadOnly);
+    N := ReplaceInFile(Root + PathDelim + 'locked.bas', '1', '2', False, [1],
+                       Lines, Err);
+    FileSetAttr(Root + PathDelim + 'locked.bas', 0);
+    CheckEqInt('a read-only file replaces nothing', 0, N);
+    Check('and says why', Err <> '');
+    CheckEq('and is left exactly as it was', 'x = 1\n', Shown(Get('locked.bas')));
+  finally
+    if DirectoryExists(Root) then
+      DeleteDirectory(Root, False);
+  end;
+end;
+
 procedure TestFindInFiles;
 var
   Root: String;
@@ -2715,6 +2914,7 @@ begin
   TestCompletion;
   TestOutline;
   TestFindInFiles;
+  TestReplaceInFiles;
   TestHandlePrivacy;
   TestRepl;
   TestProtocol;
