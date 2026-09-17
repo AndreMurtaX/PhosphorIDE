@@ -66,3 +66,22 @@ shot 483-splitter-back
 # would still photograph as a window.
 text type something:
 text Watches
+
+# --- AND STOPPING ONE THAT WILL NOT FINISH --------------------------------
+# Run it again and DO NOT answer. `line input` blocks for ever: this program
+# will not end on its own, which is the case item 1 names as "a runaway stopped
+# with Ctrl+F2 while the window stays responsive".
+key F9
+wait 3500
+text type something:
+shot 484-blocked-again
+key ctrl+F2
+wait 2500
+shot 485-stopped
+
+# THE PROGRAM IS GONE AND THE WINDOW IS NOT. The lane prints the process table
+# after this file ends, so a child that survived would show there; what is
+# asserted here is the half a screenshot cannot settle -- that the editor came
+# back, because a frozen one answers no accessibility request either.
+text Watches
+text Variables
