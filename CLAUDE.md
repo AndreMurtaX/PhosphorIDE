@@ -43,7 +43,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 626 checks, exit 0. The count is
+2. `bin/phosphoridetest` is **all green** -- today 637 checks, exit 0. The count is
    printed; if it went down, something was deleted.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
@@ -305,6 +305,27 @@ the bar.
   review that generated ADJACENCY where the corpus had generated words. **When you
   build the corpus, vary the neighbours.** The fix is in `uphosphorfold.WalkNext`: it
   rewinds, and the second word arrives by the one path every other word takes.
+
+- **A DURATION IS TAKEN WITH `uphosphorclock`, NEVER WITH `Now`.** `SysUtils.Now` is a
+  TDateTime read from the system time: on Windows it steps on the scheduler's tick, 15.6 ms
+  by default, so asking it what one keystroke cost answers 0 or 15.6 with three decimal
+  places on it. It also follows the WALL clock, so an NTP step or a daylight-saving change
+  lands mid-measurement as a negative duration. `ClockTicks`/`ClockMs` are
+  QueryPerformanceCounter on Windows and `clock_gettime(CLOCK_MONOTONIC)` on Linux;
+  `ClockResolutionNs` and `ClockOverheadNs` are reported beside any number that matters,
+  because a measurement finer than the clock's own step is arithmetic rather than evidence.
+  Roadmap item 19 is what found this out, and `MeasureHighlighter`'s four numbers survived
+  only because each divides a loop of fifty or two thousand passes by its count.
+
+  **And a performance number about the editor is taken IN the editor.**
+  `phosphoride --measure-typing <report> [file.bas]` times
+  `TCustomSynEdit.CommandProcessor(ecChar, ...)` -- the call `KeyDown` itself makes -- over
+  buffers from 100 to 5000 lines and, optionally, a real program. It reports the MINIMUM and
+  the median of 21 passes, because noise only ever adds and a mean over a dozen passes on a
+  desktop describes the machine's other work; and it reports the fold depth of a line in the
+  middle of the buffer before and after the edit, because **a cascade that is not happening
+  looks exactly like folding being free** -- the first cut of that measurement read a flat
+  1 ms from 100 lines to 5000 and was wrong about which edit it was making.
 
 - **Every path comparison goes through `CompareFilenames`** (`LazFileUtils`). It
   already knows that Windows is case-insensitive and Linux is not, which is one fewer

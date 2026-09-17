@@ -537,6 +537,13 @@ type
       of silent defect as a status bar with no panels. }
     function Highlighter: TSynCustomHighlighter;
     function GutterPartCount: Integer;
+
+    { AND WHAT --MEASURE-TYPING NEEDS, which is the editor a keystroke would
+      arrive at. It is handed out rather than driven from in here because the
+      measurement is not a feature of this window: it exists to time the path
+      SynEdit takes, and the less of this unit sits between the two the fewer
+      things the number could be about. }
+    function ActiveEditor: TSynEdit;
   end;
 
 var
@@ -3374,6 +3381,17 @@ end;
 function TFrmMain.Highlighter: TSynCustomHighlighter;
 begin
   Result := FHighlighter;
+end;
+
+function TFrmMain.ActiveEditor: TSynEdit;
+var
+  Doc: TEditorDoc;
+begin
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Result := nil
+  else
+    Result := Doc.Edit;
 end;
 
 function TFrmMain.GutterPartCount: Integer;

@@ -1,0 +1,61 @@
+# Typing at the top of a long file -- roadmap item 19, on Windows.
+#
+# WHAT THIS CASE IS AND IS NOT. The NUMBER for item 19 comes from
+# `phosphoride --measure-typing <report> [file.bas]`, which times the keystroke
+# from inside the process, through TCustomSynEdit.CommandProcessor -- the same
+# call TCustomSynEdit.KeyDown makes. This script is the other half: real keys,
+# through the real queue, into a window nothing else is holding, so that a
+# person can SEE that the editor stays usable and that the fold marker arrives.
+#
+# TWO WAYS OF TIMING THIS FROM OUTSIDE WERE TRIED ON 2026-09-17 AND BOTH LIE,
+# which is worth more to the next reader than the numbers would have been:
+#
+#  * POST the key and then SEND a WM_NULL, timing the send. Windows delivers
+#    SENT messages BEFORE POSTED ones, so the WM_NULL is answered while the
+#    character is still in the queue: every keystroke measured 0.5 ms, which was
+#    the probe's own head start. Spinning first to let the key be picked up made
+#    the number move but never to the truth -- at 2000 lines it read 8 ms
+#    against 27 ms measured in-process.
+#  * Hook TSynEdit.OnProcessCommand and OnCommandProcessed and subtract. Those
+#    two fire around ExecuteCommand (synedit.pp:7015 and :7038), but the rescan
+#    runs later, in InternalEndUndoBlock -> DecPaintLock -> DoDecPaintLock ->
+#    ScanChangedLines (synedit.pp:2621-2623), inside the `finally`. The pair
+#    brackets everything except the part that costs.
+#
+# The fixture is typing.bas, 2000 lines, whose line 1 is `functio measured()` --
+# one character short of a definition. Completing it opens a block nothing below
+# closes, so every line under it changes fold depth and the rescan runs to the
+# end of the file.
+raise
+wait 900
+shot 180-two-thousand-lines-and-an-unfinished-word
+
+# The caret to column 8, which is the end of `functio` and NOT the end of the
+# line: `{END}` would put it after `measured()`, where an `n` makes
+# `functio measured()n` and opens nothing at all.
+key ^{HOME}
+key {HOME}
+key {RIGHT 7}
+wait 400
+
+# The keystroke the whole item is about. The fold marker appearing in the gutter
+# beside line 1 is the visible proof that this is the cascading edit.
+type n
+wait 800
+shot 181-the-definition-completed-and-the-marker-with-it
+
+# Seven more characters, none of which changes a block: the editor must stay
+# exactly as responsive.
+type ame
+wait 600
+shot 182-and-typing-continues-normally
+
+# And back out, which cascades in its turn -- the close reverts every line below
+# it to the outer depth. Writing one function near the top of a long file is TWO
+# of these, not one.
+key {BACKSPACE}
+key {BACKSPACE}
+key {BACKSPACE}
+key {BACKSPACE}
+wait 800
+shot 183-and-back-with-the-marker-gone

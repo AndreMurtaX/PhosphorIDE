@@ -68,7 +68,11 @@ uses
     attached to, so that the cost of RESCANNING -- which is the cost a fold
     highlighter adds and the one the other two numbers cannot see -- has a
     number on both sides of the change. }
-  SynEditTextBuffer;
+  SynEditTextBuffer,
+  { The clock those measurements are taken with. `Now` cannot see a keystroke:
+    it steps on the scheduler's tick and it follows the wall clock, so it can
+    run backwards. Roadmap item 19 is what found that out. }
+  uphosphorclock;
 
 var
   Checks: Integer = 0;
@@ -1408,6 +1412,80 @@ begin
   Check('and is not private either', not HandleIsPrivate(0));
 end;
 
+{ ------------------------------------------------------------- the clock --- }
+
+{ A CLOCK IS SILENTLY WRONG OR IT IS RIGHT, and both look the same in a report.
+
+  Roadmap item 19 exists because a number was taken with `SysUtils.Now`, which
+  on Windows steps on the scheduler's tick -- 15.6 ms by default -- so the answer
+  to "what did this one keystroke cost" was 0 or 15.6, printed with three
+  decimal places. It also follows the WALL clock, so an NTP step lands in a
+  measurement as a negative duration.
+
+  What is pinned here is what a clock can fail at without saying so: going
+  backwards, and claiming a resolution it does not have. A number finer than the
+  clock's own step is arithmetic rather than evidence. }
+
+procedure TestClock;
+const
+  Reads = 50000;
+var
+  A, B, T0, T1: Int64;
+  I, Backwards: Integer;
+  Elapsed: Double;
+begin
+  Group('uphosphorclock: a clock that can see one keystroke');
+
+  Check('it says what it is', ClockName <> '');
+
+  { MONOTONIC. Not "usually increasing": never decreasing, over enough reads
+    that a core migration would have been seen. }
+  Backwards := 0;
+  A := ClockTicks;
+  for I := 1 to Reads do
+  begin
+    B := ClockTicks;
+    if B < A then
+      Inc(Backwards);
+    A := B;
+  end;
+  CheckEqInt('it never goes backwards', 0, Backwards);
+
+  { THE RESOLUTION IS NOT A BOAST. A clock whose step is coarser than a
+    millisecond cannot see the thing item 19 measures, and one that claims zero
+    is not answering. }
+  Check('the resolution is positive', ClockResolutionNs > 0);
+  Check('and finer than a millisecond', ClockResolutionNs < 1000000);
+  { AND READING IT IS CHEAPER THAN WHAT IT MEASURES. A read that cost as much as
+    a keystroke would be measuring itself. }
+  Check('a read costs something', ClockOverheadNs > 0);
+  Check('and far less than one keystroke', ClockOverheadNs < 100000);
+
+  { The units. A duration is milliseconds, it is never negative, and a wait of a
+    known length lands in a band a scheduler cannot leave -- Windows' own timer
+    granularity is 15.6 ms, so this is deliberately wide: what it catches is a
+    factor of a thousand, not a jitter. }
+  A := ClockTicks;
+  CheckEqInt('no time has passed between one tick and itself', 0,
+             Round(ClockMs(A, A)));
+  T0 := ClockTicks;
+  Sleep(30);
+  T1 := ClockTicks;
+  Elapsed := ClockMs(T0, T1);
+  Check('a 30 ms wait is more than 5 ms', Elapsed > 5);
+  Check('and less than 500', Elapsed < 500);
+
+  { A BUSY INTERVAL IS NOT ZERO, which is the whole difference from `Now`: fifty
+    thousand reads take a measurable time and a clock that cannot see them is
+    the one this unit replaced. }
+  T0 := ClockTicks;
+  for I := 1 to Reads do
+    B := ClockTicks;
+  T1 := ClockTicks;
+  Check('and 50000 reads take a measurable time', ClockMs(T0, T1) > 0);
+  Check('which is what Now could not see', B <> 0);
+end;
+
 { ------------------------------------------------- the rule, on its own ---- }
 
 { THE ONE COPY OF "WHERE MAY A STATEMENT BEGIN", asked directly.
@@ -1962,11 +2040,19 @@ var
   Hl: TSynPhosphorSyn;
   Buf: TStringList;
   I, P, Tokens: Integer;
-  T0: TDateTime;
+  T0: Int64;
   Whole, Single, Rescan, Quiet: Double;
   L: TSynEditStringList;
 begin
   Group('usynphosphor: what a scan costs, printed for the record');
+
+  { THESE FOUR NUMBERS USED TO BE TAKEN WITH `Now`, and roadmap item 19 is what
+    that cost. They survived only because each divides a loop of fifty or two
+    thousand passes by its count; the same clock asked about ONE edit answers 0
+    or 15.6 ms. They are taken with uphosphorclock now, and the numbers did not
+    move -- which is the point: the method was sound and the instrument was not
+    good enough to prove it. What one KEYSTROKE costs is measured somewhere
+    else entirely, in the editor, by `phosphoride --measure-typing`. }
 
   Buf := TStringList.Create;
   Hl := TSynPhosphorSyn.Create(nil);
@@ -1991,7 +2077,7 @@ begin
 
     { --- the whole buffer ---------------------------------------------------- }
     Tokens := 0;
-    T0 := Now;
+    T0 := ClockTicks;
     for P := 1 to Passes do
     begin
       Hl.ResetRange;
@@ -2005,17 +2091,17 @@ begin
         end;
       end;
     end;
-    Whole := (Now - T0) * 24 * 60 * 60 * 1000 / Passes;
+    Whole := ClockMs(T0, ClockTicks) / Passes;
 
     { --- one line, the keystroke case ---------------------------------------- }
-    T0 := Now;
+    T0 := ClockTicks;
     for P := 1 to 2000 do
     begin
       Hl.SetLine(Buf[P mod Buf.Count], P mod Buf.Count);
       while not Hl.GetEol do
         Hl.Next;
     end;
-    Single := (Now - T0) * 24 * 60 * 60 * 1000 / 2000;
+    Single := ClockMs(T0, ClockTicks) / 2000;
 
     { --- the one that actually moves --------------------------------------- }
     { THE OTHER TWO NUMBERS CANNOT SEE WHAT FOLDING COSTS, and that is the trap
@@ -2034,7 +2120,7 @@ begin
       Hl.AttachToLines(L);
       Hl.CurrentLines := L;
       Hl.ScanAllRanges;
-      T0 := Now;
+      T0 := ClockTicks;
       for P := 1 to 50 do
       begin
         { AN EDIT AT THE TOP THAT OPENS OR CLOSES A BLOCK, alternating, because
@@ -2049,7 +2135,7 @@ begin
           L[0] := 'rem block 1 -- a comment again';
         Hl.ScanRanges;
       end;
-      Rescan := (Now - T0) * 24 * 60 * 60 * 1000 / 50;
+      Rescan := ClockMs(T0, ClockTicks) / 50;
 
       { AND THE SAME EDIT THAT DOES NOT CHANGE THE STRUCTURE, because that is
         what almost every keystroke is. `fun`, `func`, `funct` are identifiers;
@@ -2057,13 +2143,13 @@ begin
         the pair of numbers is what makes that honest rather than alarming. }
       L[0] := 'rem block 1 -- a comment';
       Hl.ScanRanges;
-      T0 := Now;
+      T0 := ClockTicks;
       for P := 1 to 50 do
       begin
         L[0] := Format('rem block 1 -- edit %d', [P]);
         Hl.ScanRanges;
       end;
-      Quiet := (Now - T0) * 24 * 60 * 60 * 1000 / 50;
+      Quiet := ClockMs(T0, ClockTicks) / 50;
       Hl.DetachFromLines(L);
     finally
       L.Free;
@@ -2512,6 +2598,7 @@ begin
   TestMessages;
   TestLanguage;
   TestHighlighter;
+  TestClock;
   TestWalk;
   TestFold;
   TestFoldWired;

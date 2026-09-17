@@ -1232,6 +1232,84 @@ difference nobody wrote down.
 
 ## 19. The keystroke that costs 66 ms
 
+**DONE 2026-09-17, and the answer is that nothing needs doing.** The number was measured in
+the editor, through the path a key takes, and it is **12.70 ms on the largest Phosphor
+program that exists**.
+
+**The threshold, written down before the answer was known:** one frame at 60 Hz -- **16.7 ms
+of synchronous work for the worst keystroke on any program in either repository**, with
+100 ms as a hard ceiling for any buffer at all. A character appearing under a caret is
+display-loop feedback rather than command response, so the frame budget is the figure that
+applies and not the 100 ms instantaneity limit. **The bar is in MILLISECONDS ON A NAMED
+MACHINE and deliberately not in lines**, because the per-line cost is driven by what is ON
+the line: an identifier costs more to classify than a comment, and the rate across the real
+corpus spans 1.7 to 34.5 us per line.
+
+**How it is measured now.** `bin/phosphoride --measure-typing <report> [file.bas]` builds
+buffers of 100 to 5000 lines plus, optionally, a real program; puts the caret on a word one
+character short of a definition; and times `TCustomSynEdit.CommandProcessor(ecChar, ...)` --
+the call `KeyDown` itself makes -- with `uphosphorclock`, reporting the MINIMUM and the
+median of 21 passes. It reports the fold depth of a line in the middle of the buffer before
+and after, because a cascade that is not happening looks exactly like folding being free.
+
+Measured on Windows 11, the shipping Default build, QueryPerformanceCounter at 10 MHz:
+
+| what | 100 | 500 | 1000 | 2000 | 5000 | **the real 874-line program** |
+| --- | --- | --- | --- | --- | --- | --- |
+| a quiet keystroke | 2.13 | 2.07 | 2.07 | 2.02 | 2.10 | **1.65 ms** |
+| the cascading one | 3.45 | 8.63 | 15.17 | 27.57 | 64.33 | **12.70 ms** |
+| the same, every fold collapsed | 4.13 | 12.66 | 22.77 | 42.41 | 102.33 | **12.90 ms** |
+
+**The three unknowns the item listed, answered:**
+
+- **When.** On the keystroke, with the message loop blocked. `ScanChangedLines` calls
+  `ScanRanges` synchronously (`synedit.pp:5612`); the chunked idle path
+  (`IdleScanRanges`, 2500 lines at a time) is guarded by `WaitingForInitialSize` and is
+  reached only before the window has a handle. What IS deferred is the repaint, which is a
+  flat 3-6 ms whatever the buffer size, because it draws the visible window and nothing
+  else.
+- **How much is ours.** The cascade costs **12.45 us per line, of which `ScanFoldLine` is
+  0.48 us -- four per cent**. Folding did not make a line dearer; it made the number of
+  lines large. A cleverer fold scanner would buy nothing measurable.
+- **Which sizes.** 176 real `.bas` files across this repository and `../Phosphor`: median
+  58 lines, p90 252, largest 872. **Nothing anybody has written reaches 1000.** On this
+  machine the bar is crossed at roughly 1150 lines of code of this density.
+
+**Two things found on the way that were not in the item:**
+
+- **Typing the word `function` is ONE cascade, not eight.** `f`, `fu`, `func` are
+  identifiers and open nothing; only the eighth keystroke completes the word. Measured as a
+  counter rather than a stopwatch: of 160 keystrokes, exactly 20 -- one per pass -- exceeded
+  four times the quiet cost. But *writing* a function near the top is **two** cascades, not
+  one: the `endfunction` that closes it reverts every line below to the outer depth and
+  cascades in its turn, which is why the table above reports open and close separately and
+  they are the same size.
+- **Collapsing every fold makes the same keystroke 1.6x dearer -- on a synthetic buffer.**
+  `TSynEditFoldedView.FixFolding` re-queries every collapsed node and each query scans one
+  more line. The fixture here has a fold node every three lines; a real program does not,
+  and on the 874-line one the collapsed cost is **1.02x**. Worth knowing, not worth fixing.
+
+**The mitigation the item proposed does not apply, and the reason is worth keeping.**
+`PerformScan` stops when a line's range pointer equals the stored one, and those pointers
+are interned by equality (`synedithighlighterfoldbase.pas:1739-1745`), so an ordinary edit
+settles within a few lines -- measured, and that is the 2 ms row. But an opener with no
+terminator below it changes the fold depth of EVERY line under it, so no line's range can
+match again. **The cascade is inherent, not an artefact of our representation, and there is
+no early stop to reach for.** `usynphosphor` does nothing that defeats interning.
+
+**And the lever, if a threshold is ever missed, is not in this item's code.** An identifier
+in no table -- which is what most words in a program are -- costs **3.5 us to classify**,
+through six sorted `TStringList.Find` calls over case-insensitive indexes
+(`uphosphorlang`). Two of those per line is most of the 12.45 us. That is item 29.
+
+**Two ways of timing this from OUTSIDE the process were tried and both lie**, recorded in
+`tools/lane/steps-typing.txt` so the next reader does not pay for them again: a posted key
+followed by a sent `WM_NULL` measures the probe's own head start, because Windows delivers
+sent messages before posted ones; and `OnProcessCommand`/`OnCommandProcessed` bracket
+`ExecuteCommand` but not the rescan, which runs later in `DecPaintLock`. The lane case
+remains as a DRIVEN, visible confirmation -- real keys, real queue, the fold marker
+arriving -- with the number coming from inside.
+
 **What.** Find out what folding actually costs a person typing, rather than what it costs a
 loop in the test program, and then decide.
 
@@ -1510,6 +1588,40 @@ in `docs/building.md`, green or not. That second half is one of the two clauses 
 never closed; the other, a `--release` build on Linux, belongs with it.
 
 **Touches.** `tools/lane/`, `docs/building.md`, `CLAUDE.md`.
+
+---
+
+## 29. The 3.5 microsecond identifier
+
+**What.** `uphosphorlang` classifies a word by asking six sorted `TStringList.Find` indexes
+in turn -- operator, literal, keyword, then each of the three built-in tiers. A word that is
+in none of them, which is what a user's own names are and therefore what most words in a
+program are, visits all six. Measured 2026-09-17 at `-O3`: **3.5 us for a miss, 0.9 us for a
+hit**, against 0.04 us for the `LowerCase(Copy(...))` that precedes it.
+
+**Why it matters, and it is not folding.** Item 19 measured a keystroke at the top of a long
+file at 12.45 us per line and found `ScanFoldLine` to be 4% of it. Most of the rest is this:
+two identifiers on a line, most of them misses, is roughly 7 us. It is paid on every line of
+every rescan, on every file open, and on every scroll -- not only on the cascading keystroke
+item 19 was about. Nothing today misses item 19's threshold, so this is a lever and not a
+defect.
+
+**The shape of the fix, and its hazard.** One index instead of six, holding the kind
+alongside the word; and a cheaper compare than `AnsiCompareText`, which is what makes each
+of the ten probes in a binary search cost about 100 ns. Both belong in
+`tools/gen-keywords.py`, because `uphosphorlang.pas` is GENERATED and hand-editing it is
+forbidden. **The hazard is that a classification regression is invisible**: a keyword that
+stops being found is painted as an identifier, which no build catches and no screenshot
+shows. So the done-when has to include a check that every word in every table still
+classifies as its own kind -- all 1198 of them, from the tables themselves, not a sample.
+
+**Done when.** The generator emits the new index, `--check` still passes, every word in
+every table is verified to classify correctly by `phosphoridetest`, and
+`phosphoride --measure-typing` is re-run and the per-line number is quoted here before and
+after.
+
+**Touches.** `tools/gen-keywords.py`, `src/core/uphosphorlang.pas` (generated),
+`tests/phosphoridetest.lpr`.
 
 ---
 
