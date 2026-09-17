@@ -26,6 +26,7 @@ item 2a is the contract test that would turn part of it into a gate.
 | `steps-gutter-edit.txt` | a gutter mark following its statement across an insertion above it |
 | `steps-complete.txt`, `steps-complete-linux.txt` | the completion popup, the case it preserves, and its silence inside a string |
 | `steps-signature.txt`, `steps-signature-linux.txt` | every arity of `mid$`, the argument marked as it moves, the hint gone when the call closes, and nothing at all for `callfunc` |
+| `steps-fold-linux.txt` | the same under gtk2, clicking DOWN from the top because the editor is the part that does not move |
 | `steps-fold.txt` + `folding.bas` | folding: four nested blocks with markers, four legal lines that only LOOK like blocks and get none, and a collapse that stops at `end function` rather than at the end of the file |
 | `steps-repl.txt`, `steps-repl-linux.txt` | the REPL pane: the prompt arriving as an unterminated tail, 42, a variable surviving the line, the continuation prompt, an error in the transcript, Up and Down, End leaving no child behind, and a run beside a live prompt |
 | `repl-probe.py` | speaks to the REPL over pipes with no editor involved -- how it was found that stderr is buffered on Unix (`docs/phosphor-repl-debt.md`) |
