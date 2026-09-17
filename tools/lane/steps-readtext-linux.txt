@@ -1,38 +1,41 @@
 # READING WHAT A CONTROL SAYS -- roadmap item 28, on Linux.
 #
-# Every assertion in this directory used to be a picture on this machine. This
-# case asserts on WORDS: it types a program, runs it, and checks the Output pane
-# contains what the program printed -- the same question lane-windows.ps1 has
-# been asking since 2026-09-16 through WM_GETTEXT, finally askable here.
+# Every assertion in this directory used to be a PICTURE on this machine. Windows
+# sends WM_GETTEXT and reads a pane's whole transcript back word for word; here,
+# keys went in through XTest and frames came out through xwd, so the Linux half
+# of the REPL case checked the PROCESS TABLE while the Windows half checked the
+# conversation -- a weaker question, asked because the right one could not be.
 #
-# IT IS ALSO THE FIRST THING HERE THAT CAN FAIL WITHOUT A PERSON LOOKING. `text`
-# counts its misses and the script exits non-zero, so this one can be run from
-# another script rather than watched.
+# THIS CASE IS THE FIRST HERE THAT CAN FAIL WITHOUT A PERSON LOOKING. `text`
+# counts its misses and the script exits non-zero, so it can be run FROM another
+# script rather than watched. Run it as:
+#
+#   bash tools/lane/lane-linux.sh tools/lane/readtext.bas \
+#        tools/lane/steps-readtext-linux.txt
+#
+# THE FIXTURE IS NEVER EDITED, deliberately. F9 saves before it runs, so a case
+# that typed into the buffer would rewrite a checked-in file on every pass --
+# which is the trap roadmap item 24 paid for.
 raise
-wait 600
+wait 800
 
-# The window describes itself before anything is typed: eight tabs, by name.
+# THE WINDOW DESCRIBES ITSELF before anything happens: the eight output tabs, by
+# name, read out of the program rather than off a photograph of it.
 text Watches
 text Call Stack
 text Variables
-shot 470-before-anything
+text Problems
+shot 470-before-the-run
 
-# TYPE A PROGRAM whose output is distinctive enough that finding it proves the
-# read went to the right place.
-type println "lane-readtext-ok"
-key {ENTER}
-type total = 6 * 7
-key {ENTER}
-type println "total="; total
-wait 600
-shot 471-typed
-
-# RUN IT. F9 saves and runs; the Output tab fills.
+# RUN IT. F9 hands the fixture to the host and the Output tab fills.
 key {F9}
 wait 4000
-shot 472-ran
+shot 471-after-the-run
 
-# AND THE ASSERTIONS THAT ARE NOT PICTURES.
+# AND THE ASSERTIONS THAT ARE NOT PICTURES. Both strings are the program's own
+# output, so finding them proves three things at once: the run happened, the
+# output reached the pane, and this script is reading the pane and not a cached
+# copy of something else.
 text lane-readtext-ok
 text total=42
 say Output
