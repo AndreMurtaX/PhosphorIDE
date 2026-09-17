@@ -58,7 +58,15 @@ uses
   uphosphorrun, Pipes,
   { The REPL transcript and its history: strings and an index, every one of them
     checkable without a child process. }
-  uphosphorrepl;
+  uphosphorrepl,
+  { Where a block opens and where it closes: words and positions, and the one
+    rule that decides whether folding can hide somebody's code. }
+  uphosphorfold,
+  { Only for the third measurement below: a line store the highlighter can be
+    attached to, so that the cost of RESCANNING -- which is the cost a fold
+    highlighter adds and the one the other two numbers cannot see -- has a
+    number on both sides of the change. }
+  SynEditTextBuffer;
 
 var
   Checks: Integer = 0;
@@ -250,6 +258,13 @@ function Tokenize(AHl: TSynPhosphorSyn; const ALine: String;
 begin
   Result := nil;
   ATexts := TStringList.Create;
+  { RESETRANGE FIRST, AND IT IS A NO-OP TODAY. This highlighter carries no range
+    state, so it changes nothing -- but one instance is reused for every Scan in
+    TestHighlighter, and the moment the highlighter carries a fold stack a line
+    like `if a <> b then` would leave a block open for every check after it, all
+    of which would keep passing while running one level deep. Put in before the
+    change so it can be verified green on its own. }
+  AHl.ResetRange;
   AHl.SetLine(ALine, 0);
   while not AHl.GetEol do
   begin
@@ -1314,6 +1329,291 @@ begin
   Check('and is not private either', not HandleIsPrivate(0));
 end;
 
+{ ----------------------------------------------------------- where a block -- }
+
+procedure TestFold;
+var
+  Ev: TFoldEvents;
+
+  { The line's events as a string: `+function -if` and so on, so a check reads
+    like the answer it is asking about. }
+  function Folds(const ALine: String): String;
+  var
+    J: Integer;
+  begin
+    Result := '';
+    Ev := ScanFoldLine(ALine);
+    for J := 0 to High(Ev) do
+    begin
+      if Result <> '' then
+        Result := Result + ' ';
+      if Ev[J].Kind = feOpen then
+        Result := Result + '+'
+      else
+        Result := Result + '-';
+      Result := Result + BlockName(Ev[J].Block);
+    end;
+  end;
+
+begin
+  Group('uphosphorfold: where a block opens, and where it closes');
+
+  { --- the seven kinds ----------------------------------------------------- }
+  { The roadmap names five. There are seven: `do while ... loop` and
+    `repeat ... until` are blocks too, both compiled and run. }
+  CheckEq('an if that ends with then', '+if', Folds('if x > 0 then'));
+  CheckEq('a for', '+for', Folds('for i = 1 to 3'));
+  CheckEq('a while', '+while', Folds('while i < 3'));
+  CheckEq('a do while', '+do', Folds('do while i < 3'));
+  CheckEq('a repeat', '+repeat', Folds('repeat'));
+  CheckEq('a select', '+select', Folds('select case x'));
+  CheckEq('a function', '+function', Folds('function f(a, b)'));
+
+  CheckEq('endif closes', '-if', Folds('endif'));
+  CheckEq('next closes', '-for', Folds('next'));
+  CheckEq('wend closes', '-while', Folds('wend'));
+  { BOTH spellings close a while, measured: each of them runs. }
+  CheckEq('and so does endwhile', '-while', Folds('endwhile'));
+  CheckEq('loop closes', '-do', Folds('loop'));
+  CheckEq('until closes', '-repeat', Folds('until i >= 3'));
+  CheckEq('endselect closes', '-select', Folds('endselect'));
+  CheckEq('endfunction closes', '-function', Folds('endfunction'));
+
+  { --- the two-word terminators -------------------------------------------- }
+  CheckEq('end if closes an if', '-if', Folds('end if'));
+  CheckEq('end while closes a while', '-while', Folds('end while'));
+  CheckEq('end select closes a select', '-select', Folds('end select'));
+  CheckEq('end function closes a function', '-function', Folds('end function'));
+  CheckEq('and the node covers both words', '-if', Folds('  end   if'));
+  { The pair must be ADJACENT in the token stream, so an `end` that ends a line
+    and an `if` that starts the next are two different lines and two nothings. }
+  CheckEq('end alone does nothing', '', Folds('end'));
+  CheckEq('and an if on its own line is an if again', '+if', Folds('if x then'));
+
+  { --- SIX LEGAL PROGRAMS THAT WOULD HAVE HIDDEN CODE ---------------------- }
+
+  { 1. A WHOLE BLOCK ON ONE LINE. `for i = 1 to 2 println i next` compiles and
+    prints 1, 2, after -- and six of the seven kinds do it. An opener that fired
+    without looking at the rest of the line would open a fold that never closes,
+    and collapsing it would hide the rest of the file. }
+  CheckEq('a for that closes on its own line folds nothing', '',
+          Folds('for i = 1 to 2 println i next'));
+  CheckEq('a function likewise', '',
+          Folds('function f(n) return n + 1 endfunction'));
+  CheckEq('a while likewise', '', Folds('while i < 2 i = i + 1 wend'));
+  CheckEq('a repeat likewise', '', Folds('repeat i = i + 1 until i >= 2'));
+  CheckEq('a do likewise', '', Folds('do while j < 2 j = j + 1 loop'));
+  CheckEq('a select likewise', '',
+          Folds('select case x case 1 println 1 endselect'));
+  { But a block that only OPENS here still opens, and one that only closes here
+    still closes -- the suppression is a PAIR on one line, not a veto. }
+  CheckEq('an open with no close still opens', '+for', Folds('for i = 1 to 2'));
+  CheckEq('and a close with no open still closes', '-for', Folds('  next'));
+  CheckEq('two blocks opening on one line open twice', '+function +for',
+          Folds('function f() : for i = 1 to 2'));
+
+  { 2. `then` IS A LEGAL VARIABLE. `then = 3` then `if x = 1 then println then`
+    compiles and prints 3 -- the line ENDS with the word `then` and is the inline
+    form, which takes no endif. "the last token is then" would open a fold that
+    never closes. }
+  CheckEq('an inline if opens nothing', '',
+          Folds('if x = 1 then println then'));
+  CheckEq('nor with a separator after it', '',
+          Folds('if x > 0 then println 1 : println 2'));
+  CheckEq('nor with an else on the same line', '',
+          Folds('if x > 0 then println 1 else println 2'));
+  { And the block form still opens, whatever trails as whitespace. }
+  CheckEq('the block form opens', '+if', Folds('if x > 0 then   '));
+  CheckEq('and with a comment after it', '+if', Folds('if x > 0 then '' why'));
+
+  { 3. `else if` IS ONE TOKEN to the lexer, so the chain needs exactly ONE endif.
+    Treating that `if` as an opener leaves the first one unclosed and the fold
+    runs to the end of the file. }
+  CheckEq('else if opens nothing', '', Folds('else if n = 2 then'));
+  { But `else` ending a line and `if` starting the next are two lines and two
+    blocks, which needs two endifs -- and that one must still open. }
+  CheckEq('an if on the line after an else does open', '+if',
+          Folds('if n = 2 then'));
+
+  { 4. A TERMINATOR IS RECOGNISED WHEREVER IT APPEARS, which is what makes the
+    one-line block above close. The language keeps it safe: the word used as a
+    variable while its block is open is a compile error. }
+  CheckEq('a next after a statement still closes', '-for',
+          Folds('println i : next'));
+  CheckEq('and one with no separator at all', '-for', Folds('println i next'));
+
+  { 5. AND NOTHING INSIDE A STRING OR A COMMENT COUNTS. }
+  CheckEq('a block word in a literal', '', Folds('println "for i = 1 to 3"'));
+  CheckEq('a terminator in a literal', '', Folds('println "endif"'));
+  CheckEq('a block word in a rem', '', Folds('rem for i = 1 to 3'));
+  CheckEq('a block word after an apostrophe', '', Folds('x = 1 '' for i = 1 to 3'));
+  CheckEq('an escaped quote does not end the literal', '',
+          Folds('s = "a\" endif b"'));
+
+  { 6. AND AN OPENER IS ONLY AN OPENER WHERE A STATEMENT MAY BEGIN. }
+  CheckEq('function as a variable opens nothing', '', Folds('y = function + 1'));
+  CheckEq('but after a separator it opens', '+function',
+          Folds('x = 1 : function f()'));
+  CheckEq('and after then it opens', '+function',
+          Folds('if x > 0 then function f()'));
+  CheckEq('an empty line does nothing', '', Folds(''));
+  CheckEq('and so does whitespace', '', Folds('    '));
+
+  { --- the columns, which is what a fold node hangs on --------------------- }
+  Ev := ScanFoldLine('  for i = 1 to 3');
+  CheckEqInt('one event', 1, Length(Ev));
+  CheckEqInt('  at the for, not the line start', 3, Ev[0].Col);
+  CheckEqInt('  three characters long', 3, Ev[0].Len);
+  Ev := ScanFoldLine('x = 1 : function f()');
+  CheckEqInt('  the function after a separator', 9, Ev[0].Col);
+  CheckEqInt('  eight characters', 8, Ev[0].Len);
+  Ev := ScanFoldLine('  end if');
+  CheckEqInt('  the pair starts at the end', 3, Ev[0].Col);
+  CheckEqInt('  and spans both words', 6, Ev[0].Len);
+  Ev := ScanFoldLine('if x > 0 then');
+  CheckEqInt('  and an if hangs on the if itself', 1, Ev[0].Col);
+  CheckEqInt('  two characters', 2, Ev[0].Len);
+
+  { --- the tables, for a caller that wants to ask directly ----------------- }
+  Check('if opens', BlockOpenedBy('if') = pbIf);
+  Check('and an ordinary word does not', BlockOpenedBy('println') = pbNone);
+  Check('endfunction closes a function', BlockClosedBy('endfunction') = pbFunction);
+  Check('and an ordinary word closes nothing', BlockClosedBy('println') = pbNone);
+  CheckEq('end if is endif', 'endif', MergedWithEnd('if'));
+  CheckEq('there is no end next', '', MergedWithEnd('next'));
+  CheckEq('a name for a message', 'while', BlockName(pbWhile));
+  CheckEq('and none for none', '', BlockName(pbNone));
+end;
+
+{ ------------------------------------------------ what scanning costs ------- }
+
+{ MEASURED, NOT ASSUMED, and printed rather than asserted.
+
+  Roadmap item 17 asks for folding and says, in as many words, that adopting
+  SynEdit's fold support changes the highlighter's cost model -- and that the
+  comparison must be "measured before and after rather than assumed". A number
+  nobody wrote down before the change cannot be compared with one written down
+  after it, so this runs on both sides of that change and prints what it found.
+
+  TWO NUMBERS, because they are the two ends of what typing costs.
+
+    ONE LINE is the best case and the common one: a highlighter with no range
+    state repaints only the line that changed, so this is what a keystroke costs
+    today.
+
+    THE WHOLE BUFFER is the worst case: with range state, a change on line 10
+    forces a rescan until the range stops changing, which in the pathological
+    case is every line after it. It is also what opening a file costs.
+
+  The fixture is 5000 lines of the shape the item names -- nested blocks,
+  strings and comments -- because a buffer of blank lines would measure nothing.
+  There is one check, and it is only there so that a scan which silently stopped
+  doing anything cannot pass as a fast one. }
+
+procedure MeasureHighlighter;
+const
+  Lines = 5000;
+  Passes = 3;
+var
+  Hl: TSynPhosphorSyn;
+  Buf: TStringList;
+  I, P, Tokens: Integer;
+  T0: TDateTime;
+  Whole, Single, Rescan: Double;
+  L: TSynEditStringList;
+begin
+  Group('usynphosphor: what a scan costs, printed for the record');
+
+  Buf := TStringList.Create;
+  Hl := TSynPhosphorSyn.Create(nil);
+  try
+    I := 0;
+    while Buf.Count < Lines do
+    begin
+      Inc(I);
+      Buf.Add(Format('rem block %d -- a comment with the word function in it', [I]));
+      Buf.Add(Format('function f%d(a, b) local acc', [I]));
+      Buf.Add('  acc = 0');
+      Buf.Add(Format('  for i = 1 to %d', [I mod 7 + 1]));
+      Buf.Add('    if a > b then');
+      Buf.Add(Format('      acc = acc + left$("a string with endif in it", %d)', [I mod 5]));
+      Buf.Add('    endif');
+      Buf.Add('  next');
+      Buf.Add('  return acc');
+      Buf.Add('endfunction');
+    end;
+    while Buf.Count > Lines do
+      Buf.Delete(Buf.Count - 1);
+
+    { --- the whole buffer ---------------------------------------------------- }
+    Tokens := 0;
+    T0 := Now;
+    for P := 1 to Passes do
+    begin
+      Hl.ResetRange;
+      for I := 0 to Buf.Count - 1 do
+      begin
+        Hl.SetLine(Buf[I], I);
+        while not Hl.GetEol do
+        begin
+          Inc(Tokens);
+          Hl.Next;
+        end;
+      end;
+    end;
+    Whole := (Now - T0) * 24 * 60 * 60 * 1000 / Passes;
+
+    { --- one line, the keystroke case ---------------------------------------- }
+    T0 := Now;
+    for P := 1 to 2000 do
+    begin
+      Hl.SetLine(Buf[P mod Buf.Count], P mod Buf.Count);
+      while not Hl.GetEol do
+        Hl.Next;
+    end;
+    Single := (Now - T0) * 24 * 60 * 60 * 1000 / 2000;
+
+    { --- the one that actually moves --------------------------------------- }
+    { THE OTHER TWO NUMBERS CANNOT SEE WHAT FOLDING COSTS, and that is the trap
+      this third one exists for. The cost a fold highlighter adds is not in
+      SetLine/Next at all -- it is in PerformScan, which calls GetRange once per
+      line and keeps going until a line's range matches the one already stored
+      (synedithighlighter.pp:1752-1770). Today no line's range ever differs, so
+      an edit stops one line later; with a fold stack, typing `function` at the
+      top of a file makes every line below it differ and rescans to the end.
+
+      Reading "one line 0.0120 ms, unchanged" after the change and writing "not
+      measurably slower" would be true of the wrong thing. }
+    L := TSynEditStringList.Create;
+    try
+      L.Assign(Buf);
+      Hl.AttachToLines(L);
+      Hl.CurrentLines := L;
+      Hl.ScanAllRanges;
+      T0 := Now;
+      for P := 1 to 50 do
+      begin
+        { An edit at the TOP, which is the worst place for it: everything below
+          has to be reconsidered. }
+        L[0] := Format('rem block 1 -- edit %d', [P]);
+        Hl.ScanRanges;
+      end;
+      Rescan := (Now - T0) * 24 * 60 * 60 * 1000 / 50;
+      Hl.DetachFromLines(L);
+    finally
+      L.Free;
+    end;
+
+    WriteLn(Format('      %d lines, %d tokens: whole buffer %.1f ms, one line %.4f ms, ' +
+                   'an edit at the top %.3f ms',
+                   [Buf.Count, Tokens div Passes, Whole, Single, Rescan]));
+    Check('the 5000-line scan produced tokens', (Tokens div Passes) > 10000);
+  finally
+    Hl.Free;
+    Buf.Free;
+  end;
+end;
+
 { ------------------------------------------------------------ breakpoints --- }
 
 procedure TestBreakpoints;
@@ -1745,6 +2045,8 @@ begin
   TestMessages;
   TestLanguage;
   TestHighlighter;
+  TestFold;
+  MeasureHighlighter;
   TestBreakpoints;
   TestCompletion;
   TestOutline;
