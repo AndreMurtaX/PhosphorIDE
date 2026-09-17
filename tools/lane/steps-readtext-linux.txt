@@ -28,7 +28,13 @@ text Problems
 shot 470-before-the-run
 
 # RUN IT. F9 hands the fixture to the host and the Output tab fills.
-key {F9}
+#
+# `key F9`, NOT `key {F9}`. The two drivers share six verbs of eight and NO KEY
+# NAMES: Windows takes SendKeys braces, this side takes X keysyms. Writing the
+# Windows spelling here cost a run on 2026-09-17 -- xdrive said "no keysym called
+# {F9}", nothing ran, and the two text assertions below failed, which is the
+# first time this directory has had an assertion that could say so.
+key F9
 wait 4000
 shot 471-after-the-run
 
