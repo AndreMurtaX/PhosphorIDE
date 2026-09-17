@@ -1,0 +1,54 @@
+# A breakpoint a fold hides, under gtk2 -- roadmap item 20. Same case as
+# steps-hidden.txt; the keys are spelled the X way and the geometry is this
+# platform's.
+#
+# The clicks are measured DOWN from the top, like steps-fold-linux.txt and
+# unlike every other Linux script here: the editor is anchored under the toolbar
+# and the tab strip, so its rows keep their place whatever height mutter gives
+# the window -- it is the OUTPUT panel that moves.
+#
+# folding.bas: `function outer(n)` is line 6, its body 7..16, `end function` 17.
+# The fold column is at x=57 and the MARKS column at x=17; line 6 sits at y=176
+# and the rows are 15 px apart.
+raise
+wait 800
+
+# A breakpoint INSIDE the function, on line 8. F5 is Toggle Breakpoint.
+key ctrl+g
+wait 700
+type 8
+key Return
+wait 500
+key F5
+wait 600
+shot 220-a-breakpoint-on-line-8
+
+# Collapse the function. The mark on line 8 cannot be drawn, so the header
+# carries the badge instead: a smaller disc with a triangle under it.
+at 57 176
+wait 900
+shot 221-collapsed-and-the-header-says-so
+
+# THE CLICK. It opens the block and toggles nothing; the status bar says so.
+# Before this item it set a second breakpoint on the header.
+at 17 176
+wait 900
+shot 222-the-click-opened-it-instead-of-adding-one
+
+# One breakpoint, on line 8, where it was put.
+key ctrl+g
+wait 700
+type 1
+key Return
+wait 500
+shot 223-still-one-breakpoint-on-line-8
+
+# And a collapsed header that hides NOTHING toggles like any other line: the
+# `while` on line 13 holds no breakpoint, so the dot lands on 13 itself.
+# Line 13 is y = 176 + 7*15 = 281.
+at 57 281
+wait 900
+shot 224-the-while-collapsed-and-no-badge
+at 17 281
+wait 900
+shot 225-a-fold-hiding-nothing-still-toggles

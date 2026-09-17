@@ -448,6 +448,7 @@ type
     procedure RepaintEditors;
     procedure SyncGutterMarks(ADoc: TEditorDoc);
     procedure DocBreakpointsChanged(Sender: TObject; AFromEdit: Boolean);
+    procedure DocFoldsChanged(Sender: TObject);
     function CompletionTier: TPhosphorTier;
     procedure CompletionAccepted(var AValue: String; ASourceValue: String;
       var ASourceStart, ASourceEnd: TPoint; AKeyChar: TUTF8Char;
@@ -896,6 +897,10 @@ begin
     calls: typing above a breakpoint moves it, and a mark left on the old line
     is the defect TrackEdit exists to prevent, one layer out. }
   Result.OnBreakpointsChanged := @DocBreakpointsChanged;
+  { A FOLD OPENING OR CLOSING CHANGES WHICH MARKS CAN BE DRAWN and changes
+    nothing else, so it gets its own handler rather than a flag on the
+    breakpoint one: there is no edit to wait for and nothing to defer. }
+  Result.OnFoldsChanged := @DocFoldsChanged;
   ApplyEditorSettings(Result);
 
   PagesEditors.ActivePage := Page;
@@ -2717,24 +2722,57 @@ begin
     SyncGutterMarks(TEditorDoc(Sender));
 end;
 
-{ AND A BREAKPOINT INSIDE A COLLAPSED BLOCK IS INVISIBLE. Decided on 2026-09-16
-  with folding, and recorded rather than fixed.
+{ A fold opened or closed: the SET is untouched and the PICTURE is stale. Unlike
+  an edit, this needs no deferral -- SynEdit has already finished with the fold by
+  the time the notification arrives, and there is no second handler on it whose
+  order is not ours. See SyncGutterMarks for what the picture then becomes. }
+procedure TFrmMain.DocFoldsChanged(Sender: TObject);
+begin
+  SyncGutterMarks(TEditorDoc(Sender));
+  TEditorDoc(Sender).Edit.Invalidate;
+end;
+
+{ A BREAKPOINT INSIDE A COLLAPSED BLOCK IS SHOWN ON THE HEADER. Roadmap item 20,
+  decided and built on 2026-09-17; what stood here before was the same problem
+  recorded rather than fixed.
 
   TSynGutterMarks paints VISIBLE screen rows only (synguttermarks.pp:353-357), so
-  a mark on a line hidden by a fold is simply not drawn. Nothing below is wrong --
-  the mark is still in the set, BreakpointIsArmed still answers, the run still
-  stops -- and the debugger's own stop calls GotoSource, which moves the caret and
-  makes SynEdit unfold to reach it. What is lost is the PICTURE, between edits.
+  a mark on a line hidden by a fold is not drawn at all. Nothing underneath was
+  wrong -- the mark stayed in the set, BreakpointIsArmed still answered, the run
+  still stopped -- and what was lost was the PICTURE. The cost of that was
+  measured before anything was built, by performing the sequence the item
+  describes: collapse a function, see an EMPTY gutter, click the header to set
+  the breakpoint again, expand, and find TWO. Against the real host those two
+  stop the run THREE times, and the extra stop lands on a line with no mark on
+  it.
 
-  The alternative was an editor that refuses to collapse a block containing a
-  breakpoint, which is a surprising thing for a fold marker to do and needs a
-  reach into the folded view that SynEdit exposes only through the caret. The
-  cost of leaving it is a user who collapses a function, sees no mark, clicks the
-  collapsed header and gets a SECOND breakpoint on the header line. That is worth
-  knowing about; it is not worth an editor that argues with its own gutter. }
+  SO THE COLLAPSED HEADER CARRIES A THIRD MARK, `markBreakHidden` -- a smaller
+  disc with a triangle under it, "not here, below". The row is the OUTERMOST
+  collapsed header, which is the one the user can still see: with a `for` inside
+  a collapsed `function`, every line of the `for` answers the `function`'s
+  header. `TEditorDoc.CollapsedHeaderFor` is the question and
+  `CollapsedLineForFoldAtLine` is what answers it.
+
+  EXACTLY ONE MARK PER LINE, AND THAT IS NOT A STYLE CHOICE. At 96 PPI this
+  gutter's marks part is 24 px wide against a 16 px column, so ColumnCount is 1
+  and a second mark on the same line is simply not drawn -- and WHICH of the two
+  survives is decided by their heap addresses, so it changes between runs.
+  (`Application.Scaled` is on, and at 150% the ratio becomes 2 and both appear:
+  the picture would differ by MONITOR.) A header that hides breakpoints therefore
+  shows the badge and NOTHING ELSE, including when it carries a breakpoint of its
+  own -- the badge is the fact that cannot be recovered any other way, and one
+  click recovers the rest.
+
+  WHAT THE BADGE DOES NOT SAY is how many, or whether the host armed them. That
+  is a deliberate loss and the reason it is acceptable is the click: a gutter
+  click on a badged row REVEALS the block instead of toggling (see
+  EditorGutterClick), after which every hidden mark is drawn exactly as it always
+  was, solid or hollow, one per line. The badge is a door, not a summary. }
 procedure TFrmMain.SyncGutterMarks(ADoc: TEditorDoc);
 var
-  I: Integer;
+  I, J, Line, Header: Integer;
+  Headers: array of Integer;
+  Known: Boolean;
   Mark: TSynEditMark;
 begin
   if (ADoc = nil) or (ADoc.Edit = nil) then
@@ -2759,17 +2797,61 @@ begin
     end;
   end;
 
+  { PASS ONE: which visible rows are standing in for hidden breakpoints. The
+    list is tiny -- one entry per collapsed block that holds a breakpoint -- and
+    building it first is what lets pass two know which rows to leave alone. }
+  Headers := nil;
   for I := 0 to ADoc.BreakpointCount - 1 do
   begin
+    Header := ADoc.CollapsedHeaderFor(ADoc.Breakpoints[I]);
+    if Header < 1 then
+      Continue;
+    Known := False;
+    for J := 0 to High(Headers) do
+      if Headers[J] = Header then
+        Known := True;
+    if not Known then
+    begin
+      SetLength(Headers, Length(Headers) + 1);
+      Headers[High(Headers)] := Header;
+    end;
+  end;
+
+  { PASS TWO: the breakpoints that are drawn where they are. A hidden one is
+    skipped because its row is not on screen, and one that sits ON a badged
+    header is skipped because the badge has that row -- see the header comment
+    for why two marks may not share it. }
+  for I := 0 to ADoc.BreakpointCount - 1 do
+  begin
+    Line := ADoc.Breakpoints[I];
+    if ADoc.CollapsedHeaderFor(Line) > 0 then
+      Continue;
+    Known := False;
+    for J := 0 to High(Headers) do
+      if Headers[J] = Line then
+        Known := True;
+    if Known then
+      Continue;
+
     Mark := TPhosphorBreakMark.Create(ADoc.Edit);
-    Mark.Line := ADoc.Breakpoints[I];
+    Mark.Line := Line;
     { SOLID IF THE HOST BOUND IT, HOLLOW IF IT COULD NOT. Outside a session
       nothing is known and BreakpointIsArmed answers True, which draws the mark
       the way the user meant it -- see its own comment: unknown is not dead. }
-    if BreakpointIsArmed(ADoc, ADoc.Breakpoints[I]) then
+    if BreakpointIsArmed(ADoc, Line) then
       Mark.ImageIndex := markBreakArmed
     else
       Mark.ImageIndex := markBreakInert;
+    Mark.Visible := True;
+    ADoc.Edit.Marks.Add(Mark);
+  end;
+
+  { PASS THREE: one badge per collapsed header that hides something. }
+  for J := 0 to High(Headers) do
+  begin
+    Mark := TPhosphorBreakMark.Create(ADoc.Edit);
+    Mark.Line := Headers[J];
+    Mark.ImageIndex := markBreakHidden;
     Mark.Visible := True;
     ADoc.Edit.Marks.Add(Mark);
   end;
@@ -3570,12 +3652,40 @@ procedure TFrmMain.EditorGutterClick(Sender: TObject; X, Y, ALine: Integer;
   AMark: TSynEditMark);
 var
   Doc: TEditorDoc;
+  Hidden: Integer;
 begin
   { Clicking the margin is how every other editor toggles a breakpoint, so it is
     how this one does too -- even while nothing stops at one. }
   Doc := DocOfPage(PagesEditors.ActivePage);
   if (Doc = nil) or (ALine < 1) then
     Exit;
+
+  { EXCEPT ON A ROW THAT IS HIDING ONE, WHERE IT OPENS THE BLOCK INSTEAD.
+    Roadmap item 20. SynEdit hands this handler the TEXT line, so on a collapsed
+    header that line is the header's -- and a person who collapsed a function,
+    saw an empty gutter and clicked to set the breakpoint again used to get a
+    SECOND one, on a line they did not choose, which stopped the run an extra
+    time. The badge SyncGutterMarks now draws says the block holds one; this
+    makes the badge a door.
+
+    IT IS THE ONLY ROW WHERE A GUTTER CLICK DOES ANYTHING ELSE, and only while
+    it is badged: a collapsed header hiding nothing toggles like every other
+    line. Nothing is refused and the caret does not move -- the block opens, the
+    marks come back solid or hollow as they always were, and the next click is
+    an ordinary one on the line the user actually wanted. }
+  Hidden := Doc.HiddenBreakpointCount(ALine);
+  if Hidden > 0 then
+  begin
+    Doc.RevealFoldAt(ALine);
+    if Hidden = 1 then
+      StatusBar1.Panels[3].Text := 'opened: this fold was hiding a breakpoint'
+    else
+      StatusBar1.Panels[3].Text :=
+        Format('opened: this fold was hiding %d breakpoints', [Hidden]);
+    Doc.Edit.Invalidate;
+    Exit;
+  end;
+
   Doc.ToggleBreakpoint(ALine);
   SyncBreakpoints(Doc);
   Doc.Edit.Invalidate;

@@ -1,0 +1,56 @@
+# A breakpoint a fold hides -- roadmap item 20, on Windows.
+#
+# THE SEQUENCE THE ITEM IS ABOUT, performed exactly as it is written there:
+# collapse a function, look at the gutter, and click the collapsed header.
+# Before 2026-09-17 that produced an EMPTY gutter and then a SECOND breakpoint
+# on a line the user did not choose -- and against the real host those two stop
+# the run three times, the extra stop on a line with no mark on it.
+#
+# folding.bas: `function outer(n)` is line 6, its body 7..16, `end function` 17.
+# The fold column is at x=60 and the MARKS column at x=23; line 6 sits at y=187
+# and the rows are 15 px apart.
+wait 700
+
+# A breakpoint INSIDE the function, on line 8. F5 is Toggle Breakpoint, so this
+# step needs no pixel.
+key ^g
+wait 700
+type 8
+key {ENTER}
+wait 500
+key {F5}
+wait 600
+shot 210-a-breakpoint-on-line-8
+
+# Collapse the function. The mark on line 8 cannot be drawn -- its row is gone --
+# so the header carries the BADGE: a smaller disc with a triangle under it,
+# "not here, below".
+at 60 187
+wait 900
+shot 211-collapsed-and-the-header-says-so
+
+# THE CLICK. It opens the block and toggles NOTHING, and the status bar says
+# which of the two happened. Before this item it set a second breakpoint here.
+at 23 187
+wait 900
+shot 212-the-click-opened-it-instead-of-adding-one
+
+# One breakpoint, on line 8, exactly where it was put. The gutter shows one
+# solid dot and no badge, because nothing is hidden any more.
+key ^g
+wait 700
+type 1
+key {ENTER}
+wait 500
+shot 213-still-one-breakpoint-on-line-8
+
+# AND A COLLAPSED HEADER THAT HIDES NOTHING TOGGLES LIKE ANY OTHER LINE. The
+# `while` on line 13 holds no breakpoint -- the only one is on 8, outside it --
+# so collapsing it and clicking its gutter is an ORDINARY toggle, and the dot
+# lands on 13. Line 13 is y = 187 + 7*15 = 292.
+at 60 292
+wait 900
+shot 214-the-while-collapsed-and-no-badge
+at 23 292
+wait 900
+shot 215-a-fold-hiding-nothing-still-toggles

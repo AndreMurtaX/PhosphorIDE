@@ -48,8 +48,9 @@ const
     another, and an index means nothing without knowing which. }
   markBreakArmed = 0;
   markBreakInert = 1;
+  markBreakHidden = 2;
   ToolbarIconCount = 9;
-  GutterMarkCount = 2;
+  GutterMarkCount = 3;
 
 { Fill AList with the nine icons, at both resolutions, replacing whatever was
   there. The list's own Width and Height are set to 16: the 24 is a REGISTERED
@@ -84,6 +85,26 @@ const
     $16, $8C, $00, $0B, $86, $7E, $3E, $A0, $4B, $51, $41, $97, $C2, $6E, $14,
     $0C, $0F, $00, $00, $9E, $2B, $30, $5C, $92, $13, $CF, $DD, $00, $00, $00,
     $00, $49, $45, $4E, $44, $AE, $42, $60, $82
+  );
+  PngBreakHidden16: array[0..99] of Byte = (
+    $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
+    $52, $00, $00, $00, $10, $00, $00, $00, $10, $08, $06, $00, $00, $00, $1F,
+    $F3, $FF, $61, $00, $00, $00, $2B, $49, $44, $41, $54, $78, $DA, $63, $60,
+    $18, $B4, $60, $99, $B4, $F4, $7F, $64, $4C, $91, $66, $92, $0D, $19, $35,
+    $00, $D3, $A0, $81, $8D, $7F, $B2, $BC, $41, $95, $30, $A0, $38, $00, $07,
+    $2E, $10, $49, $05, $00, $42, $EB, $67, $E9, $FF, $08, $19, $5B, $00, $00,
+    $00, $00, $49, $45, $4E, $44, $AE, $42, $60, $82
+  );
+  PngBreakHidden24: array[0..120] of Byte = (
+    $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
+    $52, $00, $00, $00, $18, $00, $00, $00, $18, $08, $06, $00, $00, $00, $E0,
+    $77, $3D, $F8, $00, $00, $00, $40, $49, $44, $41, $54, $78, $DA, $63, $60,
+    $18, $05, $D4, $00, $CB, $A4, $A5, $FF, $63, $C3, $34, $35, $9C, $2A, $96,
+    $10, $32, $9C, $62, $4B, $46, $2D, $18, $78, $0B, $68, $9E, $8A, $E8, $62,
+    $01, $2E, $8B, $86, $76, $11, $31, $B4, $22, $99, $E6, $85, $1D, $DD, $22,
+    $99, $2E, $A9, $68, $68, $25, $D1, $51, $00, $03, $00, $1A, $B7, $DA, $F3,
+    $FA, $29, $A8, $32, $00, $00, $00, $00, $49, $45, $4E, $44, $AE, $42, $60,
+    $82
   );
   PngBreakInert16: array[0..102] of Byte = (
     $89, $50, $4E, $47, $0D, $0A, $1A, $0A, $00, $00, $00, $0D, $49, $48, $44,
@@ -346,6 +367,7 @@ begin
   Prepare(AList);
   AddPair(AList, PngBreakArmed16, PngBreakArmed24);
   AddPair(AList, PngBreakInert16, PngBreakInert24);
+  AddPair(AList, PngBreakHidden16, PngBreakHidden24);
 end;
 
 end.

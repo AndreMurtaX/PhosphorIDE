@@ -30,7 +30,8 @@ unit ueditordoc;
 interface
 
 uses
-  Classes, SysUtils, Controls, SynEdit, LazSynEditText, ubreakpoints;
+  Classes, SysUtils, Controls, SynEdit, LazSynEditText, SynEditFoldedView,
+  ubreakpoints;
 
 type
   { Says the breakpoint SET moved, and whether an edit is what moved it. The
@@ -46,11 +47,17 @@ type
     FUntitledIndex: Integer;
     FBreakpoints: TBreakpointSet;
     FOnBreakpointsChanged: TBreakpointsChangedEvent;
+    FOnFoldsChanged: TNotifyEvent;
     { SynEdit's own notification that lines were inserted or removed. Registering
       for it is what makes a breakpoint follow its statement; without it the marks
       stay on their line numbers while the text slides out from under them, which
       is invisible until the day something actually stops at one. }
     procedure LinesChanged(Sender: TSynEditStrings; AIndex, ACount: Integer);
+    { A FOLD OPENED OR CLOSED. Not an edit: no line moved and the set did not
+      change. What changed is which lines are DRAWN, and the gutter's marks are a
+      picture of the set, so the picture has to be taken again. }
+    procedure FoldsChanged(Sender: TSynEditStrings; AIndex, ACount: Integer);
+    function FoldedView: TSynEditFoldedView;
     procedure Changed(AFromEdit: Boolean);
     function GetModified: Boolean;
     procedure SetModified(AValue: Boolean);
@@ -91,6 +98,23 @@ type
     procedure ClearBreakpoints;
     function HasBreakpoint(ALine: Integer): Boolean;
 
+    { WHICH VISIBLE ROW IS STANDING IN FOR THIS LINE, or 0 when the line is
+      drawn. A fold hides lines; the row the user can still see and click is the
+      collapsed header, and with blocks nested inside blocks it is the OUTERMOST
+      collapsed one -- `CollapsedLineForFoldAtLine` answers that and
+      `ExpandedLineForBlockAtLine` does not, which is why only the first appears
+      here (measured 2026-09-17: with a `for` inside a collapsed `function`,
+      every line of the `for` answers the `function`'s header). }
+    function CollapsedHeaderFor(ALine: Integer): Integer;
+
+    { How many breakpoints this visible row is hiding underneath it. Zero for an
+      ordinary line, and zero for a collapsed header whose block holds none. }
+    function HiddenBreakpointCount(AHeaderLine: Integer): Integer;
+
+    { Open the block whose header is AHeaderLine. Nothing happens if it is not a
+      collapsed header. The caret is NOT moved: this is a reveal, not a jump. }
+    procedure RevealFoldAt(AHeaderLine: Integer);
+
     property Edit: TSynEdit read FEdit;
     property FileName: String read FFileName write FFileName;
     property UntitledIndex: Integer read FUntitledIndex write FUntitledIndex;
@@ -101,6 +125,9 @@ type
     property Breakpoints[AIndex: Integer]: Integer read GetBreakpoint;
     { The whole set, for handing to a debug adapter. }
     property BreakpointSet: TBreakpointSet read FBreakpoints;
+    { Fired when a fold opened or closed. The SET did not change -- this is the
+      one event here that says only "the picture is stale". }
+    property OnFoldsChanged: TNotifyEvent read FOnFoldsChanged write FOnFoldsChanged;
 
     { Fired whenever the SET changed -- a toggle, a clear, or an edit that moved
       or dropped one. It exists because the gutter's marks are a SECOND copy of
@@ -133,9 +160,19 @@ type
     ViewedTextBuffer is and TextBuffer is not.
 
     ViewedTextBuffer is the buffer AS VIEWED, and its own comment warns that folds
-    make that differ from the text. This highlighter enables no folding
-    (docs/architecture.md says why), so the two are the same here -- and the day
-    folding arrives, this is one of the places that has to be looked at.
+    make that differ from the text. THAT DAY CAME: roadmap item 17 gave this
+    editor folding, and item 20 is the one that came back here to look. The worry
+    does not materialise for LinesChanged -- measured 2026-09-17, with
+    `function outer()` collapsed, an insertion at TEXT line 13 arrives as
+    senrLineCount AIndex=13, which is the TEXT index and not the view row, so
+    TrackEdit gets what it always got.
+
+    The same descendant now also reaches FoldedTextBuffer, a sibling protected
+    property on the same class (syneditmiscclasses.pp:220), which is the folded
+    view itself. It must descend from TSynEdit and NOT from TCustomSynEdit: the
+    latter is TSynEdit's ancestor, so a descendant of it is TSynEdit's SIBLING and
+    the cast is `Warning: (4040) Class types are not related` -- which this
+    project's -vewn bar refuses.
 
     The alternative was to infer the delta from Lines.Count inside OnChange, and
     it is wrong for the case that matters: pasting six lines into the middle of a
@@ -159,6 +196,12 @@ begin
   FUntitledIndex := 0;
   FBreakpoints := TBreakpointSet.Create;
   TSynEditAccess(FEdit).ViewedTextBuffer.AddChangeHandler(senrLineCount, @LinesChanged);
+  { AND THE ONE FOLDING SENDS. `senrLineMappingChanged` is the notification a
+    fold opening or closing produces (lazsynedittext.pas:56 names it "folds
+    added/removed"); OnChange does not fire for a fold and TSynStatusChange has
+    no member for one, so this is the only way to hear about it. }
+  TSynEditAccess(FEdit).ViewedTextBuffer.AddChangeHandler(senrLineMappingChanged,
+                                                          @FoldsChanged);
 end;
 
 destructor TEditorDoc.Destroy;
@@ -167,12 +210,75 @@ begin
     THIS object, and the editor outlives it by however long the parent tab takes
     to be freed. }
   if FEdit <> nil then
+  begin
     TSynEditAccess(FEdit).ViewedTextBuffer.RemoveChangeHandler(senrLineCount, @LinesChanged);
+    TSynEditAccess(FEdit).ViewedTextBuffer.RemoveChangeHandler(senrLineMappingChanged,
+                                                               @FoldsChanged);
+  end;
   { FEdit itself belongs to the parent control and is freed with it. Freeing it
     here as well is a double free the first time a tab is closed. }
   FEdit := nil;
   FBreakpoints.Free;
   inherited Destroy;
+end;
+
+{ The folded view, or nil before there is an editor. Every fold question below
+  goes through this one place, so the cast appears once. }
+function TEditorDoc.FoldedView: TSynEditFoldedView;
+begin
+  if FEdit = nil then
+    Result := nil
+  else
+    Result := TSynEditFoldedView(TSynEditAccess(FEdit).FoldedTextBuffer);
+end;
+
+function TEditorDoc.CollapsedHeaderFor(ALine: Integer): Integer;
+var
+  FV: TSynEditFoldedView;
+begin
+  Result := 0;
+  FV := FoldedView;
+  if (FV = nil) or (ALine < 1) or (ALine > FEdit.Lines.Count) then
+    Exit;
+  { -1 MEANS THE LINE IS DRAWN, which is the answer for every line in a file
+    nobody has folded, so this is the cheap case and it stays cheap: one tree
+    lookup per breakpoint, and a buffer has a few dozen at most. }
+  Result := FV.CollapsedLineForFoldAtLine(ALine);
+  if Result < 1 then
+    Result := 0;
+end;
+
+function TEditorDoc.HiddenBreakpointCount(AHeaderLine: Integer): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  if AHeaderLine < 1 then
+    Exit;
+  for I := 0 to FBreakpoints.Count - 1 do
+    if CollapsedHeaderFor(FBreakpoints.Lines[I]) = AHeaderLine then
+      Inc(Result);
+end;
+
+procedure TEditorDoc.RevealFoldAt(AHeaderLine: Integer);
+var
+  FV: TSynEditFoldedView;
+begin
+  FV := FoldedView;
+  if (FV = nil) or (AHeaderLine < 1) then
+    Exit;
+  { 0-BASED, whatever syneditfoldedview.pp:517 says in its comment. The
+    implementation is `fFoldTree.FindFoldForLine(AStartIndex+1, True)`
+    (:3993-4006), so a 1-based editor line goes in as ALine-1. Measured
+    2026-09-17; the comment beside the declaration says "1-based" and is wrong,
+    which is worth knowing before spending an afternoon on an off-by-one. }
+  FV.UnFoldAtTextIndex(AHeaderLine - 1);
+end;
+
+procedure TEditorDoc.FoldsChanged(Sender: TSynEditStrings; AIndex, ACount: Integer);
+begin
+  if Assigned(FOnFoldsChanged) then
+    FOnFoldsChanged(Self);
 end;
 
 procedure TEditorDoc.LinesChanged(Sender: TSynEditStrings; AIndex, ACount: Integer);

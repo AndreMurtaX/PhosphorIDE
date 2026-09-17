@@ -60,6 +60,7 @@ generic driver existed, with the steps baked into the PowerShell.
 | `repl-probe.py` | speaks to the REPL over pipes with no editor involved -- how it was found that stderr is buffered on Unix (`docs/phosphor-repl-debt.md`) |
 | `steps-outline-linux.txt` | the same under gtk2, including the Go to Definition dialog through `popshot` |
 | `steps-outline.txt` + `outline.bas` | the outline pane and F12: ten definitions including two on one line, a click that keeps the keyboard, a jump, and the three answers F12 gives when there is nothing to jump to |
+| `steps-hidden.txt`, `steps-hidden-linux.txt` | roadmap item 20: a breakpoint inside a collapsed function, the badge the header then carries, the gutter click that OPENS the block instead of adding a second breakpoint, and the control case — a collapsed header hiding nothing, which toggles like any other line |
 | `steps-typing.txt` + `typing.bas` | roadmap item 19, DRIVEN: 2000 lines, a word one character short of a definition at the top, the keystroke that completes it, and the fold marker arriving. The NUMBER is not here -- it comes from `phosphoride --measure-typing`, and the script says why two ways of timing it from outside the process both lie |
 | `steps-accent.txt` + `acentos.bas` | the byte column: the same statement with and without accents, and the popup filtered on both |
 | `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |

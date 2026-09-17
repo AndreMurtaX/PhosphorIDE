@@ -1347,6 +1347,57 @@ does not close this.
 
 ## 20. A breakpoint a fold hides
 
+**DONE 2026-09-17, and the answer is the third one PLUS a rule the item did not
+decide.** The collapsed header carries a new gutter mark that says a breakpoint is
+hidden inside it, and a gutter click on that row OPENS THE BLOCK instead of toggling.
+
+**Why the third.** The first two were argued out rather than dismissed. Refusing the
+collapse is a `[-]` that a person clicks and watches do nothing -- the same class as the
+status bar with four panels and no text. Unfolding when a breakpoint MOVES is worse than
+it sounds, because breakpoints move on every edit above them: typing at the top of a file
+would keep tearing folds open. The badge is the only one that does not take away a state
+somebody can legitimately want -- a breakpoint inside a function they deliberately folded
+shut -- and its failure mode is the mildest: if the glyph is not understood, the user
+clicks it and finds out.
+
+**And the click rule is what makes it a fix rather than a decoration.** Without it the
+badge is a nicer way to watch the same duplicate get created; with it the duplicate cannot
+be created at all. It is the ONLY row in the gutter where a click does anything else, and
+only while it is badged: a collapsed header hiding nothing toggles like every other line.
+Nothing is refused, the caret does not move, and the status bar says which of the two
+happened.
+
+**What it cost to find out, measured before anything was built:**
+
+* Performing the item's sequence against the editor as it was gave an EMPTY gutter and
+  then two breakpoints where one was meant. Against the real host those two stop the run
+  **three times**, and the extra stop lands on a line with no mark on it.
+* **Exactly one mark is drawn per line at 96 PPI**, and WHICH of two on the same line
+  survives is decided by their heap addresses -- it changes between runs. `Application.Scaled`
+  is on, and at 150% the ratio becomes 2 and both appear: a design that stacked two marks
+  would have differed by MONITOR. So a badged header shows the badge and nothing else,
+  including when it carries a breakpoint of its own.
+* `CollapsedLineForFoldAtLine` is the call that answers "which visible row", and with
+  nesting it gives the OUTERMOST collapsed header -- the one the user can actually see.
+  `ExpandedLineForBlockAtLine` answers the innermost enclosing block whether or not
+  anything is folded, and would point at a row that is itself hidden.
+* `FoldedAtTextIndex` and `UnFoldAtTextIndex` are **0-based**, and SynEdit's own comments
+  beside both say "1-based". Do not cite those comments.
+* The fold notification is `senrLineMappingChanged`. `OnChange` never fires for a fold and
+  `TSynStatusChange` has no member for one.
+* Nothing in this repository saves or restores a fold state, so no breakpoint can be
+  hidden at startup -- which is the worse version of this problem, and it does not exist.
+
+**What the badge deliberately does not say** is how many, or whether the host armed them.
+One glyph stands for N breakpoints and loses solid-versus-hollow, which is the one piece of
+protocol information this gutter carries. That is a real loss and the click is why it is
+acceptable: one click and every hidden mark is drawn exactly as it always was, one per
+line. The badge is a door, not a summary.
+
+**Driven on both platforms**: `tools/lane/steps-hidden.txt` and `steps-hidden-linux.txt`
+perform the item's sequence and then the control case -- a collapsed header hiding nothing,
+which still toggles.
+
 **What.** Decide what the editor does when a fold hides a line that carries a breakpoint.
 
 **Why.** Today it does nothing, and that is recorded in `SyncGutterMarks` rather than

@@ -244,9 +244,31 @@ def break_inert(c):
     c.ring(4, 4, 2.4, 1.15, MAROON)
 
 
+# AND THE THIRD SAYS "NOT HERE -- BELOW", which is roadmap item 20. A fold can
+# hide a line that carries a breakpoint, and TSynGutterMarks paints visible
+# screen rows only, so the mark is simply not drawn: the picture then says a
+# breakpoint the user set does not exist. This one goes on the COLLAPSED HEADER,
+# which is the row they can still see.
+#
+# A SMALLER DISC WITH A TRIANGLE UNDER IT, and both halves are load-bearing. The
+# disc keeps it in the same family as the other two -- maroon, round, a
+# breakpoint -- and the triangle points at where the thing actually is. A plain
+# disc would be a lie (there is no breakpoint on this line, or not only on this
+# line); a plain arrow would not say what is down there.
+#
+# The disc is 1.7 eighths rather than 2.4 because the triangle needs the bottom
+# third of the box: at 16 px that is a 7-pixel disc over a 7x4 triangle, which
+# is the smallest pair that still reads as two shapes rather than as a smudge.
+# Both are drawn in eighths, so both land on whole pixels at 16 and at 24.
+def break_hidden(c):
+    c.disc(4, 2.6, 1.7, MAROON)
+    c.poly(((2.2, 4.8), (5.8, 4.8), (4, 6.8)), MAROON)
+
+
 GUTTER = (
     ('BreakArmed', break_armed),
     ('BreakInert', break_inert),
+    ('BreakHidden', break_hidden),
 )
 
 ICONS = (
