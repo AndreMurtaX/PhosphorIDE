@@ -148,6 +148,7 @@ type
     function GetFoldConfigCount: Integer; override;
     function GetFoldConfigInternalCount: Integer; override;
     function GetFoldConfigInstance(Index: Integer): TSynCustomFoldConfig; override;
+    function CreateFoldConfigInstance(Index: Integer): TSynCustomFoldConfig; override;
   public
     constructor Create(AOwner: TComponent); override;
 
@@ -642,6 +643,36 @@ begin
     on compiles, scans, balances its stack and folds absolutely nothing -- with
     no error anywhere (synedithighlighterfoldbase.pas:2030-2035). }
   Result.Enabled := True;
+  { AND fmMarkup IS WHAT PAINTS THE OTHER END OF A BLOCK -- see
+    CreateFoldConfigInstance, which is where the mode is allowed at all. }
+  Result.Modes := [fmFold, fmMarkup];
+end;
+
+function TSynPhosphorSyn.CreateFoldConfigInstance(Index: Integer): TSynCustomFoldConfig;
+begin
+  { fmMarkup IS HALF OF ROADMAP ITEM 22, AND IT COSTS THIS LINE.
+
+    SynEdit already creates a TSynEditMarkupWordGroup for every editor and hands
+    it whatever highlighter the editor is given (synedit.pp:2367, :6790). That
+    markup finds the partner of the word under the caret through the fold NODE
+    INFO the base class emits, and paints both -- but it filters on nodes
+    carrying `sfaMarkup`, and that action comes from the fold config's Modes:
+    `if fmMarkup in AValue then FFoldActions := FFoldActions + [sfaMarkup]`
+    (synedithighlighterfoldbase.pas:2660).
+
+    THE DEFAULT IS [fmFold] ALONE, and Modes is filtered through SupportedModes
+    on the way in (:2654), so asking for fmMarkup without widening the supported
+    set does nothing at all. Measured before this existed: with the caret inside
+    `function` on line 6 of tools/lane/folding.bas, neither it nor its
+    `end function` was painted.
+
+    The two-argument constructor is how the supported set is chosen -- the
+    property setter for it is deprecated in favour of exactly this.
+
+    NOTHING ELSE IS ASKED FOR. fmHide would let a block swallow its own header
+    row, which roadmap item 20 depends on not happening; fmOutline draws a
+    vertical guide down a gutter column this editor does not have. }
+  Result := TSynCustomFoldConfig.Create([fmFold, fmMarkup], True);
 end;
 
 { ------------------------------------------------------------ SynEdit's asks - }

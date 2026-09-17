@@ -1,0 +1,88 @@
+# The other end of a block -- roadmap item 22, on Windows.
+#
+# TWO HALVES, AND ONLY ONE OF THEM IS OURS. SynEdit's own
+# TSynEditMarkupWordGroup PAINTS the pair the moment the highlighter offers
+# fmMarkup (usynphosphor.CreateFoldConfigInstance) -- so the boxes around the
+# partner in these shots are SynEdit's, recomputed on every caret move and every
+# edit, and no code of this repository draws them. What is ours is the JUMP and
+# the sentence for the cases where there is nowhere to jump to.
+#
+# matching.bas: `function` on 7 pairs with `end function` on 13; the one-line
+# pair is on 16; `next = 5` is on 20; `y = function + 1` on 24; the literal on
+# 27; and the unterminated `while` on 32.
+raise
+wait 800
+
+# THE PAIR, PAINTED. Ctrl+G puts the caret at 7:1, which is on `function`.
+key ^g
+wait 600
+type 7
+key {ENTER}
+wait 800
+shot 410-the-pair-is-painted
+
+# AND THE JUMP. Ctrl+Shift+M moves the caret to the partner and the status bar
+# says which line it went to.
+key ^+m
+wait 900
+shot 411-jumped-to-the-end-function
+
+# It is symmetric: from the terminator back to the opener.
+key ^+m
+wait 900
+shot 412-and-back-again
+
+# A PAIR THAT OPENS AND CLOSES ON ONE LINE still has a partner. Folding drops
+# these because they hide nothing; matching keeps them.
+key ^g
+wait 600
+type 16
+key {ENTER}
+wait 600
+key ^+m
+wait 900
+shot 413-a-pair-on-one-line
+
+# --- AND THE THREE ANSWERS THAT ARE NOT A JUMP ---------------------------
+# `next` as a variable, with nothing open above it.
+key ^g
+wait 600
+type 20
+key {ENTER}
+wait 600
+key ^+m
+wait 900
+shot 414-a-next-that-closes-nothing
+
+# `function` in an expression: not at a statement position, so not a block word.
+key ^g
+wait 600
+type 24
+key {ENTER}
+wait 500
+key {HOME}
+key {RIGHT 5}
+wait 400
+key ^+m
+wait 900
+shot 415-function-in-an-expression
+
+# A line that is a comment: not a block word either, and the same sentence.
+key ^g
+wait 600
+type 31
+key {ENTER}
+wait 600
+key ^+m
+wait 900
+shot 416-a-comment-is-not-a-block-word
+
+# AN OPENER NOTHING CLOSES.
+key ^g
+wait 600
+type 32
+key {ENTER}
+wait 600
+key ^+m
+wait 900
+shot 417-a-while-that-is-never-closed

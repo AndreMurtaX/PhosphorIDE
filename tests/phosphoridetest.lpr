@@ -2022,6 +2022,144 @@ begin
              8, N);
 end;
 
+{ ------------------------------------------------------ the other end of it -- }
+
+{ WITH THE CARET ON `if`, WHERE IS THE `endif` -- roadmap item 22.
+
+  Phosphor has no braces, so the eye has nothing to match on and a `next` eleven
+  lines down is not visibly the partner of a `for`. This is a reading of the
+  structure uphosphorfold already builds, and it changes no text.
+
+  WHAT IT REFUSES TO ANSWER IS THE POINT. The three cases item 22 names are all
+  words that LOOK like block keywords and are not one here: `next = 5`, which is
+  a legal assignment; `function` used as a variable; and a block word inside a
+  literal. Each must answer "nothing", so that the caller can say so instead of
+  moving the caret somewhere arbitrary -- which is the failure this feature would
+  otherwise introduce.
+
+  NOTHING IS REMEMBERED, which is the other half: the buffer is walked on every
+  call, so an edit cannot leave a stale answer behind. }
+
+procedure TestBlockMatch;
+var
+  Buf: TStringList;
+  M: TBlockMatch;
+
+  function Kind(ALine, ACol: Integer): String;
+  begin
+    M := MatchBlockAt(Buf, ALine, ACol);
+    case M.Kind of
+      bmMatched: Result := Format('%s %d:%d', [BlockName(M.Block),
+                                               M.ThereLine, M.ThereCol]);
+      bmUnterminated: Result := 'unterminated ' + BlockName(M.Block);
+      bmUnopened: Result := 'unopened ' + BlockName(M.Block);
+    else
+      Result := 'none';
+    end;
+  end;
+
+begin
+  Group('uphosphorfold: the other end of a block');
+
+  Buf := TStringList.Create;
+  try
+    { --- the plain case ----------------------------------------------------- }
+    Buf.Clear;
+    Buf.Add('function f(n)');     { 1 }
+    Buf.Add('  for i = 1 to 3');  { 2 }
+    Buf.Add('    if n > 0 then'); { 3 }
+    Buf.Add('    endif');         { 4 }
+    Buf.Add('  next');            { 5 }
+    Buf.Add('endfunction');       { 6 }
+    CheckEq('function finds its endfunction', 'function 6:1', Kind(1, 1));
+    CheckEq('and the endfunction finds it back', 'function 1:1', Kind(6, 1));
+    CheckEq('the for finds its next', 'for 5:3', Kind(2, 3));
+    CheckEq('and the next finds the for', 'for 2:3', Kind(5, 3));
+    CheckEq('the if finds its endif', 'if 4:5', Kind(3, 5));
+    CheckEq('and the endif finds the if', 'if 3:5', Kind(4, 5));
+
+    { --- WHERE THE CARET COUNTS AS BEING ON THE WORD ------------------------ }
+    { From its first byte to ONE PAST its last, which is how a person reads it
+      and what every editor's brace matching does. }
+    CheckEq('on the first byte', 'function 6:1', Kind(1, 1));
+    CheckEq('in the middle', 'function 6:1', Kind(1, 5));
+    CheckEq('on the last byte', 'function 6:1', Kind(1, 8));
+    CheckEq('one past the last', 'function 6:1', Kind(1, 9));
+    CheckEq('and one further is nothing', 'none', Kind(1, 10));
+    CheckEq('column 0 is nothing', 'none', Kind(1, 0));
+
+    { --- A PAIR ON ONE LINE STILL HAS A PARTNER ----------------------------- }
+    { ScanFoldLine drops these because they fold nothing; matching wants them,
+      which is why ScanFoldLineRaw exists. }
+    Buf.Clear;
+    Buf.Add('for i = 1 to 2 println i next');
+    CheckEq('a for that closes on its own line', 'for 1:26', Kind(1, 1));
+    CheckEq('and the next that closes it', 'for 1:1', Kind(1, 26));
+
+    { --- THE THREE THINGS IT MUST REFUSE ------------------------------------ }
+    { 1. `next` as a variable, with nothing open above it. It closes nothing,
+      and the caller says so rather than jumping somewhere arbitrary. }
+    Buf.Clear;
+    Buf.Add('next = 5');
+    Buf.Add('println next');
+    CheckEq('next with nothing open closes nothing', 'unopened for', Kind(1, 1));
+
+    { 2. `function` as an ordinary variable. Not at a statement position, so it
+      opens nothing and there is no event to be on. }
+    Buf.Clear;
+    Buf.Add('y = function + 1');
+    CheckEq('function in an expression is not a block', 'none', Kind(1, 5));
+
+    { 3. A block word inside a literal. }
+    Buf.Clear;
+    Buf.Add('println "for i = 1 to 3 endfunction"');
+    CheckEq('a block word inside a string is not one', 'none', Kind(1, 10));
+    CheckEq('nor the terminator in it', 'none', Kind(1, 24));
+    Buf.Clear;
+    Buf.Add('rem for i = 1 to 3');
+    CheckEq('and one in a comment is not either', 'none', Kind(1, 5));
+
+    { --- AN UNTERMINATED BLOCK SAYS WHICH ----------------------------------- }
+    Buf.Clear;
+    Buf.Add('function f()');
+    Buf.Add('  return 1');
+    CheckEq('an opener with no terminator', 'unterminated function', Kind(1, 1));
+    Buf.Clear;
+    Buf.Add('for i = 1 to 3');
+    Buf.Add('  println i');
+    CheckEq('and a for likewise', 'unterminated for', Kind(1, 1));
+
+    { --- NESTING, WHICH IS WHY THERE IS A STACK ----------------------------- }
+    Buf.Clear;
+    Buf.Add('for i = 1 to 3');   { 1 }
+    Buf.Add('  for j = 1 to 3'); { 2 }
+    Buf.Add('  next');           { 3 }
+    Buf.Add('next');             { 4 }
+    CheckEq('the outer for takes the outer next', 'for 4:1', Kind(1, 1));
+    CheckEq('and the inner one the inner', 'for 3:3', Kind(2, 3));
+    CheckEq('read from the other end too', 'for 2:3', Kind(3, 3));
+    CheckEq('and the outermost', 'for 1:1', Kind(4, 1));
+
+    { A TERMINATOR OF THE WRONG KIND CLOSES NOTHING, which is the same rule the
+      fold gutter applies: `wend` does not close a `for`. }
+    Buf.Clear;
+    Buf.Add('for i = 1 to 3');
+    Buf.Add('wend');
+    CheckEq('a wend does not close a for', 'unopened while', Kind(2, 1));
+    CheckEq('and the for is still unterminated', 'unterminated for', Kind(1, 1));
+
+    { --- the edges ---------------------------------------------------------- }
+    Buf.Clear;
+    CheckEq('an empty buffer has nothing', 'none', Kind(1, 1));
+    Buf.Add('x = 1');
+    CheckEq('a line with no block word', 'none', Kind(1, 1));
+    CheckEq('a line past the end', 'none', Kind(99, 1));
+    CheckEq('and line zero', 'none', Kind(0, 1));
+  finally
+    Buf.Free;
+  end;
+end;
+
 { ----------------------------------------------------------- where a block -- }
 
 procedure TestFold;
@@ -2919,6 +3057,7 @@ begin
   TestClock;
   TestWalk;
   TestFold;
+  TestBlockMatch;
   TestFoldWired;
   MeasureHighlighter;
   TestBreakpoints;

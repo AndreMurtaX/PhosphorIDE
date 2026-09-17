@@ -583,6 +583,9 @@ object FrmMain: TFrmMain
       object MnuGotoDefinition: TMenuItem
         Action = ActGotoDefinition
       end
+      object MnuMatchBlock: TMenuItem
+        Action = ActMatchBlock
+      end
       object MnuFindInFiles: TMenuItem
         Action = ActFindInFiles
       end
@@ -771,6 +774,12 @@ object FrmMain: TFrmMain
       Hint = 'Jump to the function this name defines, in this file'
       OnExecute = ActGotoDefinitionExecute
       ShortCut = 123
+    end
+    object ActMatchBlock: TAction
+      Caption = 'Go to &Matching Block'
+      Hint = 'Jump between a block keyword and its partner'
+      OnExecute = ActMatchBlockExecute
+      ShortCut = 24653
     end
     object ActRepl: TAction
       Caption = '&REPL'

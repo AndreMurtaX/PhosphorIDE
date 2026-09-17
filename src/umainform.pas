@@ -28,7 +28,8 @@ uses
   ueditordoc, uphosphorhost, uphosphormsg, uphosphorrun, uphosphorsettings,
   SynEditHighlighter,
   usynphosphor, uphosphorlang, udebugproto, udebugsession, uphosphoricons,
-  uphosphorcomplete, uphosphoroutline, uphosphorrepl, ufindinfiles, SynCompletion;
+  uphosphorcomplete, uphosphoroutline, uphosphorrepl, ufindinfiles, uphosphorfold,
+  SynCompletion;
 
 type
 
@@ -41,6 +42,7 @@ type
     ActComplete: TAction;
     ActFindInFiles: TAction;
     ActGotoDefinition: TAction;
+    ActMatchBlock: TAction;
     ActOutline: TAction;
     ActRepl: TAction;
     BtnReplEnd: TButton;
@@ -64,6 +66,7 @@ type
     MnuFindInFiles: TMenuItem;
     MemoRepl: TMemo;
     MnuGotoDefinition: TMenuItem;
+    MnuMatchBlock: TMenuItem;
     MnuOutline: TMenuItem;
     MnuRepl: TMenuItem;
     PanelRepl: TPanel;
@@ -195,6 +198,7 @@ type
     procedure ActCompleteExecute(Sender: TObject);
     procedure ActFindInFilesExecute(Sender: TObject);
     procedure ActGotoDefinitionExecute(Sender: TObject);
+    procedure ActMatchBlockExecute(Sender: TObject);
     procedure ActOutlineExecute(Sender: TObject);
     procedure ActReplExecute(Sender: TObject);
     procedure BtnReplEndClick(Sender: TObject);
@@ -2642,6 +2646,56 @@ begin
   PagesOutput.ActivePage := TabOutline;
   if ListOutline.CanFocus then
     ListOutline.SetFocus;
+end;
+
+{ THE OTHER END OF THE BLOCK UNDER THE CARET -- roadmap item 22.
+
+  Phosphor has no braces, so the eye has nothing to match on: a `next` eleven
+  lines down is not visibly the partner of a `for`. SynEdit's own
+  TSynEditMarkupWordGroup PAINTS the pair once the highlighter offers fmMarkup
+  (see usynphosphor.CreateFoldConfigInstance); this is the half that MOVES, and
+  the half that answers when there is nowhere to move to.
+
+  AND ANSWERING IS THE POINT. Three words that look like block keywords are not
+  one here -- `next = 5`, `function` in an expression, and anything inside a
+  literal -- and a jump that silently did nothing for them would be the defect
+  this feature introduced. Each gets a sentence in the status bar instead.
+
+  BYTE COLUMNS THROUGHOUT. MatchBlockAt reports where a word starts in BYTES,
+  which is what LogicalCaretXY takes and reads; CaretX is a PHYSICAL column and
+  would be off by one per accented character, which this editor has paid for
+  once already. }
+procedure TFrmMain.ActMatchBlockExecute(Sender: TObject);
+var
+  Doc: TEditorDoc;
+  M: TBlockMatch;
+begin
+  Doc := ActiveDoc;
+  if Doc = nil then
+    Exit;
+  M := MatchBlockAt(Doc.Edit.Lines, Doc.Edit.LogicalCaretXY.Y,
+                    Doc.Edit.LogicalCaretXY.X);
+  case M.Kind of
+    bmMatched:
+      begin
+        { NOT GotoSource: the file is this one and already open, and GotoSource
+          would raise the tab and re-focus. This is a move inside the buffer the
+          caret is already in. SynEdit unfolds to reach a hidden line on its
+          own. }
+        Doc.Edit.LogicalCaretXY := Point(M.ThereCol, M.ThereLine);
+        FocusEditor(Doc);
+        StatusBar1.Panels[3].Text :=
+          Format('%s: line %d', [BlockName(M.Block), M.ThereLine]);
+      end;
+    bmUnterminated:
+      StatusBar1.Panels[3].Text :=
+        Format('this %s is never closed', [BlockName(M.Block)]);
+    bmUnopened:
+      StatusBar1.Panels[3].Text :=
+        Format('this closes a %s, and none is open', [BlockName(M.Block)]);
+  else
+    StatusBar1.Panels[3].Text := 'no block keyword under the caret';
+  end;
 end;
 
 procedure TFrmMain.ActGotoDefinitionExecute(Sender: TObject);

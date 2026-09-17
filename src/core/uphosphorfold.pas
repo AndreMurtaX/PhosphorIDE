@@ -257,6 +257,17 @@ function WalkTakeParens(var AWalk: TLineWalk; out ACount: Integer): String;
   keeps the stack across lines; this answers only what this line contributes. }
 function ScanFoldLine(const ALine: String): TFoldEvents;
 
+{ THE SAME, WITHOUT RULE 6 -- the pairs that open and close on one line are still
+  in it.
+
+  Folding drops them because they fold nothing and there is nothing to hide.
+  MATCHING wants them: in `for i = 1 to 2 println i next` the `for` and the
+  `next` are partners, a person with the caret on one wants to be shown the
+  other, and a jump between two words eleven characters apart is as useful as one
+  between two lines. So the rule is applied in ONE place, by ScanFoldLine, over
+  what this returns. }
+function ScanFoldLineRaw(const ALine: String): TFoldEvents;
+
 { Which block this word opens, or pbNone. `if` is answered here for the tables'
   sake; ScanFoldLine is what decides whether a particular `if` really opens. }
 function BlockOpenedBy(const AWord: String): TPhosphorBlock;
@@ -270,6 +281,45 @@ function MergedWithEnd(const AWord: String): String;
 
 { A name for a message and for a check. }
 function BlockName(ABlock: TPhosphorBlock): String;
+
+{ ------------------------------------------------------- matching a block --- }
+
+type
+  TBlockMatchKind = (
+    bmNone,         // the caret is not on a word that opens or closes anything
+    bmMatched,      // it is, and the partner is where There* says
+    bmUnterminated, // an opener whose block never closes in this buffer
+    bmUnopened      // a terminator with nothing open above it to close
+  );
+
+  { Where the word under the caret is, and where its partner is. Lines are
+    1-based and columns are 1-based BYTE columns -- the same units ScanFoldLine
+    reports and the same ones SynEdit's logical caret uses. }
+  TBlockMatch = record
+    Kind: TBlockMatchKind;
+    Block: TPhosphorBlock;
+    HereLine, HereCol, HereLen: Integer;
+    ThereLine, ThereCol, ThereLen: Integer;
+  end;
+
+{ THE PARTNER OF THE BLOCK WORD UNDER THE CARET, or why there is not one.
+
+  ALine and ACol are 1-based; the caret counts as ON a word when it is anywhere
+  from its first byte to one past its last, which is how a person reads "the
+  caret is on that word" and what every editor's brace matching does.
+
+  NOTHING IS REMEMBERED. The whole buffer is walked on every call, which is what
+  makes the answer survive an edit: there is no cached structure to go stale, and
+  a Phosphor program is under nine hundred lines (roadmap item 19 measured the
+  corpus). A scan of the largest one costs well under a millisecond.
+
+  WHAT IT REFUSES TO ANSWER is the point of it. `next = 5` is a legal assignment,
+  and on a line with no `for` open above it that `next` closes nothing --
+  bmUnopened, and the caller says so rather than moving the caret somewhere
+  arbitrary. `y = function + 1` is not at a statement position, so it opens
+  nothing -- bmNone. A block word inside a string or a comment is not a word at
+  all -- bmNone. Those three are exactly roadmap item 22's done-when. }
+function MatchBlockAt(ALines: TStrings; ALine, ACol: Integer): TBlockMatch;
 
 implementation
 
@@ -667,15 +717,13 @@ end;
 
 { ------------------------------------------------------------- the line ---- }
 
-function ScanFoldLine(const ALine: String): TFoldEvents;
+function ScanFoldLineRaw(const ALine: String): TFoldEvents;
 var
   W: TLineWalk;
-  I, J, N: Integer;
+  N: Integer;
   IfCol, IfLen: Integer;
   IfSeen, ThenSeen: Boolean;
   Blk: TPhosphorBlock;
-  Keep: array of Boolean;
-  Stack: array of Integer;
 
   procedure Emit(AKind: TFoldEventKind; ABlock: TPhosphorBlock;
     ACol, ALen: Integer);
@@ -752,6 +800,16 @@ begin
   if IfSeen and ThenSeen then
     Emit(feOpen, pbIf, IfCol, IfLen);
 
+end;
+
+function ScanFoldLine(const ALine: String): TFoldEvents;
+var
+  I, J, N: Integer;
+  Keep: array of Boolean;
+  Stack: array of Integer;
+begin
+  Result := ScanFoldLineRaw(ALine);
+
   { --- rule 6: a block that opened and closed here folds nothing ----------- }
   if Length(Result) < 2 then
     Exit;
@@ -786,6 +844,108 @@ begin
       Inc(N);
     end;
   SetLength(Result, N);
+end;
+
+function MatchBlockAt(ALines: TStrings; ALine, ACol: Integer): TBlockMatch;
+type
+  { Every event in the buffer, flattened, with the index of its partner or -1. }
+  TNode = record
+    Line, Col, Len: Integer;
+    Kind: TFoldEventKind;
+    Block: TPhosphorBlock;
+    Partner: Integer;
+  end;
+var
+  Nodes: array of TNode;
+  Stack: array of Integer;
+  Ev: TFoldEvents;
+  L, I, J, N, Here: Integer;
+begin
+  Result := Default(TBlockMatch);
+  Result.Kind := bmNone;
+  Result.Block := pbNone;
+  if (ALines = nil) or (ALine < 1) or (ALine > ALines.Count) then
+    Exit;
+
+  { --- every event in the buffer, in order -------------------------------- }
+  { RAW, so that a block opened and closed on one line still has a partner --
+    ScanFoldLine drops those because they fold nothing, and a person with the
+    caret on the `for` of `for i = 1 to 2 println i next` still wants the
+    `next`. }
+  Nodes := nil;
+  for L := 1 to ALines.Count do
+  begin
+    Ev := ScanFoldLineRaw(ALines[L - 1]);
+    for I := 0 to High(Ev) do
+    begin
+      N := Length(Nodes);
+      SetLength(Nodes, N + 1);
+      Nodes[N].Line := L;
+      Nodes[N].Col := Ev[I].Col;
+      Nodes[N].Len := Ev[I].Len;
+      Nodes[N].Kind := Ev[I].Kind;
+      Nodes[N].Block := Ev[I].Block;
+      Nodes[N].Partner := -1;
+    end;
+  end;
+  if Length(Nodes) = 0 then
+    Exit;
+
+  { --- pair them, by the same rule the fold gutter uses -------------------- }
+  { A terminator closes the innermost open block ONLY when it is the same kind.
+    That is what keeps `next = 5` from closing a `while`, and it is the rule
+    `DrainFoldEvents` already applies in the highlighter: a close whose kind does
+    not match the top of the stack closes nothing at all. }
+  Stack := nil;
+  for I := 0 to High(Nodes) do
+  begin
+    if Nodes[I].Kind = feOpen then
+    begin
+      SetLength(Stack, Length(Stack) + 1);
+      Stack[High(Stack)] := I;
+    end
+    else if (Length(Stack) > 0) and
+            (Nodes[Stack[High(Stack)]].Block = Nodes[I].Block) then
+    begin
+      J := Stack[High(Stack)];
+      Nodes[J].Partner := I;
+      Nodes[I].Partner := J;
+      SetLength(Stack, Length(Stack) - 1);
+    end;
+  end;
+
+  { --- which event is under the caret ------------------------------------- }
+  { ON the word means anywhere from its first byte to one past its last, which
+    is how a person reads it and what every editor's brace matching does. The
+    events of a line arrive in column order, so the first hit is the answer. }
+  Here := -1;
+  for I := 0 to High(Nodes) do
+    if (Nodes[I].Line = ALine) and (ACol >= Nodes[I].Col) and
+       (ACol <= Nodes[I].Col + Nodes[I].Len) then
+    begin
+      Here := I;
+      Break;
+    end;
+  if Here < 0 then
+    Exit;
+
+  Result.Block := Nodes[Here].Block;
+  Result.HereLine := Nodes[Here].Line;
+  Result.HereCol := Nodes[Here].Col;
+  Result.HereLen := Nodes[Here].Len;
+
+  if Nodes[Here].Partner >= 0 then
+  begin
+    J := Nodes[Here].Partner;
+    Result.Kind := bmMatched;
+    Result.ThereLine := Nodes[J].Line;
+    Result.ThereCol := Nodes[J].Col;
+    Result.ThereLen := Nodes[J].Len;
+  end
+  else if Nodes[Here].Kind = feOpen then
+    Result.Kind := bmUnterminated
+  else
+    Result.Kind := bmUnopened;
 end;
 
 end.

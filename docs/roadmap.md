@@ -1510,6 +1510,50 @@ and no file gains a BOM or changes its line endings.
 
 ## 22. The matching block, and jumping to it
 
+**DONE 2026-09-17.** With the caret on a block keyword its partner is outlined in the text,
+**Ctrl+Shift+M** moves the caret to it, and the three words that only LOOK like block
+keywords each get a sentence in the status bar instead of a jump to nowhere.
+
+**HALF OF IT COST ONE LINE, AND FINDING THAT LINE WAS THE WORK.** SynEdit already creates a
+`TSynEditMarkupWordGroup` for every editor and hands it whatever highlighter the editor is
+given (`synedit.pp:2367`, `:6790`). It finds the partner through the fold NODE INFO the
+base class emits -- but it filters on nodes carrying `sfaMarkup`, and that action comes from
+the fold config's Modes: `if fmMarkup in AValue then FFoldActions := FFoldActions +
+[sfaMarkup]` (`synedithighlighterfoldbase.pas:2660`). The default is `[fmFold]` alone, and
+Modes is filtered through SupportedModes on the way in (`:2654`), so asking for it without
+widening the supported set does nothing. Measured before the line existed: with the caret
+inside `function`, nothing was painted anywhere. `usynphosphor.CreateFoldConfigInstance`
+now creates the config with `[fmFold, fmMarkup]`, and the painting -- recomputed on every
+caret move and every edit, by SynEdit, in its own colours -- arrives with no markup code in
+this repository at all.
+
+**The other half is ours, because SynEdit's markup cannot say why there is no partner.**
+`uphosphorfold.MatchBlockAt` walks the buffer and answers one of four things: matched,
+unterminated, unopened, or nothing at all. `ActMatchBlock` moves the caret on the first and
+writes a sentence for the other three.
+
+**NOTHING IS REMEMBERED**, which is how the answer survives an edit: the whole buffer is
+walked on every call, there is no cached structure to go stale, and roadmap item 19 measured
+the corpus at under nine hundred lines.
+
+**`ScanFoldLineRaw` is new, and it is why a one-line pair still matches.** Folding drops a
+block that opens and closes on the same line because it hides nothing (rule 6); matching
+wants it, because in `for i = 1 to 2 println i next` the `for` and the `next` ARE partners.
+So the rule is applied in one place, by `ScanFoldLine`, over what the raw scan returns.
+
+**The three refusals, each a check and each driven:**
+
+| the line | what it looks like | what it answers |
+| --- | --- | --- |
+| `next = 5` | a terminator | `this closes a for, and none is open` |
+| `y = function + 1` | an opener | `no block keyword under the caret` |
+| `println "for i = 1 to 3 endfunction"` | both | `no block keyword under the caret` |
+
+and an opener nothing closes says `this while is never closed`.
+
+**Driven on both platforms** by `tools/lane/steps-matching.txt` and
+`steps-matching-linux.txt` over `matching.bas`, which holds all four answers.
+
 **What.** With the caret on `if`, show where its `endif` is -- and jump there.
 
 **Why it is cheap now and was not before.** `uphosphorfold` already answers, for every
