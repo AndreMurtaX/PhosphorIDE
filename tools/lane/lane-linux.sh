@@ -30,7 +30,7 @@ IDE="${PHOSPHORIDE:-$HERE/../../bin/phosphoride}"
 # modules are asked for by name; both are already installed here, in
 # /usr/lib/x86_64-linux-gnu/gtk-2.0/modules/. Exported rather than set on the one
 # launch line because the editor is started in more than one place below.
-export GTK_MODULES="${GTK_MODULES:-gail:atk-bridge}\"
+export GTK_MODULES="${GTK_MODULES:-gail:atk-bridge}"
 OUT="$HERE/shots"
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/*.xwd
