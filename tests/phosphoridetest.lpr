@@ -22,7 +22,7 @@ program phosphoridetest;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  {$IFDEF UNIX}cthreads, BaseUnix,{$ENDIF}
   { LINKING THE LCL IS NOT WHAT CONNECTS TO A DISPLAY. `Interfaces` is: its
     initialization section calls CreateWidgetset, and on gtk2 that opens the X
     display before main, which kills a process that merely LISTED the unit on a
@@ -897,10 +897,21 @@ begin
     { --- AND ONE THAT IS READ-ONLY ---------------------------------------- }
     { The run must survive it: this is the difference between a tool somebody
       trusts with a tree and one they run once. }
+    { READ-ONLY MEANS TWO DIFFERENT THINGS, so it is set both ways. FileSetAttr
+      is the Windows one; on Unix the bit that matters is the write permission,
+      and FpChmod is how it is taken away. Without the second, this file stayed
+      writable on Linux and three checks below went red there while passing
+      here -- which is how the defect underneath them was found. }
     Put('locked.bas', 'x = 1'#10);
     FileSetAttr(Root + PathDelim + 'locked.bas', faReadOnly);
+    {$IFDEF UNIX}
+    FpChmod(Root + PathDelim + 'locked.bas', &444);
+    {$ENDIF}
     N := ReplaceInFile(Root + PathDelim + 'locked.bas', '1', '2', False, [1],
                        Lines, Err);
+    {$IFDEF UNIX}
+    FpChmod(Root + PathDelim + 'locked.bas', &644);
+    {$ENDIF}
     FileSetAttr(Root + PathDelim + 'locked.bas', 0);
     CheckEqInt('a read-only file replaces nothing', 0, N);
     Check('and says why', Err <> '');

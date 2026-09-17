@@ -59,7 +59,16 @@ function ReadWholeFile(const APath: String): String;
 { Write AText's bytes exactly, through a temporary beside the target so that a
   full disk or a dropped share cannot leave half a file where a whole one was.
   This is the only writer in the program besides TEditorDoc.SaveToFile, and the
-  two agree because SaveToFile calls it. }
+  two agree because SaveToFile calls it.
+
+  RAISES EWriteError IF THE TARGET IS NOT WRITABLE, and that test is not
+  decoration: replacing a file by writing a temporary and renaming over it does
+  not consult the FILE's permissions on Unix at all -- unlink and rename are the
+  DIRECTORY's business, so a file the user had marked read-only was quietly
+  rewritten. Windows refuses the delete and so refused the write, which is why
+  `phosphoridetest` was green on one machine and three checks red on the other,
+  found on 2026-09-17 by running it there. The check makes both platforms answer
+  the same way, and it is the way the user asked for. }
 procedure WriteWholeFile(const APath, AText: String);
 
 { WHICH ENDING THIS TEXT USES, AND WHETHER IT CLOSES WITH ONE.
@@ -102,7 +111,19 @@ procedure WriteWholeFile(const APath, AText: String);
 var
   Stream: TFileStream;
   Temp: String;
+  Probe: THandle;
 begin
+  { ASKED BY TRYING, not by reading an attribute. faReadOnly means different
+    things on the two platforms and neither of them is "rename will refuse";
+    opening the target for writing is one syscall and it is the truth on both. }
+  if FileExists(APath) then
+  begin
+    Probe := FileOpen(APath, fmOpenWrite or fmShareDenyNone);
+    if Probe = THandle(-1) then
+      raise EWriteError.CreateFmt('%s is read-only', [APath]);
+    FileClose(Probe);
+  end;
+
   { WRITE BESIDE THE FILE, THEN REPLACE IT. fmCreate truncates the target the
     instant it is opened, so a disk that fills, a network share that drops or a
     process killed mid-write leaves a file that is empty or half a program --
