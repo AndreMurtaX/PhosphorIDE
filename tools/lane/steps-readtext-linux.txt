@@ -1,0 +1,38 @@
+# READING WHAT A CONTROL SAYS -- roadmap item 28, on Linux.
+#
+# Every assertion in this directory used to be a picture on this machine. This
+# case asserts on WORDS: it types a program, runs it, and checks the Output pane
+# contains what the program printed -- the same question lane-windows.ps1 has
+# been asking since 2026-09-16 through WM_GETTEXT, finally askable here.
+#
+# IT IS ALSO THE FIRST THING HERE THAT CAN FAIL WITHOUT A PERSON LOOKING. `text`
+# counts its misses and the script exits non-zero, so this one can be run from
+# another script rather than watched.
+raise
+wait 600
+
+# The window describes itself before anything is typed: eight tabs, by name.
+text Watches
+text Call Stack
+text Variables
+shot 470-before-anything
+
+# TYPE A PROGRAM whose output is distinctive enough that finding it proves the
+# read went to the right place.
+type println "lane-readtext-ok"
+key {ENTER}
+type total = 6 * 7
+key {ENTER}
+type println "total="; total
+wait 600
+shot 471-typed
+
+# RUN IT. F9 saves and runs; the Output tab fills.
+key {F9}
+wait 4000
+shot 472-ran
+
+# AND THE ASSERTIONS THAT ARE NOT PICTURES.
+text lane-readtext-ok
+text total=42
+say Output

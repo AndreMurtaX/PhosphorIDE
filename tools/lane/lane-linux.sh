@@ -23,6 +23,14 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # ../../bin/phosphoride, and PHOSPHORIDE overrides for a binary built elsewhere.
 IDE="${PHOSPHORIDE:-$HERE/../../bin/phosphoride}"
+
+# THE EDITOR HAS TO DESCRIBE ITSELF, or `text` and `say` find no application at
+# all -- which reads exactly like a program that failed to start. A GTK2 program
+# loads its widgets and tells the accessibility bus nothing unless these two
+# modules are asked for by name; both are already installed here, in
+# /usr/lib/x86_64-linux-gnu/gtk-2.0/modules/. Exported rather than set on the one
+# launch line because the editor is started in more than one place below.
+export GTK_MODULES="${GTK_MODULES:-gail:atk-bridge}\"
 OUT="$HERE/shots"
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/*.xwd
@@ -169,6 +177,37 @@ bot() {
     printf '%s %d %d\n' "$verb" $((x + $1)) $((y + h - $2)) | "$HERE/xdrive" "$WIN" nofocus >/dev/null
 }
 
+# READING WHAT A CONTROL SAYS, which this side could not do until roadmap item 28.
+#
+# Every assertion on this machine used to be a PICTURE. Windows sends WM_GETTEXT
+# and reads a pane's whole transcript back word for word; here, keys went in
+# through XTest and frames came out through xwd, so the Linux half of the REPL
+# case checked the PROCESS TABLE while the Windows half checked the conversation
+# -- a weaker question, asked because the right one could not be.
+#
+# `say <name>` prints what the control called <name> contains. `text <needle>`
+# asserts that some control contains <needle> and FAILS THE RUN if none does,
+# which is the verb worth having: a lane that only prints is a lane somebody has
+# to read.
+#
+# Both go through readtext.py, which uses AT-SPI -- see its header for why that
+# and not xdotool, xclip or python3-xlib, none of which is on this machine.
+FAILURES=0
+
+say() {
+    echo "--- text of: $1 ---"
+    python3 "$HERE/readtext.py" "$1" 2>&1 | sed 's/^/    /'
+}
+
+text() {
+    if python3 "$HERE/readtext.py" --grep "$1" >/dev/null 2>&1; then
+        echo "TEXT OK   $1"
+    else
+        echo "TEXT FAIL no control says: $1"
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+
 while IFS= read -r line; do
     case "$line" in
         shot\ *) flush; shot "${line#shot }" ;;
@@ -179,6 +218,8 @@ while IFS= read -r line; do
         bot\ *) flush; bot ${line#bot } ;;
         bot2\ *) flush; bot ${line#bot2 } dblclick ;;
         outtab)  flush; outtab ;;
+        say\ *) flush; say "${line#say }" ;;
+        text\ *) flush; text "${line#text }" ;;
         ''|'#'*) : ;;
         *) buf="$buf$line
 " ;;
@@ -195,6 +236,15 @@ cat "$OUT/ide.log"
 
 echo "$IDE_PID" > "$OUT/pid.txt"
 
+# A LANE THAT ONLY PRINTS IS A LANE SOMEBODY HAS TO READ. `text` assertions are
+# counted, and a run with a failed one says so in its last line and in its exit
+# code -- which is what lets this be run from a script rather than watched.
+if [ "$FAILURES" -gt 0 ]; then
+    echo "TEXT ASSERTIONS FAILED: $FAILURES"
+else
+    echo "text assertions: all passed"
+fi
+
 # CLOSE BOTH, unless the caller says otherwise. Killing the editor does not kill
 # the program it was debugging -- a phosphor stopped at a breakpoint simply loses
 # the only thing that was going to tell it to continue -- so the child goes too.
@@ -208,3 +258,5 @@ else
     pkill -x phosphor 2>/dev/null
     echo "done; closed"
 fi
+
+exit $((FAILURES > 0))
