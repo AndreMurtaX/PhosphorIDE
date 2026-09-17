@@ -48,7 +48,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
    trap 3.
-4. **Both generated units are current.**
+4. **Both generated units are current, and no citation has rotted.**
    `python tools/gen-keywords.py ../Phosphor --check` prints
    `uphosphorlang.pas is current (538 core, 181 package, 426 gui)`, and
    `python tools/gen-icons.py --check` prints
@@ -56,6 +56,18 @@ Nothing is done on a claim. An increment is complete when all five hold:
    build scripts run them. The icon check prints the TOOLBAR count only; the five
    gutter marks are counted by `--selftest` instead, which is the gate that would
    notice one going missing.
+
+   `python tools/check-citations.py` is the third, and it answers the rule two
+   sections down: a `file:line` into `../Phosphor` is how this repository holds a
+   fact it may not retype, and on 2026-09-16 sixteen of them, in eight files, had
+   quietly slid off their targets. Every one was still INSIDE its file, so a
+   bounds check would have been green through all of it -- what changed was what
+   the lines SAID. So `tools/citations.lock` remembers a fingerprint of each cited
+   range, and a citation whose target no longer matches is a red build that names
+   every file carrying it and says which line the remembered text moved to.
+   `--update` re-baselines and PRINTS each change, so accepting one leaves the old
+   and new text in the commit a reviewer reads. It checks citations into THIS
+   repository too, which rot faster because the code is being edited today.
 5. **Green on Linux too.** Windows-green has shipped Linux-broken defects in the
    sibling repository (SIGPIPE, soname, cert generation), and this repository has two
    Linux-only hazards of its own: `cthreads` and the gtk2 widgetset.
@@ -126,7 +138,7 @@ the bar.
 
 ## Architecture invariants
 
-- **The UI thread never blocks.** `umainform.pas:6-9`: nothing here waits. A run that
+- **The UI thread never blocks.** `umainform.pas:6-10`: nothing here waits. A run that
   never returns must still leave the user able to stop it, save around it and edit
   while it spins -- which is the whole point of the child process. The only sanctioned
   blocking call is `RunAndCapture`, and only because it has a deadline.
@@ -613,7 +625,10 @@ keywords-by-position, `:452` for case folding, `:459-460` for `mod`). Then a cha
 over there is findable from here. Do not paraphrase a Phosphor rule from memory; open
 the file.
 
-**AND A CITATION ROTS SILENTLY.** Every one of those four numbers was wrong on
+**AND A CITATION ROTS SILENTLY -- which is now a red build.**
+`tools/check-citations.py` is gate 4 above and exists because of the paragraph
+below. What it cannot do is check that the cited text still supports the SENTENCE
+beside it, and it cannot see a claim that has no citation at all. So: Every one of those four numbers was wrong on
 2026-09-16 -- `:361-366` had become the `strClosed` reasoning, and `:385-408`, cited
 in seven places here for "the lexer has no keyword table", had become the
 backslash-escape table inside a string literal. The CLAIMS were all still true; the

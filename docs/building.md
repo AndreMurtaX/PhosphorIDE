@@ -246,6 +246,41 @@ What `--selftest` cannot catch: whether any of those forms is usable. It builds 
 does not look at them. A control anchored to the wrong parent, an unreadable colour, a
 menu item wired to the wrong handler all pass.
 
+### `check-citations.py` -- the line numbers still point at what they claimed
+
+```
+python tools/check-citations.py            # exit 1 if anything rotted
+python tools/check-citations.py --update   # re-baseline, printing every change
+```
+
+A `file:line` into `../Phosphor` is how this repository holds a fact it is not
+allowed to retype. On 2026-09-16 sixteen of them, across eight files, pointed at
+the wrong lines -- the sibling file had grown by about sixty lines and every
+citation into it had slid off its target. The worst, quoted in seven places for
+"the lexer has no keyword table", had become a backslash-escape table inside a
+string literal. They were found by accident.
+
+**A bounds check would not have caught any of it.** Every one of those numbers was
+still inside its file. What changed was what the lines SAID, so that is what
+`tools/citations.lock` remembers: a fingerprint of each cited range plus its first
+real line, in a file a person can read.
+
+When one goes red the report names **every file that carries that citation** -- the
+2026-09-16 defect had one of them in seven places -- and searches the target for the
+remembered text, so it can say "that text is now at line 190" instead of only "it
+moved".
+
+`--update` prints what it changed, on purpose. A quiet re-baseline is how the rot
+comes back: somebody runs it to make the build green and nobody reads the lines
+again. Printing puts the before and after in the commit a reviewer sees.
+
+It checks citations into THIS repository too. They rot faster, because they point
+at code somebody is editing today.
+
+`$PHOSPHOR_SIBLING` overrides where the other repository is. Without it there, the
+check says how many citations it did NOT check and exits 0 -- a gate that fails on a
+machine that never had the sibling is a gate people learn to pass with a flag.
+
 ### `gen-keywords.py --check` -- the tables have not drifted
 
 ```

@@ -152,4 +152,13 @@ else
 fi
 
 echo ""
+echo "citations"
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "  SKIPPED: python3 not found."
+else
+    python3 "$root/tools/check-citations.py" \
+        || fail 'a file:line citation no longer points at what it claimed.'
+fi
+
+echo ""
 echo "built and checked: $exe"

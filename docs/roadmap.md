@@ -425,7 +425,7 @@ says so -- not a request the other end will refuse. That is the entire reason
 - The greyed-out state is driven by `Capabilities`, not by a constant.
 - Stop terminates: `disconnect` with `terminate: true`, the child is gone, the marker is
   cleared, the editor is in `dsIdle`.
-- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:1132`) still
+- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3247`) still
   shows a correct sentence against a host with no debug subcommand.
 - Inserting a line above a breakpoint while stopped re-sends the set, and the host stops on
   the statement the user chose rather than the one below it.
@@ -951,7 +951,7 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
 **Two things will bite, and both are known now rather than after the fact.**
 
 - **The prompt arrives, but it is not a line, and the pane must know that.** The REPL
-  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:3017`), and the
+  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:3746`), and the
   runner already handles that case: `DrainTimer` counts drains in which a stream produced
   nothing and `FlushPrompt` emits the unterminated tail after two of them
   (`src/core/uphosphorrun.pas:667-681`), marked `ACompleteLine=False`; `RunnerOutput`
@@ -1915,11 +1915,94 @@ limitation recorded in the present tense is a claim with an expiry date nobody s
 
 ## 27. A citation that cannot rot quietly
 
+**DONE 2026-09-17.** `tools/check-citations.py`, run by both build scripts beside the
+two `--check` gates.
+
+**IT WAS IN FLIGHT, AND I SAID IT WAS NOT.** The note below told the next person to
+check `tools/` before starting. I did, saw only the two generators, and wrote in this
+very entry that the session had produced nothing. That was false, and the tool I had
+just written found it: a citation it flagged led to
+`.claude/worktrees/distracted-williams-53ecc1/`, where **commit `ad5a1ea` on the branch
+`claude/distracted-williams-53ecc1`** holds a 655-line `check-citations.py`, a
+`citations.tsv`, both build scripts wired, and a pass of citation corrections -- 879
+insertions across 15 files, committed on 2026-09-16 and never merged.
+
+Checking `tools/` was the wrong check. `git log --all --not main` was the right one, and
+it takes a second. **A branch is not a place work goes to be finished**; this one sat for
+a day while the entry describing it said it might be done, and then I wrote that it was
+not. Both halves of that are the item's own subject: a claim nobody could verify
+cheaply, left standing.
+
+**What I did about it, and what I did not.** I kept the tool written here, because the
+branch is two weeks stale against a tree that has since absorbed items 18 to 26 and its
+build-script changes now conflict with three other gates. I took its best idea outright
+-- the `citations-frozen` marker, which lets a file that DISCUSSES citations opt out,
+and which its author hit on the first run exactly as I did. **It is read in the first
+forty lines only**, and that was not the first rule: anywhere in the file was, and it
+was wrong within the hour, because this very entry explains the marker and thereby
+froze the roadmap -- forty-three citations stopped being checked and the run said so
+only as a smaller total. A gate that switches itself off quietly is worse than no gate.
+A declaration belongs where a reader looks for one. **What I did NOT do is mine
+its citation corrections**, and that is the honest gap: it fixed ranges like
+`PhosphorCompiler.pas:601-645` to `:623-632` against the Phosphor of 2026-09-16, and
+Phosphor has changed since -- items 25 and 26 edited `PhosphorVM.pas` and
+`phosphor.lpr` in this session alone. Applying those numbers unread would be
+re-introducing rot with a straight face. They are worth a read against today's tree and
+they are not in this commit.
+
+**A BOUNDS CHECK WOULD HAVE BEEN GREEN THROUGH THE WHOLE DEFECT.** All sixteen rotted
+line numbers were still INSIDE their files; what changed was what the lines SAID. So
+`tools/citations.lock` remembers a fingerprint of each cited range plus its first real
+line, and a citation whose target no longer matches is a red build.
+
+**THE REPORT IS THE FEATURE.** It names every file carrying that citation -- the
+original defect had one of them in SEVEN places -- and searches the target for the
+remembered text, so it says "that text is now at line 190" rather than only "it moved".
+One inserted line in `PhosphorLexer.pas` turns twelve citations red and each one says
+where its text went.
+
+**IT FOUND ROTTED CITATIONS ON ITS FIRST RUN**, and they are fixed in the same commit:
+`phosphor.lpr` line 3017, cited for the REPL prompt, had become frame-label printing in
+the debug state dump. The prompt is `:3746`.
+
+**I counted those wrong twice.** A grep before writing the checker found three; I wrote
+"three". The tool found a fourth, in `docs/roadmap.md`, worded differently from the
+others. I wrote "four". A wider search then found a FIFTH, in
+`tests/phosphoridetest.lpr`. That is the item's own argument happening to the person
+making it, twice in ten minutes: a count in prose is a claim, and the only reliable
+counter is one that runs.
+
+`umainform.pas`
+line 1132 for `ActDebugWhy` had become `ActSaveAsExecute`'s `var` (it is `:3247`); and
+the same claim
+about the UI thread was cited as `6-9` in one place and `6-10` in three others.
+
+**AND IT CHECKS THIS REPOSITORY'S OWN CITATIONS TOO**, 60 of the 118. They rot faster
+than the sibling's, because they point at code somebody is editing today.
+
+**What it does NOT catch, which is why the item is worth more than its mechanism.** It
+checks that a citation points at the text it pointed at before. It cannot check that
+the text supports the SENTENCE beside it, and it cannot see a claim with no citation in
+it at all -- which is exactly the second defect of 2026-09-16: `CLAUDE.md` explained the
+no-BOM rule by saying a BOM is a lexical error on line one, which the console host has
+stripped since its first commit. The rule was right, the reason had never been true of
+that path, and there was no number in it to go stale. No mechanism finds that one.
+
+**AND THE BASELINE RECORDS THE TREE AS IT IS, WHICH IS THIS TOOL'S REAL LIMITATION.**
+A first `--update` fingerprints whatever is there, including citations that were ALREADY
+wrong -- so the gate now defends the current numbers whether or not they were ever right.
+It stops the NEXT drift; it blesses the last one.
+
+That is not theoretical. The unmerged branch above corrected ranges this baseline has
+just frozen, and the lockfile's own weak anchors say where to look: twenty-one citations
+point at lines reading `var`, `begin`, `end;` or `uses`, which are not lines anybody
+cites on purpose. They are not known to be wrong. They are known to be unrecognisable,
+and that list is the cheapest possible worklist for whoever reads them:
+
+    awk -F'\t' '!/^#/ && length($3)<12' tools/citations.lock
+
 **What.** A checker that fails the build when a `file:line` into `../Phosphor` no longer
 points at what it claimed.
-
-**IN FLIGHT.** This was spun off into its own session on 2026-09-16 and may already be
-done; check `tools/` before starting.
 
 **Why.** `CLAUDE.md`'s rule is that a fact about Phosphor is extracted, never retyped, and
 that where extraction is impossible the source is cited with a line number. On 2026-09-16

@@ -169,4 +169,15 @@ if (-not $python) {
 }
 
 Write-Host ''
+Write-Host 'citations'
+if (-not $python) {
+    Write-Host '  SKIPPED: python not found.'
+} else {
+    & python (Join-Path $root 'tools\check-citations.py')
+    if ($LASTEXITCODE -ne 0) {
+        Fail 'a file:line citation no longer points at what it claimed.'
+    }
+}
+
+Write-Host ''
 Write-Host "built and checked: $exe" -ForegroundColor Green
