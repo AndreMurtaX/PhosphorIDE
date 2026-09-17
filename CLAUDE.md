@@ -106,10 +106,32 @@ connecting to anything.
 
 Measured again on 2026-09-16, same VM: all five gates green with the debugger in,
 and the editor **driven** under gtk2 rather than merely constructed -- breakpoints,
-stepping, the variables pane and a clean end, through `tools/lane/`. What is still
-unwatched is narrower than it has ever been: the `xvfb-run` branch of `build.sh`, and
-the gtk2 MENU BAR, which answers neither a synthetic click nor F10 navigation from
-XTest and so could not be driven at all.
+stepping, the variables pane and a clean end, through `tools/lane/`.
+
+**AND ON 2026-09-17 THE LINUX LANE LEARNED TO READ WORDS.** Until then every
+assertion on that side was a PICTURE: keys went in through XTest, frames came out
+through `xwd`, and the Linux half of the REPL case checked the process table while
+the Windows half checked the conversation -- a weaker question, asked because the
+right one could not be. `tools/lane/readtext.py` asks it through **AT-SPI**, which
+needed no package this machine did not have: `gi` with the `Atspi` typelib was
+already installed and `gtk-2.0/modules/` already held `libgail.so` and
+`libatk-bridge.so`. The editor has to be started with `GTK_MODULES=gail:atk-bridge`
+or it describes nothing, and `lane-linux.sh` exports it.
+
+Two verbs come out of that and both COUNT THEIR FAILURES, so a run exits non-zero
+and can be scripted rather than watched: `text <needle>` asserts that some control
+says it, and `menu <name>` **clicks a menu item**. That second one retires the other
+half of the sentence this paragraph used to end with: the gtk2 menu bar answers
+neither a synthetic click nor F10 from XTest, and that is still true, but a menu
+item exposes an AT-SPI action and doing it opens what a click would open -- measured
+by invoking Help > About and reading the dialog it opened back through the same
+script.
+
+So what is still unwatched is ONE thing: the **`xvfb-run` branch of `build.sh`**,
+the one CI uses. It is not stubbornness. `xvfb-run` is not installed on the VM,
+`sudo` there wants a password, and installing a package on somebody's machine is
+their call. Until it is run, "green on Linux" means green in a real Xwayland
+session, which is not quite the same claim.
 
 Measured on 2026-09-10 on Ubuntu with Lazarus 4.8: `bash scripts/build.sh` builds both
 projects clean, `bin/phosphoridetest` is green, and the selftest constructs all three

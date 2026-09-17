@@ -195,12 +195,22 @@ Two differences from Windows, both honest rather than defects:
   arrive in the opposite order on the two platforms. They are two streams and they
   genuinely race; what does NOT race, and holds on both, is that the program's own
   output comes before the stop that followed it.
-- **`Debug > Stop Debugging` could not be driven under gtk2 at all** -- the menu bar
-  answers neither a synthetic click nor F10 navigation, and a GTK menu cannot even be
-  photographed because `xwd -root` fails on Xwayland. That is a fact about XTest and
-  GTK, not about the editor. The menu item is driven on Windows; on Linux the same
-  teardown is reached from the process side, and the transcript ends
-  `type something: ` / `> killed` with nothing left listening.
+- ~~**`Debug > Stop Debugging` could not be driven under gtk2 at all**~~ -- the menu
+  bar answers neither a synthetic click nor F10 navigation, and a GTK menu cannot even
+  be photographed because `xwd -root` fails on Xwayland. Every word of that is still
+  true **of XTest**, and it stopped being the whole story on 2026-09-17: a menu item
+  exposes an AT-SPI action, and doing it opens what a click would open.
+  `tools/lane/readtext.py --invoke` is the door and `menu <name>` is the lane verb;
+  `steps-readtext-linux.txt` proves it by invoking Help > About and then reading the
+  dialog that opened, by its words.
+
+  It is left struck rather than deleted because the reason it was written is worth
+  keeping: the obstacle was never the editor, and the fix was not to change the
+  editor. It was to stop asking through the one interface that could not answer.
+
+  The Linux teardown is still reached from the process side, and the transcript still
+  ends `type something: ` / `> killed` with nothing left listening. Rewriting that case
+  to use the menu is worth doing and is not done.
 
 One thing found here and fixed the same day, seen only because `ss` shows it and
 `netstat` does not: while a session was live the **debuggee held the editor's

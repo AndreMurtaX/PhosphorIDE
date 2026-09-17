@@ -2029,6 +2029,44 @@ two `--check` gates that already exist.
 
 ## 28. Reading text back, on the machine that cannot
 
+**FIRST HALF DONE 2026-09-17. SECOND HALF BLOCKED, and it is not mine to unblock.**
+
+**Reading text back: done, through AT-SPI, and it needed no new package.** The item
+said the route must not want anything the VM does not have without Andre's say-so.
+It did not have to: `gi` with the `Atspi` typelib was already installed, and
+`/usr/lib/x86_64-linux-gnu/gtk-2.0/modules/` already held `libgail.so` and
+`libatk-bridge.so`, which are the two halves a GTK2 program needs to describe
+itself. The answer was installed and nothing had asked it. `xdotool`, `xclip`,
+`xsel` and `python3-xlib` are all absent, so every route that suggests itself first
+was the wrong one.
+
+`tools/lane/readtext.py` reads any control's text; `lane-linux.sh` gains `text
+<needle>` and `say <name>`, and `steps-readtext-linux.txt` + `readtext.bas` are the
+case. It asserts on the Output pane's actual transcript -- `lane-readtext-ok` and
+`total=42`, the program's own words -- which is the question Windows has asked
+through `WM_GETTEXT` since 2026-09-16 and this side could not.
+
+**THE FAILURES ARE COUNTED AND THE SCRIPT EXITS NON-ZERO**, which is the part that
+makes it a test rather than a printout. Proven by failing: the first run spelled the
+key `{F9}` in the Windows way, `xdrive` said `no keysym called {F9}`, nothing ran,
+and the two output assertions went red -- the first time anything in this directory
+could say so without a person looking at a picture.
+
+**AND IT CLOSED A GAP THE ITEM DID NOT ASK FOR.** `CLAUDE.md` has said since
+2026-09-16 that the gtk2 menu bar "answers neither a synthetic click nor F10
+navigation from XTest and so could not be driven at all". True of XTest, and not of
+AT-SPI: a menu item exposes one action and doing it opens what a click would open.
+`menu <name>` is the verb, and the case proves it by invoking Help > About and then
+reading the dialog that opened, by its words. The obstacle was never the editor.
+
+**The `xvfb-run` half is blocked on a package and a password.** `xvfb-run` is not
+installed on the VM (`apt-cache policy xvfb`: `Installed: (none)`), and `sudo -n`
+there fails, so it cannot be installed without Andre. That clause is one of the two
+item 1 never closed and it is still open; so is its sibling, a `--release` build on
+Linux. Until then, "green on Linux" means green in a real Xwayland session, which is
+not quite the same claim -- which is the sentence `CLAUDE.md` has carried since
+2026-09-10 and which this item exists to settle.
+
 **What.** A way for the Linux lane to read what a control SAYS, and a single run of
 `scripts/build.sh` under `xvfb-run`.
 
