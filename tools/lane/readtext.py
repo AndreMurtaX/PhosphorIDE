@@ -134,10 +134,46 @@ def role_of(node):
         return '?'
 
 
+def showing(node):
+    """Is this control actually on screen?
+
+    AT-SPI WALKS THE WHOLE WIDGET TREE, INCLUDING THE PAGES NOBODY SWITCHED TO.
+    A GTK notebook keeps every page's widgets alive and describable, so a `--grep`
+    that only asked "is this string anywhere in the tree" answered YES for the
+    Watches hint while the Output tab was showing, and YES for the call-stack rows
+    while nothing had clicked the Call Stack tab. Measured 2026-09-18:
+
+        An answer for the running program   SHOWING=True   VISIBLE=True
+        An expression to watch              SHOWING=False  VISIBLE=False
+        *.bas                               SHOWING=False  VISIBLE=False
+
+    That is not a small distinction. steps-stack-linux.txt clicks a tab strip at
+    a coordinate that stopped being right when the window grew, so its three
+    screenshots came back BYTE-IDENTICAL -- the pane never changed -- and every
+    text assertion in it passed anyway. The case believed it proved "the call
+    stack pane shows five frames" and proved "the call stack list holds five
+    rows, on a tab nobody went to".
+
+    SHOWING and not VISIBLE: VISIBLE means the widget would be drawn if its
+    ancestors were, SHOWING means they are. A control on a hidden notebook page
+    is VISIBLE and not SHOWING, which is exactly the case that needs excluding."""
+    try:
+        return node.get_state_set().contains(Atspi.StateType.SHOWING)
+    except Exception:
+        # A control that will not answer is not one this can vouch for.
+        return False
+
+
 def main():
     args = sys.argv[1:]
     grep = None
     invoke = None
+    # `--any` drops back to the old behaviour: assert the string is somewhere in
+    # the widget tree, showing or not. Kept because one legitimate use exists --
+    # checking that a pane HOLDS something before the click that reveals it --
+    # and named so that a case using it says so out loud.
+    any_state = '--any' in args
+    args = [a for a in args if a != '--any']
     if args and args[0] == '--invoke':
         if len(args) < 2:
             sys.stderr.write('readtext: --invoke needs something to act on\n')
@@ -159,14 +195,40 @@ def main():
 
     nodes = walk(root)
     if grep is not None:
+        hidden = None
         for node, _ in nodes:
-            if grep in text_of(node) or grep in label_of(node):
-                print('found in %s %r' % (role_of(node), label_of(node)[:40]))
+            if grep not in text_of(node) and grep not in label_of(node):
+                continue
+            if showing(node) or any_state:
+                print('found in %s %r%s' % (role_of(node), label_of(node)[:40],
+                                            '' if showing(node) else '  (NOT SHOWING)'))
                 return 0
+            if hidden is None:
+                hidden = node
+        if hidden is not None:
+            # THE DIAGNOSTIC THAT TURNS A SILENT PASS INTO A USEFUL RED. Finding
+            # the string on a page nobody switched to is a different failure from
+            # not finding it at all, and it names the one thing worth checking:
+            # the click that was supposed to bring that page forward.
+            sys.stderr.write(
+                'readtext: %r is in a %s the program is NOT SHOWING '
+                '(a closed tab, a hidden pane).\n' % (grep, role_of(hidden)))
+            sys.stderr.write(
+                '          Whatever was meant to bring it on screen did not.\n')
+            sys.stderr.write(
+                '          Pass --any to assert on the widget tree instead.\n')
+            return 1
         sys.stderr.write('readtext: %r is in no control this program shows\n' % grep)
         return 1
 
     if invoke is not None:
+        # A MENU AND ITS ITEM CAN CARRY THE SAME NAME, and the menu comes first in
+        # the tree. Measured 2026-09-18 on the release binary: `--invoke Run`
+        # matched the top-level Run MENU -- which opens it and does nothing else --
+        # while the Run ITEM sat two levels down waiting. The caller asked for an
+        # action, so an item that performs one is what was meant; the menu is the
+        # fallback for a name that only a menu carries.
+        candidates = []
         for node, _ in nodes:
             if label_of(node) != invoke:
                 continue
@@ -176,6 +238,9 @@ def main():
                 n = 0
             if n < 1:
                 continue
+            candidates.append(node)
+        candidates.sort(key=lambda x: 0 if role_of(x) == 'menu item' else 1)
+        for node in candidates:
             try:
                 Atspi.Action.do_action(node, 0)
             except Exception as exc:
