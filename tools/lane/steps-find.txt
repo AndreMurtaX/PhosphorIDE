@@ -5,6 +5,8 @@
 #
 # Ctrl+Shift+F, and the caret is in the search box: the action focuses it, so
 # nothing here has to click first.
+fixture lane345.bas
+
 key ^+f
 wait 700
 shot 110-pane-opened

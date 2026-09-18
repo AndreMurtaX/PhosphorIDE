@@ -4,6 +4,8 @@
 # run; `phosphor run tools/lane/outline.bas` prints, in order,
 # `function stringghost()` 1 5 3 4 5 6 7 true 42 3 -- eleven lines, the first
 # from the string literal on line 4 and the last from the built-in call on 49.
+fixture outline.bas
+
 key ^+o
 wait 900
 shot 130-ten-definitions

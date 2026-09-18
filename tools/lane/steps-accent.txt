@@ -16,6 +16,8 @@
 # unfiltered, correctly, because there is no word where the caret is; and the
 # first version of this case read that as the bug it was meant to prove.
 # Measured 2026-09-16. `{END}` on the line itself is exact.
+fixture acentos.bas
+
 key ^{HOME}
 key {DOWN}{DOWN}{DOWN}{END}
 wait 500

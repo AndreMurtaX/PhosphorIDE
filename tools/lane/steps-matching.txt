@@ -10,6 +10,8 @@
 # matching.bas: `function` on 7 pairs with `end function` on 13; the one-line
 # pair is on 16; `next = 5` is on 20; `y = function + 1` on 24; the literal on
 # 27; and the unterminated `while` on 32.
+fixture matching.bas
+
 raise
 wait 800
 

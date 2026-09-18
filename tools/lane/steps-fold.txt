@@ -6,6 +6,8 @@
 # has always been there; what turns it on is a CLASS TEST on the highlighter and
 # nothing else, so the markers appearing at all is the proof that the promotion
 # took.
+fixture folding.bas
+
 wait 600
 shot 170-the-markers-and-the-four-that-have-none
 

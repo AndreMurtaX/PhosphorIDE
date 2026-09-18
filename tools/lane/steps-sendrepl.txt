@@ -13,6 +13,8 @@
 #   * and the transcript is indistinguishable from the same lines typed by hand,
 #     which the last shot is for -- a line is sent only when a prompt is
 #     showing, one per prompt.
+fixture sendrepl.bas
+
 raise
 wait 800
 

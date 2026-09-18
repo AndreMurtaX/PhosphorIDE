@@ -5,6 +5,8 @@
 # there is no answer from any host, and both marks must be SOLID: the editor
 # draws what the user meant rather than claiming a mark is dead on no
 # information. Only after setBreakpoints answers does line 3 go hollow.
+fixture lane345.bas
+
 key ^g
 wait 700
 type 3

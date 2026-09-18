@@ -1,6 +1,8 @@
 # Now that every frame carries a line, a CALLER can be jumped to -- which is what
 # a call-stack pane is mostly for, and what the host owed until 2026-09-16.
 # Double-click (main) and the caret must land on line 11, the outermost call.
+fixture deep.bas
+
 key ^g
 wait 700
 type 4

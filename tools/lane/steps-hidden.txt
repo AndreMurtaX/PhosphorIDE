@@ -9,6 +9,8 @@
 # folding.bas: `function outer(n)` is line 6, its body 7..16, `end function` 17.
 # The fold column is at x=60 and the MARKS column at x=23; line 6 sits at y=187
 # and the rows are 15 px apart.
+fixture folding.bas
+
 wait 700
 
 # A breakpoint INSIDE the function, on line 8. F5 is Toggle Breakpoint, so this

@@ -12,6 +12,8 @@
 # a `--check` warning carry no line, take AddProblem's other arm and mark
 # nothing. That branch has no picture of its own: its evidence is a Problems row
 # with no `(n)` in it, which this pane has shown since roadmap item 6.
+fixture blame.bas
+
 raise
 wait 800
 shot 450-nothing-marked-yet

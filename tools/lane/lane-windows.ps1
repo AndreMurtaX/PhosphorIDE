@@ -96,6 +96,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 . (Join-Path $PSScriptRoot 'win.ps1')
+. (Join-Path $PSScriptRoot 'uia.ps1')
 
 Add-Type @"
 using System;
@@ -120,10 +121,28 @@ public class LaneWin {
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $exe = if ($env:PHOSPHORIDE) { $env:PHOSPHORIDE } else { Join-Path $root 'bin\phosphoride.exe' }
-if (-not $Fixture) { $Fixture = Join-Path $PSScriptRoot 'lane345.bas' }
 if (-not $Steps)   { $Steps   = Join-Path $PSScriptRoot 'steps-lane.txt' }
-$Fixture = (Resolve-Path $Fixture).Path
 $Steps = (Resolve-Path $Steps).Path
+
+# A CASE CARRIES ITS OWN FIXTURE, because on 2026-09-18 not one of them did and
+# rebuilding the table cost an hour of reading. `steps-gutter.txt` goes to line 3
+# and toggles a breakpoint; against lane345.bas that is the blank line the whole
+# case is about, and against deep.bas it is `if n <= 0 then`, which is a
+# statement -- so the case passes its own steps, takes its screenshots and proves
+# the OPPOSITE of what it was written for, silently. Only `steps-stdin.txt` said
+# which file it wanted, in a comment nothing reads.
+#
+# -Fixture still wins, so a case can be pointed at something else deliberately.
+if (-not $Fixture) {
+    foreach ($l in Get-Content -LiteralPath $Steps) {
+        if ($l.Trim() -match '^fixture\s+(.+)$') {
+            $Fixture = Join-Path $PSScriptRoot $Matches[1].Trim()
+            break
+        }
+    }
+}
+if (-not $Fixture) { $Fixture = Join-Path $PSScriptRoot 'lane345.bas' }
+$Fixture = (Resolve-Path $Fixture).Path
 
 $shot = Join-Path $PSScriptRoot 'shots'
 New-Item -ItemType Directory -Force -Path $shot | Out-Null
@@ -131,6 +150,7 @@ Get-ChildItem $shot -Filter *.png -ErrorAction SilentlyContinue | Remove-Item -F
 
 $p = Start-Process -FilePath $exe -WorkingDirectory $root -ArgumentList $Fixture -PassThru
 Start-Sleep -Seconds $StartupSeconds
+$script:EditorPid = $p.Id
 $form = [Wnd]::TopLevel($p.Id)
 if ($form -eq [IntPtr]::Zero) { Write-Error 'no visible PhosphorIDE window'; exit 1 }
 Write-Output "pid=$($p.Id) form=$form"
@@ -154,13 +174,43 @@ function Focus() { [Wnd]::SetForegroundWindow($form) | Out-Null; Start-Sleep -Mi
 # would make the driver useless. Three attempts at a third of a second, and if
 # the editor still is not in front, the case goes RED and says which window took
 # it. Anything is better than typing the test's own words into it.
+# OUR OWN DIALOG IS A LEGITIMATE TARGET, and the first cut of this guard did not
+# know that -- which made it worse than no guard at all.
+#
+# MEASURED 2026-09-18. `key ^g` opens Go to line, a MODAL window whose handle is
+# not $form, so the guard called SetForegroundWindow($form) three times: focus was
+# pulled off the dialog onto a form the LCL's modal loop has disabled, `type 4`
+# went nowhere, {ENTER} closed nothing, and the case carried on pressing keys at a
+# dead window while the dialog sat there holding the `1` it opened with. Then the
+# guard returned TRUE, because by its own test the editor WAS in front. Six of the
+# nineteen cases go through Ctrl+G; all six were broken by the thing added to
+# protect them, and not one of them said so.
+#
+# The question the guard actually needs to ask is not "is this window $form" but
+# "is this window OURS". A modal of the editor's is where the keys are supposed to
+# go; anything belonging to another process is what the guard was written for.
+function OurWindow($h) {
+    if ($h -eq [IntPtr]::Zero) { return $false }
+    # NOT `$pid`. That is one of PowerShell's read-only automatic variables -- the
+    # ID of the shell itself -- and assigning to it throws
+    # SessionStateUnauthorizedAccessException from inside the guard, which then
+    # refuses every keystroke of the run with a message about the foreground
+    # window that is perfectly accurate and has nothing to do with it.
+    $wpid = [uint32]0
+    [Wnd]::GetWindowThreadProcessId($h, [ref]$wpid) | Out-Null
+    return ($wpid -eq [uint32]$script:EditorPid)
+}
+
 function RequireFocus($what) {
     for ($i = 0; $i -lt 3; $i++) {
-        if ([LaneWin]::GetForegroundWindow() -eq $form) { return $true }
+        # NOT RAISED WHEN IT IS ALREADY OURS. Raising $form over our own modal is
+        # the defect above; the loop only reaches for the foreground when
+        # something else has it.
+        if (OurWindow ([LaneWin]::GetForegroundWindow())) { return $true }
         [Wnd]::SetForegroundWindow($form) | Out-Null
         Start-Sleep -Milliseconds 350
     }
-    if ([LaneWin]::GetForegroundWindow() -eq $form) { return $true }
+    if (OurWindow ([LaneWin]::GetForegroundWindow())) { return $true }
     $fg = [LaneWin]::GetForegroundWindow()
     $title = [LaneWin]::Text($fg)
     # WRITE-HOST, NOT WRITE-OUTPUT, and the difference is the whole function.
@@ -322,6 +372,39 @@ function Text($needle) {
     $script:Failures++
 }
 
+# `uia <needle>` -- the same question asked of the instrument that can reach a
+# list row, a tree node and a status bar panel past the first. See uia.ps1 for
+# what WM_GETTEXT cannot see and why that is not a bug in either of them.
+function Uia($needle) {
+    $script:Assertions++
+    $hit = UiaFind $form $needle
+    if ($hit) {
+        Write-Output "UIA OK    $needle  <- $($hit.Type) $($hit.Class)"
+        return
+    }
+    Write-Output "UIA FAIL  nothing on screen says: $needle"
+    $script:Failures++
+}
+
+# `uianot <needle>` -- and the negative, which the gutter and the stack cases
+# need: both panes are EMPTIED whenever the state is not dsStopped, and "the
+# variables pane is empty" is not a thing a positive assertion can say.
+#
+# A NEGATIVE IS ONLY WORTH ANYTHING BESIDE A POSITIVE. `uianot` on a string that
+# was never there is green in an empty window, green with the editor crashed and
+# green with the needle misspelled -- so every case below that uses one asserts
+# the same string PRESENT at the moment it should be, first.
+function UiaNot($needle) {
+    $script:Assertions++
+    $hit = UiaFind $form $needle
+    if (-not $hit) {
+        Write-Output "UIA OK    (absent) $needle"
+        return
+    }
+    Write-Output "UIA FAIL  still on screen: $needle  <- $($hit.Type) $($hit.Class)"
+    $script:Failures++
+}
+
 Focus
 foreach ($line in Get-Content -LiteralPath $Steps) {
     $line = $line.Trim()
@@ -362,9 +445,26 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         # <space> as in `key`, because every line is trimmed: `text a  b` would
         # otherwise lose the run of spaces a transcript actually contains.
         'text'     { Text ($rest -replace '<space>', ' ') }
+        'uia'      { Uia ($rest -replace '<space>', ' ') }
+        'uianot'   { UiaNot ($rest -replace '<space>', ' ') }
+        'uiatab'   { $script:Assertions++
+                     $r = UiaTab $form $rest
+                     Write-Output $r
+                     if ($r -like 'TAB FAIL*') { $script:Failures++ } }
+        'uiamenu'  { $script:Assertions++
+                     $parts = $rest -split '\s*>\s*', 2
+                     $r = UiaMenu $form $parts[0] $(if ($parts.Count -gt 1) { $parts[1] } else { '' })
+                     Write-Output $r
+                     if ($r -like 'MENU FAIL*') { $script:Failures++ } }
+        'uiasays'  { Write-Output "--- what UI Automation sees ---"
+                     UiaSays $form ($rest -eq 'all') | ForEach-Object { Write-Output "  $_" }
+                     Write-Output "--- end ---" }
         'at'       { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $false }
         'click'    { ClickCtl $rest }
         'dblclick' { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $true }
+        # Read before the editor started; here it is a no-op rather than an
+        # unknown command.
+        'fixture'  { }
         default    { Write-Error "unknown command: $verb"; }
     }
 }

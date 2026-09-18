@@ -3,6 +3,8 @@
 #
 # The caret starts at the top of lane345.bas; Ctrl+End puts it past the last
 # line, where a new statement can be typed without disturbing the fixture.
+fixture lane345.bas
+
 key ^{END}
 wait 400
 key {ENTER}

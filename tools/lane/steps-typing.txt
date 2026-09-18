@@ -26,6 +26,8 @@
 # one character short of a definition. Completing it opens a block nothing below
 # closes, so every line under it changes fold depth and the rescan runs to the
 # end of the file.
+fixture typing.bas
+
 raise
 wait 900
 shot 180-two-thousand-lines-and-an-unfinished-word

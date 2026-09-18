@@ -2,6 +2,8 @@
 # typing a line ABOVE a breakpoint moves the breakpoint, and the mark is a second
 # copy of that fact drawn by SynEdit. Set one on line 10, insert a line at the
 # top, and the mark must be on 11 -- not left behind on 10.
+fixture lane345.bas
+
 key ^g
 wait 700
 type 10

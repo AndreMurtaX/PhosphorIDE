@@ -6,6 +6,8 @@
 #
 # `memo` reads the TMemo of whichever output tab is SHOWING, so every read below
 # is MemoRepl rather than MemoOutput.
+fixture lane345.bas
+
 key ^+r
 wait 2500
 shot 150-the-prompt-arrived

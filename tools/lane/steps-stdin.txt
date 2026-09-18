@@ -29,6 +29,8 @@
 # running, which was the only signal it ever carried -- and the hint is drawn
 # anyway. That is worth pinning: somebody reading this window for the first time
 # learns what the row is before they ever start a program.
+fixture stdin.bas
+
 says
 text An answer for the running program, then Enter
 shot 1-idle

@@ -2,6 +2,8 @@
 #
 # Tab strip and row geometry were measured from a screenshot rather than
 # guessed: the output tabs sit at y 561, the list rows start at 603 and step 16.
+fixture deep.bas
+
 key ^g
 wait 700
 type 4

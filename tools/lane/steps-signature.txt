@@ -7,6 +7,8 @@
 # composes it with whatever follows: `"a` becomes a diaeresis and both
 # characters are lost. `"z` is safe. Measured on 2026-09-16, when the line came
 # out as `s = mid$( bc",` and the editor was blamed first.
+fixture lane345.bas
+
 key ^{END}
 wait 400
 key {ENTER}
