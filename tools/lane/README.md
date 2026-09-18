@@ -112,6 +112,24 @@ Four things cost real time on 2026-09-16 and are worth not rediscovering:
   records the process's own top-level windows once, before anything can pop up,
   and photographs whatever is new. A hint window came out 217x42 on the first
   try. Menus and the completion list are reachable the same way.
+- **AND ON WINDOWS, `SendKeys` TYPES INTO WHOEVER HAS FOCUS -- INCLUDING AN APP
+  THAT IS NOT YOURS.** `raise` at the top of a script is not enough, because it
+  answers the question once and the desktop keeps asking it. Measured twice on
+  2026-09-18: `steps-stdin.txt` was run while the agent driving it was streaming
+  output into a chat window on the same desktop, that window took focus back
+  between the `raise` and the `type`, and the fixture's answer went into the chat
+  instead of into the editor. The shots prove it -- `3-typed.png` and
+  `4-answered.png` are photographs of the chat client. The case then failed on
+  `< Andre` and `hello, Andre` with a `phosphor` child still alive, which reads
+  exactly like a stdin row that does not work.
+
+  There is no defence inside the script: `SendKeys` has no target window, and the
+  Linux side's `xdrive` does (`nofocus` sends to a window id). So the rule is
+  operational rather than technical -- **a Windows lane run owns the desktop for
+  its duration.** Do not run one on a machine somebody is using, and if a case
+  fails on an assertion about text the script typed, look at the shot before
+  looking at the editor.
+
 - **Nothing may steal focus mid-script.** A GTK menu holds a keyboard grab, and
   `XSetInputFocus` on the form drops it, so consecutive keys go in ONE `xdrive`
   invocation and every invocation is `nofocus` unless the script says `raise`.

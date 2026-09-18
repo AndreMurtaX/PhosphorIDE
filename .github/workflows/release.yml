@@ -1,0 +1,157 @@
+name: release
+
+# A TAG IS THE ONLY WAY TO CUT ONE, and the tag has to survive every gate first.
+#
+# Until 2026-09-18 this repository had no release at all: the only way to use
+# PhosphorIDE was to install Lazarus and build it, which is fine for the author
+# and for a reviewer and is not fine for a user. `build.yml` already kept the
+# binaries, as a 7-day artifact of a Default build -- tens of megabytes of debug
+# information, expiring, and reachable only by somebody who knows to look in the
+# Actions tab.
+#
+# WHAT THIS DOES DIFFERENTLY, and each of the three is deliberate:
+#
+#   * IT RUNS THE WHOLE BUILD SCRIPT, not just lazbuild. A release is cut from a
+#     tree that passed all five gates -- zero warnings and notes, the unit checks,
+#     the contract test against a real binary, the selftest under a timeout, the
+#     generators and the citations. This project's rule is that nothing is done
+#     on a claim, and a tag is the largest claim it makes.
+#   * IT PASSES --RequireHost. On a contributor's machine the contract check may
+#     skip and say so; a release may not be cut from a run that skipped it.
+#   * IT SHIPS THE RELEASE MODE. 4.8 MB against Default's 37 MB, and the Release
+#     mode is the one -O3 flow analysis actually looks at -- it was RED the first
+#     time it was run, on 2026-09-17, over two warnings that had been sitting in
+#     uphosphorcomplete.pas for as long as the file existed.
+#
+# WHAT A USER STILL HAS TO DO, and the release notes say so rather than leaving
+# it to be discovered: this is an editor for an interpreter it does not contain.
+# Without a `phosphor` binary it opens, edits, highlights, folds and finds; it
+# cannot run, check, compile, pack or debug. Tools > Preferences points it at one.
+
+on:
+  push:
+    tags: ['v*']
+  # So the packaging can be exercised without minting a tag. A dispatch run
+  # uploads nothing -- see the guard on the last step.
+  workflow_dispatch:
+
+permissions:
+  contents: write        # only to create the release and upload to it
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-latest
+            name: linux
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out PhosphorIDE
+        uses: actions/checkout@v4
+        with:
+          path: PhosphorIDE
+
+      - name: Check out Phosphor
+        uses: actions/checkout@v4
+        with:
+          repository: AndreMurtaX/Phosphor
+          path: Phosphor
+
+      - name: Install Lazarus
+        uses: gcarreno/setup-lazarus@v3.3.1
+        with:
+          lazarus-version: stable
+
+      - name: Install xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # The contract test needs a binary, and --require-host below forbids it
+      # from skipping. Same step as build.yml, same reason.
+      - name: Build the phosphor host
+        run: lazbuild --build-mode=Default Phosphor/host/console/phosphor.lpi
+
+      - name: Build and check, Release (Windows)
+        if: runner.os == 'Windows'
+        working-directory: PhosphorIDE
+        shell: pwsh
+        run: powershell -NoProfile -File scripts\build.ps1 -Release -PhosphorRepo ..\Phosphor -RequireHost
+
+      - name: Build and check, Release (Linux)
+        if: runner.os == 'Linux'
+        working-directory: PhosphorIDE
+        run: xvfb-run -a bash scripts/build.sh --release --phosphor ../Phosphor --require-host
+
+      # THE BINARY IS ASKED WHAT IT IS before it is packaged. `--selftest`
+      # constructs every form and exits 0 or does not; a release that ships a
+      # binary nobody asked a question of is a release built on an exit code from
+      # three steps earlier.
+      - name: Ask the binary what it is (Windows)
+        if: runner.os == 'Windows'
+        working-directory: PhosphorIDE
+        shell: pwsh
+        run: |
+          $p = Start-Process bin\phosphoride.exe -PassThru -ArgumentList '--selftest', "$env:RUNNER_TEMP\st.txt"
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'selftest hung' }
+          if ($p.ExitCode -ne 0) { throw "selftest exit $($p.ExitCode)" }
+          Get-Content "$env:RUNNER_TEMP\st.txt"
+
+      - name: Ask the binary what it is (Linux)
+        if: runner.os == 'Linux'
+        working-directory: PhosphorIDE
+        run: |
+          xvfb-run -a timeout 60 bin/phosphoride --selftest /tmp/st.txt
+          cat /tmp/st.txt
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        working-directory: PhosphorIDE
+        shell: pwsh
+        run: |
+          $stage = "$env:RUNNER_TEMP\stage"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item bin\phosphoride.exe $stage
+          Copy-Item LICENSE $stage
+          Copy-Item README.md $stage
+          Copy-Item docs\getting-started.md $stage
+          Compress-Archive -Path "$stage\*" -DestinationPath "phosphoride-windows-x86_64.zip"
+          Get-FileHash phosphoride-windows-x86_64.zip -Algorithm SHA256
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        working-directory: PhosphorIDE
+        run: |
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage"
+          cp bin/phosphoride "$stage/"
+          cp LICENSE README.md "$stage/"
+          cp docs/getting-started.md "$stage/"
+          tar -czf phosphoride-linux-x86_64.tar.gz -C "$stage" .
+          sha256sum phosphoride-linux-x86_64.tar.gz
+
+      # gh rather than a third-party action, because build.yml's own header
+      # already records that every @v4/@v3 action here raises a Node 20
+      # deprecation on every run, and this is one fewer to carry.
+      #
+      # ONLY ON A TAG. A workflow_dispatch run builds, checks and packages, and
+      # uploads nothing -- so the packaging can be exercised without minting a
+      # release nobody asked for.
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: PhosphorIDE
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" \
+            --title "PhosphorIDE $tag" \
+            --notes-file .github/release-notes.md
+          gh release upload "$tag" phosphoride-*.zip phosphoride-*.tar.gz --clobber
