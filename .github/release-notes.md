@@ -45,9 +45,12 @@ The Release build is about 4.8 MB against the debug build's 37 MB, and it is the
 
 ## Known, measured, and written down
 
-- **A hot breakpoint can lose a hit** -- between 1 and 13 stops in ten thousand, over
-  eleven runs of a 10 000-iteration loop. Measured, and as of this release not yet
-  diagnosed.
+- **A hot breakpoint can lose a hit, in the `phosphor` host** -- an interrupt landing
+  on an armed line makes the engine report a pause instead of a breakpoint, and the
+  host resumes without re-checking. Diagnosed 2026-09-18; the fix is one branch in the
+  sibling repository. **This editor does not provoke it**: it drains its debug socket
+  every 40 ms, and at that rate a 10 000-iteration loop measures 10000/10000. A driver
+  answering as fast as it can loses 4 or 5. See `docs/phosphor-lost-stop.md`.
 - **A breakpoint condition is recompiled on every hit**: 0,04 ms on a small program,
   2,3 ms on a 606-line one. The cache is proven and not built.
 - **`evaluate` refuses every function call you write**, because the engine's registry

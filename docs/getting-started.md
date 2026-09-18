@@ -256,10 +256,14 @@ expiry date nobody set.
   does not, and will not until the engine's registry can say whether a function has
   an effect. The host says so up front, in a second capability key called
   `evaluateCalls`.
-- **A hot breakpoint can lose a hit.** Measured over eleven runs of a
-  10 000-iteration loop, between 1 and 13 stops in ten thousand never reached the
-  editor. It is not a conditional-breakpoint problem — it happens with a plain
-  breakpoint too — and it is not yet diagnosed.
+- ~~**A hot breakpoint can lose a hit.**~~ **Diagnosed 2026-09-18, and it is not
+  yours.** The rate this bullet used to give — 1 to 13 in ten thousand — was
+  measured by a driver answering each stop as fast as it could. The editor drains
+  its debug socket from a timer at 40 ms, and at 40 ms the same 10 000-iteration
+  loop measures **10000/10000**. The defect is real and it is the host's: an
+  interrupt landing on an armed line makes the engine report a pause instead of a
+  breakpoint, and the host's pause path resumes without re-checking the line.
+  `docs/phosphor-lost-stop.md` has the mechanism and the one-branch fix.
 - ~~**The gtk2 menu bar cannot be driven by a script.**~~ **It cannot be driven through
   XTest** -- neither a synthetic click nor F10 -- which is still true and is a narrower
   sentence than the one this bullet used to carry. Since 2026-09-17 a menu item is

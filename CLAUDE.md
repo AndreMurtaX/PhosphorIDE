@@ -610,8 +610,11 @@ What is still absent, and must not be described otherwise:
   Faking a condition here -- stop, ask `evaluate`, continue when it is false --
   works, and costs 11,6 to 23 ms per hit against 0,04 to 2,3 ms in the host; a
   10 000-hit loop is 231 seconds against 58, it writes one Output line and one band
-  flash per refused hit, and this editor already loses between 1 and 13 stops in ten
-  thousand, each of which would be a condition never evaluated.
+  flash per refused hit. (That sentence used to end "and this editor already loses
+  between 1 and 13 stops in ten thousand". It was diagnosed on 2026-09-18 and the
+  editor does NOT: that rate is a prompt-reply driver's, and the editor drains from
+  a timer at 40 ms where the same loop measures 10000/10000. The defect is the
+  host's, and `docs/phosphor-lost-stop.md` has the mechanism.)
 
   **FOUR GUTTER GLYPHS, not a badge beside the dot.** Armed and inert cross with
   plain and conditional, and a conditional one is the same disc with a bite out of

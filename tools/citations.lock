@@ -50,6 +50,8 @@
 ../Phosphor/engine/PhosphorVM.pas:374-374	a2424c186f1ad8d0	and the pc of the boundary. Those four are ONE value in four fields: a step
 ../Phosphor/engine/PhosphorVM.pas:3751-3751	e6f07d43b5c21db0	begin
 ../Phosphor/engine/PhosphorVM.pas:4127-4162	0d7dd6257e075e5c	FStartTick moves forward by the parked milliseconds.
+../Phosphor/engine/PhosphorVM.pas:4217-4217	d7c3c30c90501d22	if InterlockedExchange(FDbgInterrupt, 0) <> 0 then
+../Phosphor/engine/PhosphorVM.pas:4217-4222	8f7a68fc10c2651e	if InterlockedExchange(FDbgInterrupt, 0) <> 0 then
 ../Phosphor/engine/PhosphorValue.pas:632-632	0f9d0b2d99d6030d	concatenation, EAccessViolation, and EStackOverflow, and report each of them
 ../Phosphor/engine/PhosphorValue.pas:73-74	e98e04fb9e96ac0a	and simply continues. The seam MUST NOT block: the engine treats it as a
 ../Phosphor/engine/libs/PhosphorDictLib.pas:47-53	937de134e3f245a9	{ Each entry's hash, taken once when the entry is made and carried beside
@@ -120,6 +122,7 @@ src/umainform.pas:3314-3314	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecu
 src/umainform.pas:438-450	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
 src/umainform.pas:503-503	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
 src/umainform.pas:6-10	6e5a2b104154c318	The one rule this unit exists to keep: NOTHING HERE WAITS. Every call into the
+src/umainform.pas:631-631	7effb3a1ae7eb275	DebugPollIntervalMs = 40;
 src/umainform.pas:642-698	14826a9d8e11015e	and point at slots that exist by the time anything paints.
 src/umainform.pas:693-693	1fba61ea27a1be58	FFind.OnDone := @FindDone;
 src/umainform.pas:868-905	8bfb1ba23a3e68a3	the debug session and empties the stack and variables panes; the longer

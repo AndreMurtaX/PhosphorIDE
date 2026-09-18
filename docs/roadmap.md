@@ -1986,7 +1986,7 @@ counter and are never reused; an answer for a watch that is gone lands nowhere.
 assumed.** Faking it here -- stop, ask `evaluate`, continue when false -- works, and
 costs 11,6 to 23 ms per hit against 0,04 to 2,3 ms over there. A 10 000-hit loop is
 231 seconds against 58; it writes one Output line and one band flash per refused
-hit; and this editor already loses between 1 and 13 stops in ten thousand, each of
+hit; and this editor was believed to lose 1 to 13 stops in ten thousand, each of
 which would be a condition never evaluated. The host side is one evaluator with two
 callers, so a condition and a watch cannot come to disagree about what an expression
 means -- the failure this pair of repositories has now spent five items avoiding.
@@ -2477,9 +2477,19 @@ because an item is something somebody has decided to do:
 - `uphosphorhost.RunAndCapture` measures its 5000 ms deadline with `Now`, which
   this repository's own invariant forbids without an exception for deadlines. It
   is a start-up path; `tests/uhostprobe.pas` uses the monotonic clock and says so.
-- **A hot breakpoint loses between 1 and 13 stops in ten thousand.** Measured, not
-  diagnosed -- and which side it is on is not known, which is what makes it worth
-  an item the day somebody starts.
+- ~~**A hot breakpoint loses between 1 and 13 stops in ten thousand.** Measured, not
+  diagnosed -- and which side it is on is not known.~~ **Diagnosed 2026-09-18, and
+  it is the HOST's.** An interrupt consumed at `engine/PhosphorVM.pas:4217` makes the
+  armed-line test at `:4222` unreachable, so a breakpoint due at that line is reported
+  as a pause -- and the host's pause drain resumes with no `ArmedAt` check, the one its
+  `srEntry` sibling already has. One branch, over there.
+
+  **And the editor does not provoke it**, which is the correction worth carrying: the
+  1-to-13 rate was a prompt-reply driver's, and the editor drains from a timer at 40 ms
+  where the same loop measures 10000/10000. Loss rate tracks how hard the editor end
+  hammers the socket -- a 1000 Hz background takes it from 1 per 1000 to 193.
+  `docs/phosphor-lost-stop.md` has it, with two latent editor-side defects found on the
+  way and deliberately left for their own increment.
 - The compiled chunk of a breakpoint condition is not cached: 2,3 ms per hit on a
   606-line program. The technique is proven and written down in
   `../Phosphor/docs/debugging.md`; building it is host-side work.
