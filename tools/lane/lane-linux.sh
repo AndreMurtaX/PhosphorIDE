@@ -230,6 +230,32 @@ drag() {
         | "$HERE/xdrive" "$WIN" nofocus >/dev/null
 }
 
+# `tab <name>` -- CLICK A CONTROL WHERE IT ACTUALLY IS, not where a constant says.
+#
+# Every `bot` in these cases measures UP FROM THE BOTTOM because mutter gives this
+# window a different height on different runs. That rule is not enough, and the
+# reason is worth the six lines: it holds only while the bottom panel keeps a
+# FIXED height, and the panel grows with the window. Measured 2026-09-18 -- the
+# tab strip is 191 px up in a 752-tall window and 332 up in a 1011-tall one. Every
+# tab click in a tall window landed in the list below the strip, the pane never
+# changed, three screenshots of steps-stack-linux.txt came back byte-identical,
+# and nothing went red because the assertions were reading hidden pages.
+#
+# AT-SPI knows where the tab is. It exposes no action -- so `menu` cannot reach it
+# -- but it does expose extents, which is the half CLAUDE.md had wrong.
+tab() {
+    local xy
+    if ! xy=$(python3 "$HERE/readtext.py" --where "$1" 2>/dev/null); then
+        echo "TAB FAIL nothing showing is named: $1"
+        FAILURES=$((FAILURES + 1))
+        ASSERTIONS=$((ASSERTIONS + 1))
+        return
+    fi
+    ASSERTIONS=$((ASSERTIONS + 1))
+    echo "TAB OK    $1 at $xy"
+    printf 'click %s\n' "$xy" | "$HERE/xdrive" "$WIN" nofocus >/dev/null
+}
+
 menu() {
     ASSERTIONS=$((ASSERTIONS + 1))
     if python3 "$HERE/readtext.py" --invoke "$1" >/dev/null 2>&1; then
@@ -253,6 +279,7 @@ while IFS= read -r line; do
         say\ *) flush; say "${line#say }" ;;
         text\ *) flush; text "${line#text }" ;;
         menu\ *) flush; menu "${line#menu }" ;;
+        tab\ *) flush; tab "${line#tab }" ;;
         drag\ *) flush; drag ${line#drag } ;;
         ''|'#'*) : ;;
         *) buf="$buf$line

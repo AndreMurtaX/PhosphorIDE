@@ -38,7 +38,7 @@ text Phosphor BASIC
 text Call Stack (5)
 text Variables (3)
 
-bot 191 184
+tab Call Stack
 wait 700
 shot 21-call-stack
 
@@ -53,7 +53,7 @@ text down
 bot 100 66
 wait 1200
 shot 22-frame-3-selected
-bot 289 184
+tab Variables
 wait 700
 shot 23-variables-of-frame-3
 
@@ -65,7 +65,7 @@ key ctrl+a
 type 12
 key Return
 wait 600
-bot 191 184
+tab Call Stack
 wait 500
 bot2 100 135
 wait 900

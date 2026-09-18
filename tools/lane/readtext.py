@@ -168,6 +168,7 @@ def main():
     args = sys.argv[1:]
     grep = None
     invoke = None
+    where = None
     # `--any` drops back to the old behaviour: assert the string is somewhere in
     # the widget tree, showing or not. Kept because one legitimate use exists --
     # checking that a pane HOLDS something before the click that reveals it --
@@ -179,6 +180,12 @@ def main():
             sys.stderr.write('readtext: --invoke needs something to act on\n')
             return 2
         invoke = args[1]
+        args = args[2:]
+    elif args and args[0] == '--where':
+        if len(args) < 2:
+            sys.stderr.write('readtext: --where needs a control to locate\n')
+            return 2
+        where = args[1]
         args = args[2:]
     elif args and args[0] == '--grep':
         if len(args) < 2:
@@ -219,6 +226,30 @@ def main():
                 '          Pass --any to assert on the widget tree instead.\n')
             return 1
         sys.stderr.write('readtext: %r is in no control this program shows\n' % grep)
+        return 1
+
+    if where is not None:
+        # WHERE A CONTROL ACTUALLY IS, in screen coordinates, so a script can
+        # click it instead of assuming an offset. A page tab exposes no ACTION
+        # under gail -- so it cannot be invoked the way a menu item can -- but it
+        # does expose EXTENTS, which is the half CLAUDE.md had wrong until
+        # 2026-09-18. The centre is printed, because an edge is where a border is.
+        for node, _ in nodes:
+            if label_of(node) != where:
+                continue
+            if not showing(node):
+                continue
+            try:
+                e = Atspi.Component.get_extents(node, Atspi.CoordType.SCREEN)
+            except Exception as exc:
+                sys.stderr.write('readtext: %r has no extents (%s)\n' % (where, exc))
+                return 1
+            if e.width <= 0 or e.height <= 0:
+                sys.stderr.write('readtext: %r has an empty rectangle\n' % where)
+                return 1
+            print('%d %d' % (e.x + e.width // 2, e.y + e.height // 2))
+            return 0
+        sys.stderr.write('readtext: nothing showing is named %r\n' % where)
         return 1
 
     if invoke is not None:
