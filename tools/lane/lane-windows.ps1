@@ -180,6 +180,56 @@ function Grab($name) {
     Write-Output "  shot $name"
 }
 
+# `click <needle>` -- CLICK A CONTROL WHERE IT ACTUALLY IS.
+#
+# Every other click here is `at DX DY`, an offset from the window's top-left that
+# was right on the day it was written. steps-stdin.txt clicks `at 460 709` for the
+# stdin row and fails its last two assertions with the editor CONFIRMED in front,
+# so the keys reach the right window and the click lands in the wrong place --
+# the same defect the Linux side had at its pane tabs, and the same answer:
+# Kids($form) has known where every control is all along.
+#
+# The needle matches the control's TEXT (what WM_GETTEXT returns, which for the
+# stdin row is its TextHint) or its CLASS. Exactly one visible match is required:
+# clicking the first of several is how a locator drifts onto the wrong control
+# without saying so.
+function ClickCtl($needle) {
+    $script:Assertions++
+    $hits = @()
+    foreach ($row in [Wnd]::Kids($form)) {
+        $f = $row -split "`t"
+        if ($f[3] -ne '1') { continue }
+        # WM_GETTEXT, NOT THE COLUMN Kids CARRIES. GetWindowTextW does not cross a
+        # process boundary -- it comes back empty for somebody else's control,
+        # quietly and by documentation -- so $f[4] is blank for every one of these
+        # and the first cut of this function matched nothing at all. The assertion
+        # verb three functions down has always sent WM_GETTEXT for exactly this
+        # reason; the locator has to as well.
+        $t = [LaneWin]::Text([IntPtr][long]$f[0])
+        if (($t -and $t.Contains($needle)) -or $f[1] -eq $needle) { $hits += ,@($f[0], $f[1], $f[2], $f[3], $t) }
+    }
+    if ($hits.Count -eq 0) {
+        Write-Output "CLICK FAIL no visible control matches: $needle"
+        $script:Failures++
+        return
+    }
+    if ($hits.Count -gt 1) {
+        Write-Output "CLICK FAIL $($hits.Count) visible controls match: $needle"
+        foreach ($h in $hits) { Write-Output "           $($h[1]) '$($h[4])'" }
+        $script:Failures++
+        return
+    }
+    $r = $hits[0][2] -split ','
+    $x = [int](([int]$r[0] + [int]$r[2]) / 2)
+    $y = [int](([int]$r[1] + [int]$r[3]) / 2)
+    [LaneWin]::SetCursorPos($x, $y) | Out-Null
+    Start-Sleep -Milliseconds 150
+    [LaneWin]::mouse_event(0x02, 0, 0, 0, [IntPtr]::Zero)
+    [LaneWin]::mouse_event(0x04, 0, 0, 0, [IntPtr]::Zero)
+    Start-Sleep -Milliseconds 250
+    Write-Output "CLICK OK   $needle at $x,$y"
+}
+
 function ClickAt($dx, $dy, $double) {
     $r = Rect
     [LaneWin]::SetCursorPos($r.L + $dx, $r.T + $dy) | Out-Null
@@ -302,6 +352,7 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         # otherwise lose the run of spaces a transcript actually contains.
         'text'     { Text ($rest -replace '<space>', ' ') }
         'at'       { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $false }
+        'click'    { ClickCtl $rest }
         'dblclick' { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $true }
         default    { Write-Error "unknown command: $verb"; }
     }

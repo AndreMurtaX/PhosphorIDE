@@ -54,7 +54,11 @@ shot 2-prompt
 text An answer for the running program, then Enter
 
 # NOW ANSWER IT, the way the hint says to: click the box, type, Enter.
-at 460 709
+# ASKED FOR, NOT GUESSED. This was `at 460 709` and it stopped landing on the row
+# when the window changed size -- with the editor confirmed in front, so the keys
+# were fine and the coordinate was not. The needle is the row's own TextHint,
+# which IS its text to WM_GETTEXT.
+click An answer for the running program
 wait 300
 type Andre
 wait 300
