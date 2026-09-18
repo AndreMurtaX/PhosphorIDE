@@ -452,9 +452,10 @@ begin
     Exit;
   end;
 
-  { ONE SEARCH, NOT FIVE. This was a chain of four calls over five sorted
-    indexes, asked in turn, so a word in none of them -- a person's own names,
-    which is most words in most programs -- paid for all five before being told
+  { ONE SEARCH, NOT SIX. This was a chain of four calls over SIX sorted indexes,
+    asked in turn -- the fourth call, PhosphorBuiltinTier, looped over one index
+    per tier -- so a word in none of them, which is what a person's own names are
+    and therefore most words in most programs, paid for all six before being told
     no. Measured at -O3 on 2026-09-17: 3,5 us for that miss against 0,04 us for
     the LowerCase(Copy(...)) just above. Two identifiers on a line is about 7 us,
     and it is paid on every line of every rescan, every file open and every

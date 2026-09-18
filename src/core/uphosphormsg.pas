@@ -25,13 +25,34 @@ unit uphosphormsg;
   3. THERE ARE THREE OTHER SHAPES. A packed executable has no path to print, so it
      says `phosphor: <line>: <message>`. The REPL says `error: <message>` with no
      prefix, no path and no line. And a host-level refusal (`file not found`,
-     `cannot write to`, `usage:`, the `--check` warning block) has no source
-     location at all. A parser that assumes the first shape turns `file not found:
-     nope.bas` into a jump to line 0 of a file called `file not`.
+     `cannot write to`, the `--check` warning block) has no source location at
+     all. A parser that assumes the first shape turns `file not found: nope.bas`
+     into a jump to line 0 of a file called `file not`.
+
+     `usage:` USED TO BE IN THAT LIST AND DOES NOT BELONG THERE. Measured on
+     2026-09-17 against the real binary: a usage refusal is `usage: phosphor
+     compile [--check] <in.bas> <out.pbc>` with NO `phosphor: ` prefix at all, so
+     ParsePhosphorMessage returns early and it comes back pmkPlain. Two more
+     prefixes exist that this unit does not know either -- `phosphor debug: ` on
+     every `--port` refusal, and none at all on a `usage:` line -- and a refusal
+     whose echoed path contains `:12: ` still forges a source location, which is
+     the one thing this unit exists to prevent. All three are roadmap item 30;
+     `tests/phosphorcontract.lpr` pins today's behaviour so that whichever side is
+     fixed, the other cannot drift quietly.
 
   There is never a column: the compiler and the lexer track ErrorLine and nothing
-  else. A line number CAN exceed the file's line count -- an unterminated block in
-  a three-line file reports line 4 -- so a caller must clamp before scrolling.
+  else. A line number MAY IN PRINCIPLE exceed the file's line count, so a caller
+  clamps before scrolling -- but the worked example this paragraph used to give,
+  "an unterminated block in a three-line file reports line 4", IS NOT TRUE TODAY.
+  Measured 2026-09-17 over 34 constructed shapes, not one reported a line past the
+  end: Phosphor's compiler routes unterminated blocks through FailUnterminated,
+  which deliberately names the line the block OPENED on. The value is
+  constructible -- the lexer gives tkEOF the line count plus one -- but no error
+  site reaches it. Whoever would have to change it for this to become true is
+  Phosphor, in FailUnterminated. The clamp stays: it is the editor being right
+  about a protocol rather than about one implementation of it, and this unit's
+  handling of such a line is still pinned on a synthetic string in
+  tests/phosphoridetest.lpr.
 
   Nothing here reads a file or touches the LCL: it is pure text, so it is testable
   without a UI and without the host installed. }
@@ -52,7 +73,7 @@ type
     pmkPackedError,  // phosphor: <line>: <msg>          (a packed executable)
     pmkReplError,    // error: <msg>                     (the REPL)
     pmkWarning,      // phosphor: warning: ...           (compile --check, pack)
-    pmkHostError     // phosphor: <anything else>        (refused to run, usage)
+    pmkHostError     // phosphor: <anything else>        (refused to run)
   );
 
   TPhosphorMessage = record

@@ -210,10 +210,21 @@ uses
 
 const
   { What the host's --help must show for this editor to offer stepping. It is a
-    cheap PRE-FILTER and nothing more: the usage block advertises `phosphor debug`
-    but says nothing about `--port`, so a host with only the terminal debugger
-    looks identical here. Available is not set from this -- it is set when the
-    handshake succeeds, which is the only thing that actually proves it. }
+    cheap PRE-FILTER and nothing more. Available is not set from this -- it is
+    set when the handshake succeeds, which is the only thing that actually
+    proves it.
+
+    THE REASON THIS IS A PRE-FILTER CHANGED, and the old one was wrong. It said
+    the usage block "says nothing about `--port`, so a host with only the
+    terminal debugger looks identical here". Measured 2026-09-17 by the contract
+    test: `--help` names `--port` on its own line and says it is for an editor.
+    The block is still only a pre-filter for a better reason -- an advertisement
+    is not a capability, a host may print the line and refuse the connection, and
+    only the handshake settles it -- but this comment claimed a fact about
+    another repository's output that had stopped being true, which is exactly
+    what `tests/phosphorcontract.lpr` exists to notice. It asserts the predicate
+    below and nothing more: pinning the layout would make a help-text tidy-up in
+    Phosphor a red build here. }
   DebugSubcommandMarker = 'phosphor debug';
 
   NoHostReason =

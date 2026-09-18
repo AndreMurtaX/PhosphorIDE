@@ -4,6 +4,7 @@
 #   bash scripts/build.sh              debug build + checks
 #   bash scripts/build.sh --release    optimised, stripped
 #   bash scripts/build.sh --no-checks  build only
+#   bash scripts/build.sh --require-host   the host contract check may not skip
 #
 # The same three checks as scripts/build.ps1, for the same reasons, with one
 # difference that matters here: --selftest CONSTRUCTS FORMS, and constructing an
@@ -23,6 +24,7 @@ bin="$root/bin"
 release=0
 checks=1
 phosphor_repo=""
+require_host=0
 selftest_timeout=60
 
 while [ $# -gt 0 ]; do
@@ -30,6 +32,7 @@ while [ $# -gt 0 ]; do
         --release) release=1 ;;
         --no-checks) checks=0 ;;
         --phosphor) shift; phosphor_repo="${1:-}" ;;
+        --require-host) require_host=1 ;;
         --timeout) shift; selftest_timeout="${1:-60}" ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -79,9 +82,11 @@ build_project() {
 
 build_project "$root/src/phosphoride.lpi" "$mode"
 build_project "$root/tests/phosphoridetest.lpi" "Default"
+build_project "$root/tests/phosphorcontract.lpi" "Default"
 
 exe="$bin/phosphoride"
 test_exe="$bin/phosphoridetest"
+contract_exe="$bin/phosphorcontract"
 [ -x "$exe" ] || fail "no binary at $exe"
 
 if [ "$checks" -eq 0 ]; then
@@ -95,6 +100,25 @@ fi
 echo ""
 echo "unit checks"
 "$test_exe" || fail "$? unit check(s) failed."
+
+# THE ONE COUPLING BETWEEN THE TWO REPOSITORIES THAT HAD NO CHECK. Everything
+# above tests uphosphormsg.pas against strings THIS repository wrote down; this
+# runs the actual binary and asserts the shapes it really emits. Exit 77 is its
+# skip, announced by the program itself so it exists however it was invoked --
+# the same discipline as the selftest skip below.
+echo ""
+echo "host contract"
+if [ "$require_host" -eq 1 ]; then
+    "$contract_exe" --require-host
+else
+    "$contract_exe"
+fi
+rc=$?
+if [ $rc -eq 77 ]; then
+    :   # already announced itself, in its own words
+elif [ $rc -ne 0 ]; then
+    fail "$rc shape(s) no longer match the phosphor binary."
+fi
 
 echo ""
 echo "form streaming (--selftest)"

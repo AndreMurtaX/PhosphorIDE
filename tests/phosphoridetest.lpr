@@ -80,42 +80,10 @@ uses
     run backwards. Roadmap item 19 is what found that out. }
   uphosphorclock;
 
-var
-  Checks: Integer = 0;
-  Failures: Integer = 0;
-  Section: String = '';
-
-procedure Group(const AName: String);
-begin
-  Section := AName;
-  WriteLn;
-  WriteLn('-- ', AName);
-end;
-
-procedure Check(const AWhat: String; ACondition: Boolean);
-begin
-  Inc(Checks);
-  if ACondition then
-    Exit;
-  Inc(Failures);
-  WriteLn('FAIL  [', Section, '] ', AWhat);
-end;
-
-procedure CheckEq(const AWhat, AExpected, AGot: String);
-begin
-  Inc(Checks);
-  if AExpected = AGot then
-    Exit;
-  Inc(Failures);
-  WriteLn('FAIL  [', Section, '] ', AWhat);
-  WriteLn('        expected: ', AExpected);
-  WriteLn('        got:      ', AGot);
-end;
-
-procedure CheckEqInt(const AWhat: String; AExpected, AGot: Integer);
-begin
-  CheckEq(AWhat, IntToStr(AExpected), IntToStr(AGot));
-end;
+{ The scoreboard, shared with tests/phosphorcontract.lpr. It used to be written
+  out here; two programs counting checks two ways is the defect this repository
+  keeps writing rules against, so there is one copy and both include it. }
+{$I checks.inc}
 
 { ------------------------------------------------------- diagnostic parsing - }
 
@@ -2629,8 +2597,9 @@ end;
 
 { ONE TABLE ANSWERS FIVE QUESTIONS, AND A WRONG ANSWER IS INVISIBLE.
 
-  Roadmap item 29 replaced five sorted indexes, asked in turn, with one sorted
-  table and one binary search. Its own hazard paragraph is the reason this exists:
+  Roadmap item 29 replaced six sorted indexes, asked in turn, with one sorted
+  table and one binary search -- six and not five, because the tier question was
+  itself a loop over one index per tier. Its own hazard paragraph is the reason this exists:
   a keyword that stops being found is painted as an identifier, which no build
   catches, no screenshot shows and nobody notices until they wonder why `next` is
   not blue.
@@ -2703,8 +2672,8 @@ begin
   Check('every literal word classifies as one' + Since, Ok);
 
   { THE ONE OVERLAP, AND IT IS CHECKED BOTH WAYS. `error` is in the keyword table
-    AND the core table. The five separate searches asked about keywords first, so
-    it painted as a keyword; the merge keeps that order, and the generator PRINTS
+    AND the core table. The separate searches asked the keyword index before the
+    built-in tiers, so it painted as a keyword; the merge keeps that order, and the generator PRINTS
     the choice it made. If a future Phosphor adds a second overlap, that line of
     output is the warning -- and this assertion is what turns a silent change of
     mind into a red test. }

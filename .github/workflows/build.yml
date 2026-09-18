@@ -11,8 +11,16 @@ name: build
 #     compiler's text as well as its exit code, because lazbuild has answered 0
 #     over a compiler that did not.
 #   * bin/phosphoridetest -- the diagnostic parser, the generated word tables, the
-#     highlighter's scanner and the protocol codec. 125 checks. None of these has
-#     a visible failure mode, which is exactly why they are tested here.
+#     highlighter's scanner and the protocol codec. None of these has a visible
+#     failure mode, which is exactly why they are tested here. (This comment gave
+#     a check COUNT until 2026-09-17, and by then the count was wrong by a factor
+#     of seven. The program prints its own count; a second copy of a number is a
+#     second copy that goes stale.)
+#   * bin/phosphorcontract -- the same parser against the REAL phosphor binary
+#     rather than against strings this repository wrote down. It is the only
+#     thing that notices when the host rewords a message, renumbers an exit code
+#     or moves a diagnostic to stdout, any of which silently breaks
+#     jump-to-error while every other check here stays green.
 #   * phosphoride --selftest -- every form is CONSTRUCTED from its .lfm. This is
 #     the check that catches a hand-written .lfm naming a property its .pas does
 #     not publish, which does not fail at build time and does not fail at run time
@@ -77,16 +85,40 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      # THE CONTRACT CHECK NEEDS A BINARY, AND A CHECKOUT IS NOT ONE. lazbuild
+      # rather than Phosphor's own scripts/build.{ps1,sh}: Lazarus is already
+      # installed by the step above, lazbuild resolves the LCL and LazUtils paths
+      # itself, and the .lpi already targets ../../bin/phosphor -- which is
+      # exactly the sibling position PhosphorIDE's host search looks in, two
+      # levels up from PhosphorIDE/bin. So the search itself is what runs here,
+      # and the log will say `from a Phosphor checkout beside this one`.
+      #
+      # This step does NOT hold Phosphor to PhosphorIDE's zero-warnings bar. That
+      # bar is the sibling repository's to set, in its own CI.
+      - name: Build the phosphor host
+        run: lazbuild --build-mode=Default Phosphor/host/console/phosphor.lpi
+
+      # Fails HERE rather than three steps later inside a build script, and puts
+      # the version in the log so that a contract failure can be attributed to
+      # the binary that produced it.
+      - name: Say which binary answered
+        shell: bash
+        run: |
+          exe="Phosphor/bin/phosphor"
+          [ "${{ runner.os }}" = "Windows" ] && exe="Phosphor/bin/phosphor.exe"
+          test -x "$exe" || { echo "no host binary at $exe"; exit 1; }
+          "$exe" --version
+
       - name: Build and check (Windows)
         if: runner.os == 'Windows'
         working-directory: PhosphorIDE
         shell: pwsh
-        run: powershell -NoProfile -File scripts\build.ps1 -PhosphorRepo ..\Phosphor
+        run: powershell -NoProfile -File scripts\build.ps1 -PhosphorRepo ..\Phosphor -RequireHost
 
       - name: Build and check (Linux)
         if: runner.os == 'Linux'
         working-directory: PhosphorIDE
-        run: xvfb-run -a bash scripts/build.sh --phosphor ../Phosphor
+        run: xvfb-run -a bash scripts/build.sh --phosphor ../Phosphor --require-host
 
       - name: Keep the binaries
         if: always()

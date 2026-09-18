@@ -24,12 +24,13 @@ sits low because nothing depends on it; item 17 sits last because it has a cost 
 the list does not, named where it is described.
 
 **That ordering is spent**, and the Phosphor lead time it was built around turned out to be
-a day rather than a season. **ONE thing on the first list is still open.** This paragraph
-named two until 2026-09-17:
+a day rather than a season. **NOTHING ON THE FIRST LIST IS OPEN.** This paragraph named two
+things on the morning of 2026-09-17 and both closed that day:
 
-- **Item 2a**, the contract test against the real binary, which has not moved at all. It
-  is the only coupling between the two repositories with no automatic check behind it,
-  and the only numbered item on this list carrying no DONE line.
+- ~~**Item 2a**, the contract test against the real binary, which has not moved at all.~~
+  **Done.** `tests/phosphorcontract.lpr`, 130 checks against the real binary. It was the
+  last item on this list to close and the one that had never moved; what it found in its
+  first run is item 30.
 - ~~**Two clauses of item 1**: `xvfb-run -a bash scripts/build.sh` has still never been
   run by anyone here, and neither has a `--release` build on Linux.~~ **Both were run on
   2026-09-17** and `docs/building.md` has the runs: the `xvfb-run` branch exits 0 with the
@@ -209,6 +210,56 @@ new name. That only works if something runs it on every push.
 ---
 
 ## 2a. A contract test against the real phosphor binary
+
+**DONE 2026-09-17.** `tests/phosphorcontract.lpr` and `tests/uhostprobe.pas`, six committed
+fixtures under `tests/fixtures/contract/`, **130 checks against the real binary**, wired into
+both build scripts and into CI. The oldest open item on this list, and the last to close.
+
+**WHAT IT FOUND ON ITS FIRST RUN IS WORTH MORE THAN THE TEST.** The Why below says it would
+catch a reworded message. It did better: it caught **this repository being wrong about the
+other one**, in claims that had been checked for a year against strings written down here.
+
+- `uphosphormsg.pas`'s header listed **`usage:`** among the shapes that become
+  `pmkHostError`. It cannot: a real usage line is `usage: phosphor compile ...` with no
+  `phosphor: ` prefix at all, and the parser returns early without one.
+- **`phosphor debug: ` is a second prefix** nothing here knew about. Every `--port` refusal
+  carries it, so the debugger's own refusals reach the Output pane as ordinary program text
+  -- on exactly the path where this editor most wants to surface one.
+- A refusal whose echoed path contains `:12: ` **forges a source location**, which is the
+  one failure that unit exists to prevent, and it is reachable.
+- The header's worked example that **a line number can exceed the file's line count** is
+  FALSE today: 34 constructed shapes, not one past the end.
+- `udebugsession.pas` said `--help` "says nothing about `--port`". It says it on its own
+  line, and says it is for an editor.
+
+The first three are item 30. The last two are corrected where they were written.
+
+**AND ONE THING IT GOT WRONG WAS MINE.** The first run was red on `pmkPackedError`, because
+this program asserted that a pathless diagnostic is not jumpable. It is:
+`HasSourceLocation` is `(Kind in [pmkSourceError, pmkPackedError]) and (Line > 0)`
+(`uphosphormsg.pas:223-226`), because the editor supplies the path itself -- it knows which
+file it packed. Asserting False would have pinned a defect that does not exist.
+
+**A MESSAGE THIS REPOSITORY COPIED IS HARD; A MESSAGE IT OBSERVES IS SOFT.** Three strings
+are retyped into `uphosphormsg.pas`'s header as worked examples -- `no function
+nosuchfunc$:%`, `cannot open "cafe.txt" for input: no such file`, `file not found: nope.bas`
+-- and `check-citations.py` cannot protect them, because they carry no `file:line`. That is
+precisely the second failure mode its own docstring says nothing finds. This test is that
+mechanism, and those three are asserted byte-exact. Every other message is checked and
+reported as `WORDING MOVED` **without failing**, so a reword in Phosphor tells its authors
+that a consumer noticed rather than turning a build red in another repository.
+
+**Exit 3 is not asserted and must not be.** The taxonomy says the interpreter faulted. Deep
+recursion is guarded at 262 144 frames and answers 1; 200 000 nested parens are guarded at
+256 levels and answer 1; four kinds of corrupt bytecode are all guarded and all answer 1.
+The only provocation found cost **126 seconds and a 24 GB working set**. `PhosphorExitCodeText(3)`
+stays a pure-string check where it already is.
+
+**Both clauses that demanded watching were watched.** The skip: the host moved aside, exit
+**77** with its announcement printed, and `--require-host` refusing to skip in the same run.
+The red: the runtime message changed to `division by nothing`, which named
+`SHAPE MOVED: pmkSourceError (runtime)` in the block AND in the summary's last line, then
+reverted to green. A gate nobody has watched fail is not known to be able to fail.
 
 **What.** A check that runs the ACTUAL `phosphor` binary against a handful of deliberately
 broken `.bas` files and asserts the shapes this editor parses: the four diagnostic forms,
@@ -558,8 +609,10 @@ carries `Index`, `Name` (the function's name, or `(main)`), `Path` and `Line`
 
 Double-click jumps through `GotoSource` (`src/umainform.pas:1047`) rather than a second
 navigator, because that is the one place that clamps a line past the end of a file -- and a
-line number genuinely can exceed the file's line count: an unterminated block in a
-three-line file reports line 4.
+line number may in principle exceed the file's line count -- though the example this
+sentence used to give, an unterminated block in a three-line file reporting line 4,
+was disproved by item 2a on 2026-09-17 and is corrected at `uphosphormsg.pas`'s
+header.
 
 **Done when.** Three-deep recursion shows four rows including `(main)`; double-click moves
 the caret and switches tab; selecting a frame drives the variables pane; the pane clears on
@@ -2183,7 +2236,7 @@ Six is what the code did. `usynphosphor` asked operator, literal and keyword, an
 `PhosphorBuiltinTier` LOOPED over all three built-in tiers -- `uphosphorlang.pas` at
 `9c95592^`, lines 839-851 -- so a word in none of them, which is most words a person
 types, paid six `Find` calls and not five. The **What** section below says six twice, and
-`uphosphorlang.pas:1347` says six: the three places that said five were all written after
+`uphosphorlang.pas:1349` says six: the three places that said five were all written after
 the measurement, from memory, on the same day, and the correct copies were the older ones.
 The subject line of `9c95592` still says five and cannot be changed; this is the correction
 a reader will find.
@@ -2218,7 +2271,7 @@ and names the first one that is wrong. Proven by breaking it: flipping one kind 
 in the generated table turns it red with `1 wrong, first is "abs"`.
 
 **ONE WORD IS IN TWO TABLES.** `error` is both a keyword and a core built-in, and the
-five separate searches asked about keywords first. The merge keeps that order, the
+separate searches asked the keyword index BEFORE the built-in tiers. The merge keeps that order, the
 generator **prints every word it had to choose for**, and the test asserts the choice
 both ways -- `IsPhosphorKeyword('error')` true, `IsPhosphorBuiltin('error')` false,
 exactly as the old chain answered. A second overlap arriving from a new Phosphor
@@ -2264,6 +2317,63 @@ after.
 
 **Touches.** `tools/gen-keywords.py`, `src/core/uphosphorlang.pas` (generated),
 `tests/phosphoridetest.lpr`.
+
+---
+
+## 30. Three prefixes the diagnostic parser does not know
+
+**What.** `ParsePhosphorMessage` recognises one prefix, `phosphor: `, and the REPL's
+`error: `. Measured against the real binary on 2026-09-17 by item 2a, that is not enough:
+
+1. **`usage: ` carries no prefix at all.** `phosphor compile` with no arguments prints
+   `usage: phosphor compile [--check] <in.bas> <out.pbc>` and exits 2. The parser returns
+   early on any line not starting with `phosphor: `, so a refusal that stopped the run from
+   happening reaches the Output pane as ordinary program text, unstyled, with nothing to say
+   that nothing ran.
+2. **`phosphor debug: ` is a second prefix.** All five `--port` refusals carry it --
+   `phosphor debug: --port wants 1..65535, got 99999`, `phosphor debug: --port needs a port
+   number` -- and `debug` with no file gives a two-line block in the same shape. Every one
+   comes back `pmkPlain`. This is the worst of the three, because the debug launch path is
+   where this editor most needs to tell somebody why a session did not start.
+3. **A refusal can forge a source location.** `phosphor run "a:12: b.bas"` gives
+   `phosphor: file not found: a:12: b.bas`, and the parser answers `pmkSourceError`, path
+   `file not found: a`, line 12, **jumpable**. That is the exact failure the unit's header
+   opens by describing. `FindLineSeparator` starts at index 3 of the text after the prefix,
+   so `file not found` is fourteen characters of runway and the first `:<digits>: ` in the
+   echoed path wins.
+
+**Why.** The first two are silent: a refusal that should be styled as an error is styled as
+output, and nobody notices because nothing looks broken. The third is not silent, it is
+wrong -- double-clicking it opens a file that does not exist and puts the caret on line 12.
+
+**Reachability is not the same on both platforms**, which is what makes the third one worth
+doing rather than noting. On Windows a path cannot contain a colon, so it takes a
+deliberately crafted argument. On Linux a filename may legally contain `:12: `, and then an
+ordinary `file not found` on an ordinary file forges a location by accident.
+
+**Done when.**
+
+- A refusal is recognised by its shape BEFORE the separator search runs, not after. The
+  known host-refusal openings (`file not found: `, `cannot write to `) are the ones the host
+  actually emits; anything else keeping the `phosphor: ` prefix stays `pmkHostError`.
+- `usage: ` and `phosphor debug: ` classify as `pmkHostError`, with the same "no location"
+  answer from `HasSourceLocation`.
+- `tests/phosphorcontract.lpr` is the regression test: the three checks currently marked
+  `(gap 1)`, `(gap 2)` and `(gap 3)` flip from pinning today's behaviour to pinning the
+  fixed behaviour, **against the real binary**, and the comment beside each says so.
+- `phosphoridetest` gains the same cases as pure strings, so they are checked with no host.
+- `uphosphormsg.pas`'s header stops recording them as known gaps.
+
+**Touches.** `src/core/uphosphormsg.pas`, `tests/phosphoridetest.lpr`,
+`tests/phosphorcontract.lpr`.
+
+**Not on this list, and why.** The host's `cannot write to <path>: <message>` tail is the
+FPC RTL's `Ex.Message`, localised by the OS and emitted in the **console OEM codepage** --
+measured as byte `$C6` where a-tilde belongs, which is CP850 and is neither UTF-8 nor
+CP1252. That is a real counter-example to this repository's "the host emits UTF-8" invariant
+and it will render as mojibake in the Output pane, but the defect is **Phosphor's**: this
+editor is right to pass bytes through untouched. It belongs in
+`docs/phosphor-debugger-debts.md`'s successor, not here.
 
 ---
 

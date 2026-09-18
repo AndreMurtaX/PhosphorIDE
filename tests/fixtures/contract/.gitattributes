@@ -1,0 +1,6 @@
+# BYTE FIXTURES. Every assertion in tests/phosphorcontract.lpr is about what
+# the host prints for exactly these bytes, including the line number it
+# reports. Letting git rewrite the endings on checkout would move the file
+# under the test on one platform and not the other, and the failure would
+# read as the host having changed.
+*.bas -text

@@ -37,10 +37,11 @@ type
 
   { WHAT A WORD IS, in one answer.
 
-    The five questions below used to be five searches, asked in turn, over five
-    indexes -- so a word that is none of them, which is what a person's own names
-    are and therefore what most words in a program are, paid for all five before
-    being told no. Measured at -O3 on 2026-09-17: 3,5 us for a miss and 0,9 us for
+    FIVE QUESTIONS, SIX INDEXES. The five questions below used to be answered by
+    six sorted indexes asked in turn -- operator, literal, keyword, and one per
+    built-in tier, because the tier question LOOPED over all three -- so a word
+    that is none of them, which is what a person's own names are and therefore
+    what most words in a program are, paid for all six before being told no. Measured at -O3 on 2026-09-17: 3,5 us for a miss and 0,9 us for
     a hit, against 0,04 us for the LowerCase(Copy(...)) that precedes it. Two
     identifiers on a line is about 7 us, paid on every line of every rescan, every
     file open and every scroll.
@@ -1233,7 +1234,8 @@ end;
 
 { THE FIVE OLD QUESTIONS, EACH NOW ONE SEARCH AND ONE COMPARE. They are kept
   because they are what reads well at a call site and because other code asks
-  them; what changed is that asking all five costs one search rather than five. }
+  them; what changed is that asking all five costs one search rather than six --
+  six, because the tier question was a loop over three indexes of its own. }
 function IsPhosphorKeyword(const AWord: String): Boolean;
 var
   Kind: TPhosphorWordKind;

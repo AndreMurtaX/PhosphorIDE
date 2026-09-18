@@ -28,6 +28,10 @@ param(
     # Where a Phosphor checkout lives, for the generated-tables check. Skipped
     # when it is not there -- a contributor need not have both repositories.
     [string]$PhosphorRepo = '',
+    # Forbid the host contract check from SKIPPING. In CI the phosphor binary is
+    # built a step earlier, so a skip there can only mean that step lied -- and a
+    # check that quietly does not run reads as a pass.
+    [switch]$RequireHost,
     [int]$SelfTestTimeoutSeconds = 60
 )
 
@@ -85,9 +89,11 @@ function Invoke-LazBuild($project, $buildMode) {
 
 Invoke-LazBuild (Join-Path $root 'src\phosphoride.lpi') $mode
 Invoke-LazBuild (Join-Path $root 'tests\phosphoridetest.lpi') 'Default'
+Invoke-LazBuild (Join-Path $root 'tests\phosphorcontract.lpi') 'Default'
 
 $exe = Join-Path $bin 'phosphoride.exe'
 $testExe = Join-Path $bin 'phosphoridetest.exe'
+$contractExe = Join-Path $bin 'phosphorcontract.exe'
 if (-not (Test-Path $exe)) { Fail "no binary at $exe" }
 
 if ($NoChecks) {
@@ -102,6 +108,20 @@ Write-Host ''
 Write-Host 'unit checks'
 & $testExe
 if ($LASTEXITCODE -ne 0) { Fail "$LASTEXITCODE unit check(s) failed." }
+
+# THE ONE COUPLING BETWEEN THE TWO REPOSITORIES THAT HAD NO CHECK. Everything
+# above tests uphosphormsg.pas against strings THIS repository wrote down; this
+# runs the actual binary and asserts the shapes it really emits. Exit 77 is its
+# skip, announced by the program itself so it exists however it was invoked.
+Write-Host ''
+Write-Host 'host contract'
+if ($RequireHost) { & $contractExe --require-host } else { & $contractExe }
+$rc = $LASTEXITCODE            # on its own line: a pipeline measures the pipe
+if ($rc -eq 77) {
+    # Already announced itself, in its own words. Nothing to add.
+} elseif ($rc -ne 0) {
+    Fail "$rc shape(s) no longer match the phosphor binary."
+}
 
 Write-Host ''
 Write-Host 'form streaming (--selftest)'

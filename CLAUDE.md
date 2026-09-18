@@ -43,8 +43,28 @@ Nothing is done on a claim. An increment is complete when all five hold:
 1. `lazbuild` builds with **zero errors, zero warnings, zero notes**. Both `.lpi` files
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
-2. `bin/phosphoridetest` is **all green** -- today 850 checks, exit 0. The count is
-   printed; if it went down, something was deleted.
+2. **Two binaries, and they answer different questions.**
+   `bin/phosphoridetest` is **all green** -- today 850 checks, exit 0. The count is
+   printed; if it went down, something was deleted. It is HERMETIC: it spawns
+   nothing, needs no other repository, and runs the same on a machine that has
+   never seen Phosphor. Keep it that way.
+
+   `bin/phosphorcontract` runs the **real `phosphor` binary** and asserts the
+   shapes this editor parses -- 130 checks today. Everything in the other program
+   tests `uphosphormsg.pas` against strings THIS repository wrote down; this one
+   is the only thing that notices when the host rewords a message, renumbers an
+   exit code or moves a diagnostic to stdout, each of which silently breaks
+   jump-to-error while all 850 of those checks stay green. It **exits 77 and says
+   so** when no host is found, because a check that quietly does not run reads as
+   a pass; `--require-host` removes the skip, and CI passes it because the binary
+   is built two steps earlier there.
+
+   Roadmap item 2a is what it closed, and what it found in its first run -- three
+   prefixes the parser does not know -- is item 30. Its own header carries the
+   rule that keeps it honest: **a message this repository has copied into its own
+   source is hard; a message it merely observes is soft**, reported as
+   `WORDING MOVED` and not counted as a failure, so a reword in Phosphor is never
+   a red build here.
 3. `phosphoride --selftest <report>` exits **0 under a timeout**. It constructs every
    form and writes what it found to the report file. The timeout is not optional; see
    trap 3.
@@ -77,8 +97,10 @@ Windows:
 ```powershell
 lazbuild --build-mode=Default src\phosphoride.lpi
 lazbuild tests\phosphoridetest.lpi
+lazbuild tests\phosphorcontract.lpi
 bin\phosphoridetest.exe
 $code = $LASTEXITCODE           # on its own line: a pipeline measures the pipe
+bin\phosphorcontract.exe       # 0 green, 77 skipped-and-said-so, else a count
 $p = Start-Process bin\phosphoride.exe -PassThru `
        -ArgumentList '--selftest', "$env:TEMP\phosphoride-selftest.txt"
 if (-not $p.WaitForExit(30000)) { $p.Kill(); throw '--selftest hung' }
@@ -91,7 +113,9 @@ Linux:
 ```bash
 lazbuild --build-mode=Default src/phosphoride.lpi
 lazbuild tests/phosphoridetest.lpi
+lazbuild tests/phosphorcontract.lpi
 bin/phosphoridetest; echo $?
+bin/phosphorcontract; echo $?   # 0 green, 77 skipped-and-said-so, else a count
 xvfb-run -a timeout 30 bin/phosphoride --selftest /tmp/phosphoride-selftest.txt; echo $?
 python3 tools/gen-keywords.py ../Phosphor --check
 ```
@@ -234,8 +258,14 @@ the bar.
   nope.bas` into a jump to line 0 of a file called `file not`. Messages contain colons
   (`no function nosuchfunc$:%`), so the separator is found by searching for
   `:<digits>: ` past any drive letter -- never by splitting on the first or last colon.
-  There is never a column, and the line number **can exceed the file's line count** (an
-  unterminated block in a three-line file reports line 4), so clamp before scrolling.
+  There is never a column. The line number **may in principle exceed the file's line
+  count**, so clamp before scrolling -- but the example this file gave for years, an
+  unterminated block in a three-line file reporting line 4, was measured on 2026-09-17
+  and is FALSE: over 34 constructed shapes not one reported a line past the end,
+  because Phosphor routes unterminated blocks through `FailUnterminated`, which names
+  the line the block OPENED on. Phosphor, in that function, is who would have to change
+  it. The clamp stays -- a host is entitled to answer otherwise -- and roadmap item 2a's
+  contract test is what turned a claim nobody could check into one that was.
 - **A `.bas` is saved as UTF-8 with NO byte-order mark.** Still the rule, and its reason
   was wrong: measured on 2026-09-16, `phosphor run` on a BOM-saved file works, because
   the console host STRIPS a leading BOM when it reads a file
@@ -393,7 +423,7 @@ the bar.
   turn -- operator, literal, keyword, and then each of the three built-in tiers, because
   `PhosphorBuiltinTier` loops -- and a word in none of them, which is most words a person
   types, paid for all six. (This said FIVE until 2026-09-17, in three places written the
-  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1347` said six. A
+  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1349` said six. A
   count is derived or it is cited.) One table and one binary search took the same measurement from
   **13,28 us per line to 2,28**, and the worst single keystroke at 5000 lines from
   86,46 ms to 19,74. `ScanFoldLine` costs 0,47 us in both runs; only its SHARE moved,

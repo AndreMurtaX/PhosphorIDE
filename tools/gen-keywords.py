@@ -248,10 +248,11 @@ type
 
   { WHAT A WORD IS, in one answer.
 
-    The five questions below used to be five searches, asked in turn, over five
-    indexes -- so a word that is none of them, which is what a person's own names
-    are and therefore what most words in a program are, paid for all five before
-    being told no. Measured at -O3 on 2026-09-17: 3,5 us for a miss and 0,9 us for
+    FIVE QUESTIONS, SIX INDEXES. The five questions below used to be answered by
+    six sorted indexes asked in turn -- operator, literal, keyword, and one per
+    built-in tier, because the tier question LOOPED over all three -- so a word
+    that is none of them, which is what a person's own names are and therefore
+    what most words in a program are, paid for all six before being told no. Measured at -O3 on 2026-09-17: 3,5 us for a miss and 0,9 us for
     a hit, against 0,04 us for the LowerCase(Copy(...)) that precedes it. Two
     identifiers on a line is about 7 us, paid on every line of every rescan, every
     file open and every scroll.
@@ -326,11 +327,13 @@ uses
 
 # THE MERGE, AND THE ONE WORD IT HAS TO CHOOSE FOR.
 #
-# The editor used to ask five separate sorted indexes in turn -- operator,
-# literal, keyword, then the three built-in tiers -- so a word in none of them
-# paid for all five. One table answers in one binary search, but a table needs
-# one kind per word and the five tables are not disjoint: `error` is both a
-# keyword and a core built-in.
+# The editor used to ask six separate sorted indexes in turn -- operator,
+# literal, keyword, then one per built-in tier -- so a word in none of them paid
+# for all six. (This sentence said FIVE until 2026-09-17 while listing six things
+# in the same breath, and that wrong count reached two documents and a commit
+# subject before anyone ran the old code to count.) One table answers in one
+# binary search, but a table needs one kind per word and the six tables are not
+# disjoint: `error` is both a keyword and a core built-in.
 #
 # THE MERGE THEREFORE APPLIES THE OLD CHAIN'S PRIORITY, in the order it asked,
 # and PRINTS every word it had to choose for. A second overlap arriving from a
@@ -485,7 +488,8 @@ end;
 
 { THE FIVE OLD QUESTIONS, EACH NOW ONE SEARCH AND ONE COMPARE. They are kept
   because they are what reads well at a call site and because other code asks
-  them; what changed is that asking all five costs one search rather than five. }
+  them; what changed is that asking all five costs one search rather than six --
+  six, because the tier question was a loop over three indexes of its own. }
 function IsPhosphorKeyword(const AWord: String): Boolean;
 var
   Kind: TPhosphorWordKind;
@@ -631,8 +635,8 @@ def render(tiers, sigs, source_label):
         sorted(KEYWORDS), sorted(OPERATORS), sorted(LITERALS),
         core, sorted(tiers['package']), sorted(tiers['gui']))
     for word, kept, dropped in overlaps:
-        print('  overlap: %r is %s and %s -- kept %s, the order the five '
-              'separate searches asked in' % (word, kept, dropped, kept))
+        print('  overlap: %r is %s and %s -- kept %s, the order the separate '
+              'searches asked in' % (word, kept, dropped, kept))
     arrays = '\n\n'.join([
         pas_array('ClassWords', [w for w, _ in rows]),
         pas_kind_array('ClassKinds', [k + 1 for _, k in rows]),
