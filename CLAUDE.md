@@ -44,20 +44,21 @@ Nothing is done on a claim. An increment is complete when all five hold:
    pass `-vewn` in `CustomOptions`; a note is a defect until proven cosmetic, and it is
    never suppressed.
 2. **Two binaries, and they answer different questions.**
-   `bin/phosphoridetest` is **all green** -- today 850 checks, exit 0. The count is
+   `bin/phosphoridetest` is **all green** -- 992 checks on 2026-09-18, exit 0, the
+   same number on both machines. The count is
    printed; if it went down, something was deleted. It is HERMETIC: it spawns
    nothing, needs no other repository, and runs the same on a machine that has
    never seen Phosphor. Keep it that way.
 
    `bin/phosphorcontract` runs the **real `phosphor` binary** and asserts the
-   shapes this editor parses -- 130 checks on Windows and 131 on Linux today, and
-   the difference is deliberate: whether an echoed path is case-folded is a
+   shapes this editor parses -- 163 checks on Windows and 164 on Linux on
+   2026-09-18, and the difference is deliberate: whether an echoed path is case-folded is a
    question that only exists on a case-insensitive filesystem, so the same
    property is asserted through a refusal on the other one. Everything in the other program
    tests `uphosphormsg.pas` against strings THIS repository wrote down; this one
    is the only thing that notices when the host rewords a message, renumbers an
    exit code or moves a diagnostic to stdout, each of which silently breaks
-   jump-to-error while all 850 of those checks stay green. It **exits 77 and says
+   jump-to-error while all 992 of those checks stay green. It **exits 77 and says
    so** when no host is found, because a check that quietly does not run reads as
    a pass; `--require-host` removes the skip, and CI passes it because the binary
    is built two steps earlier there.
