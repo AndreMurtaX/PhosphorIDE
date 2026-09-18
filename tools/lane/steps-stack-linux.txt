@@ -20,15 +20,45 @@ key F5
 wait 600
 key shift+F9
 wait 5000
+
+# THE SESSION IS RUNNING, asked of the status bar, which is SHOWING whatever any
+# tab click did. `debug deep.bas` is what the run label reads while a session is
+# live; when the session has ended it says something else.
+text debug deep.bas
+
+# THE HOST ANSWERED. Without a phosphor binary the Debug menu is greyed and none
+# of the above happens, so this separates "the session ran" from "the editor
+# drew a debug-looking window".
+text Phosphor BASIC
+
+# FIVE FRAMES, THREE LEVELS OF RECURSION PLUS THE TWO OUTER ONES. The tab
+# CAPTION carries the count -- `Call Stack (5)` -- and a tab caption is showing
+# whether or not its page is, which is exactly what makes it assertable here
+# while the rows behind it are not.
+text Call Stack (5)
+text Variables (3)
+
 bot 191 184
 wait 700
 shot 21-call-stack
+
+# AND NOW THE ROWS THEMSELVES, which are only SHOWING if the click above landed
+# on the tab strip. This is the assertion that would have caught the coordinate
+# rule going stale: measured 2026-09-18, `bot ... 184` lands on the tab strip in
+# a 752-tall window and 148 px below it in a 1011-tall one, because the output
+# panel GROWS with the window rather than keeping a fixed height. The three
+# screenshots of this case came back byte-identical and nothing went red.
+text down
+
 bot 100 66
 wait 1200
 shot 22-frame-3-selected
 bot 289 184
 wait 700
 shot 23-variables-of-frame-3
+
+# The variables of whichever frame is selected. `n` is the parameter of down().
+text local
 key ctrl+g
 wait 700
 key ctrl+a

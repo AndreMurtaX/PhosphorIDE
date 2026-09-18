@@ -198,12 +198,19 @@ function Says() {
 }
 
 $script:Failures = 0
+# HOW MANY QUESTIONS THIS CASE ACTUALLY ASKED. Audited 2026-09-18: twenty-two of
+# the twenty-three cases on this side asked NONE. Every one printed
+# `text assertions: all passed` and exited 0, because a failure counter that is
+# never incremented is zero -- so re-running them proved the program starts and
+# does not crash while keys are sent at it, and nothing else.
+$script:Assertions = 0
 
 # `text <needle>` -- the assertion, named for the Linux driver's verb because it
 # asks the same question: does some control in this window SAY this to the person
 # in front of it. WM_GETTEXT is sent explicitly to each one; see the header for
 # why the text `Kids` already carries cannot be used for it.
 function Text($needle) {
+    $script:Assertions++
     foreach ($row in [Wnd]::Kids($form)) {
         $f = $row -split "`t"
         if ($f[3] -ne '1') { continue }
@@ -291,9 +298,20 @@ if ($KeepOpen) {
 # watched -- and after the teardown above, because a case that fails its
 # assertions must still not leave a phosphoride holding bin\phosphoride.exe open
 # for the next build.
-if ($script:Failures -gt 0) {
-    Write-Output "TEXT ASSERTIONS FAILED: $($script:Failures)"
+if ($script:Assertions -eq 0) {
+    # NOT A PASS. This case drove the editor and photographed it, which is
+    # evidence exactly once -- on the day somebody looked at the pictures. As a
+    # gate it asked nothing, so it cannot go red.
+    Write-Output ''
+    Write-Output 'THIS CASE ASSERTS NOTHING: 0 text checks.'
+    Write-Output 'Screenshots and `memo` dumps are evidence when a person reads them,'
+    Write-Output 'and a gate only when something compares them. Give it a `text` line,'
+    Write-Output 'or run it knowing it can only fail by crashing.'
     exit 1
 }
-Write-Output "text assertions: all passed"
+if ($script:Failures -gt 0) {
+    Write-Output "TEXT ASSERTIONS FAILED: $($script:Failures) of $($script:Assertions)"
+    exit 1
+}
+Write-Output "$($script:Assertions) assertion(s), all passed"
 exit 0

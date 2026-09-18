@@ -193,6 +193,11 @@ bot() {
 # Both go through readtext.py, which uses AT-SPI -- see its header for why that
 # and not xdotool, xclip or python3-xlib, none of which is on this machine.
 FAILURES=0
+# HOW MANY QUESTIONS THIS CASE ACTUALLY ASKED. Audited 2026-09-18: thirteen of
+# the seventeen cases here asked NONE, and every one of them printed
+# `text assertions: all passed` and exited 0, because a failure counter that is
+# never incremented is zero. A case that cannot fail is not a case.
+ASSERTIONS=0
 
 say() {
     echo "--- text of: $1 ---"
@@ -200,6 +205,7 @@ say() {
 }
 
 text() {
+    ASSERTIONS=$((ASSERTIONS + 1))
     if python3 "$HERE/readtext.py" --grep "$1" >/dev/null 2>&1; then
         echo "TEXT OK   $1"
     else
@@ -225,6 +231,7 @@ drag() {
 }
 
 menu() {
+    ASSERTIONS=$((ASSERTIONS + 1))
     if python3 "$HERE/readtext.py" --invoke "$1" >/dev/null 2>&1; then
         echo "MENU OK   $1"
     else
@@ -266,10 +273,23 @@ echo "$IDE_PID" > "$OUT/pid.txt"
 # A LANE THAT ONLY PRINTS IS A LANE SOMEBODY HAS TO READ. `text` assertions are
 # counted, and a run with a failed one says so in its last line and in its exit
 # code -- which is what lets this be run from a script rather than watched.
+if [ "$ASSERTIONS" -eq 0 ]; then
+    # NOT A PASS. This case drove the editor and photographed it, which is
+    # evidence exactly once -- on the day somebody looked at the pictures. As a
+    # gate it asked nothing, so it cannot go red, so re-running it proves only
+    # that the program starts and does not crash while keys are sent at it.
+    echo ""
+    echo "THIS CASE ASSERTS NOTHING: 0 text or menu checks, $(ls "$OUT"/*.png 2>/dev/null | wc -l) screenshot(s)."
+    echo "Screenshots are evidence when a person looks at them, and a gate only"
+    echo "when something compares them. Give it a \`text\` line, or run it knowing"
+    echo "it can only fail by crashing."
+    FAILURES=$((FAILURES + 1))
+fi
+
 if [ "$FAILURES" -gt 0 ]; then
-    echo "TEXT ASSERTIONS FAILED: $FAILURES"
+    echo "TEXT ASSERTIONS FAILED: $FAILURES of $ASSERTIONS"
 else
-    echo "text assertions: all passed"
+    echo "$ASSERTIONS assertion(s), all passed"
 fi
 
 # CLOSE BOTH, unless the caller says otherwise. Killing the editor does not kill
