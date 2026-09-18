@@ -92,5 +92,24 @@ public class Wnd {
     }, IntPtr.Zero);
     return outp;
   }
+
+  // MINIMISE SOMEBODY ELSE'S WINDOW, AND PUT IT BACK. A lane run needs the
+  // foreground and cannot ask for it politely: SendKeys has no target window, so
+  // whatever is in front receives the keys. See lane-windows.ps1's -Quieten.
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+
+  // Visible top-level windows of a process, titled or not. Unlike TopLevel this
+  // does NOT filter on the caption: the point is to get every window of theirs
+  // out of the way, and a splash or a tooltip has no caption to match on.
+  public static List<IntPtr> Windows(int pid) {
+    var outp = new List<IntPtr>();
+    EnumWindows(delegate(IntPtr h, IntPtr l) {
+      uint p; GetWindowThreadProcessId(h, out p);
+      if (p == (uint)pid && IsWindowVisible(h)) outp.Add(h);
+      return true;
+    }, IntPtr.Zero);
+    return outp;
+  }
 }
 "@

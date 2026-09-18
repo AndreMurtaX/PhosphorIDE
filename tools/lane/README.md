@@ -179,6 +179,24 @@ Four things cost real time on 2026-09-16 and are worth not rediscovering:
   fails on an assertion about text the script typed, look at the shot before
   looking at the editor.
 
+  **AND IT HAPPENED TWICE MORE ON 2026-09-18**, over a remote session, with the
+  same window. The second time the log named it -- `FOCUS FAIL ... the foreground
+  window is 'Claude'`, five times in one case -- and eight cases came back red for
+  a program whose only change that day was comments. The focus guard did its job:
+  it refused rather than typing into the chat. It cannot make the run valid.
+
+  `-Quieten <process>` is the answer, and it is narrow. The driver minimises that
+  process's visible top-level windows after the editor is up and restores exactly
+  the ones it minimised -- a window already minimised is not the driver's to
+  restore. The restore is on a `trap` as well as on every exit, and the trap tears
+  the editor down too: measured 2026-09-18 by making a step throw, the first cut
+  restored the window and left a phosphoride holding `bin\phosphoride.exe` open
+  against the next build.
+
+  It defaults to nothing, because naming somebody's window to hide is a decision
+  about their desktop. With `-Quieten claude` the same nineteen cases that had
+  gone eight red came back 19/19 and `focus=0` throughout.
+
 - **Nothing may steal focus mid-script.** A GTK menu holds a keyboard grab, and
   `XSetInputFocus` on the form drops it, so consecutive keys go in ONE `xdrive`
   invocation and every invocation is `nofocus` unless the script says `raise`.

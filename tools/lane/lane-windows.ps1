@@ -105,7 +105,11 @@ param(
     [string]$Fixture = '',
     [string]$Steps = '',
     [int]$StartupSeconds = 5,
-    [switch]$KeepOpen
+    [switch]$KeepOpen,
+    # Processes whose windows must be out of the way while this runs. Empty by
+    # default: hiding somebody's window is a decision about their desktop.
+    # See the block above Quieten for what this cost before it existed.
+    [string[]]$Quieten = @()
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -134,6 +138,62 @@ public class LaneWin {
   }
 }
 "@
+
+# A WINDOW THAT WILL NOT STAY BEHIND HAS COST THREE RUNS.
+#
+# `SendKeys` has no target window -- it goes to whatever has the foreground -- so
+# the operational rule in the README is that a Windows lane run owns the desktop
+# for its duration. On 2026-09-17 that rule was broken by the agent driving the
+# lane: it was streaming output into a chat window on the same desktop, the window
+# took the foreground between the `raise` and the `type`, and the fixture's answer
+# was typed into the chat. `3-typed.png` from that run is a photograph of it.
+#
+# On 2026-09-18 it happened twice more over a remote session, and the second time
+# the log said so in as many words -- `FOCUS FAIL ... the foreground window is
+# 'Claude'` -- while eight cases went red for a program that had not changed.
+#
+# So the driver can put those windows down and pick them back up. It restores
+# EXACTLY the ones it minimised: a window the person had already minimised is not
+# theirs to restore. And the restore is on a `trap` as well as on every exit,
+# because a driver that leaves somebody's window minimised because it crashed has
+# made things worse than the problem it was solving.
+$script:Quietened = @()
+
+function Quieten($names) {
+    foreach ($n in $names) {
+        foreach ($proc in (Get-Process $n -ErrorAction SilentlyContinue)) {
+            foreach ($h in [Wnd]::Windows($proc.Id)) {
+                if (-not [Wnd]::IsIconic($h)) {
+                    [Wnd]::ShowWindow($h, 6) | Out-Null      # SW_MINIMIZE
+                    $script:Quietened += $h
+                }
+            }
+        }
+    }
+    if ($script:Quietened.Count) {
+        Write-Host "quietened $($script:Quietened.Count) window(s): $($names -join ', ')"
+    }
+}
+
+function Unquieten() {
+    foreach ($h in $script:Quietened) { [Wnd]::ShowWindow($h, 9) | Out-Null }   # SW_RESTORE
+    $script:Quietened = @()
+}
+
+# AND THE TEARDOWN, because a trap that only restores a window is half a net.
+# Measured 2026-09-18 by making a step throw: the window came back and a
+# phosphoride was left running, holding bin\phosphoride.exe open against the next
+# build. This is the same teardown the normal path does, minus the reporting.
+function Teardown() {
+    if ($script:EditorPid) {
+        Stop-Process -Id $script:EditorPid -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 300
+    }
+    Get-Process phosphor -ErrorAction SilentlyContinue |
+        ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+}
+
+trap { Unquieten; Teardown; break }
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $exe = if ($env:PHOSPHORIDE) { $env:PHOSPHORIDE } else { Join-Path $root 'bin\phosphoride.exe' }
@@ -168,8 +228,9 @@ $p = Start-Process -FilePath $exe -WorkingDirectory $root -ArgumentList $Fixture
 Start-Sleep -Seconds $StartupSeconds
 $script:EditorPid = $p.Id
 $form = [Wnd]::TopLevel($p.Id)
-if ($form -eq [IntPtr]::Zero) { Write-Error 'no visible PhosphorIDE window'; exit 1 }
+if ($form -eq [IntPtr]::Zero) { Write-Error 'no visible PhosphorIDE window'; Unquieten; exit 1 }
 Write-Output "pid=$($p.Id) form=$form"
+Quieten $Quieten
 
 function Rect() {
     $r = New-Object Wnd+R
@@ -648,12 +709,14 @@ if ($script:Assertions -eq 0) {
     # evidence exactly once -- on the day somebody looked at the pictures. As a
     # gate it asked nothing, so it cannot go red.
     Write-Output ''
+    Unquieten
     Write-Output 'THIS CASE ASSERTS NOTHING: 0 text checks.'
     Write-Output 'Screenshots and `memo` dumps are evidence when a person reads them,'
     Write-Output 'and a gate only when something compares them. Give it a `text` line,'
     Write-Output 'or run it knowing it can only fail by crashing.'
     exit 1
 }
+Unquieten
 if ($script:Failures -gt 0) {
     Write-Output "TEXT ASSERTIONS FAILED: $($script:Failures) of $($script:Assertions)"
     exit 1
