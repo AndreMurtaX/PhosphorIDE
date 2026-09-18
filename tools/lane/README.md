@@ -158,6 +158,21 @@ one run of the Go to Definition case on 2026-09-16. Where a popup's EFFECT is th
 test — what the line says after Return — asserting that is still better than a
 picture of it.
 
+**PREFER `tab <name>` TO A COORDINATE.** It asks AT-SPI where the control is and
+clicks its centre, so no window size can invalidate it. Everything below about
+measuring from the bottom edge is the rule it replaces, kept because thirteen cases
+still use `bot` and because the way that rule failed is worth knowing: it assumed
+the output panel keeps a fixed height and the panel GROWS with the window -- 191 px
+up at 752 tall, 332 up at 1011 -- so the clicks missed, the pane never changed, and
+nothing went red.
+
+**AND A CASE THAT ASSERTS NOTHING NOW FAILS.** Audited 2026-09-18: thirteen of the
+seventeen cases here and twenty-two of the twenty-three on the Windows side made
+ZERO `text` checks. They take screenshots and print a pass, because a failure
+counter that is never incremented is zero. A screenshot is evidence on the day a
+person looks at it and a gate only when something compares it; both drivers now
+print the assertion count and refuse a case that asked nothing.
+
 **Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
 not down from the top. mutter gives this window a different height on different
 runs -- 700, 725 and 750 all seen on one afternoon -- so everything below the editor

@@ -124,7 +124,10 @@ reaching the Problems tab and its first row needs pixel coordinates and this win
 not have stable ones: measured 2026-09-17, one run reported 1000x675 through `xwininfo`
 while its own `xwd` frame came back 1330x950, so an offset derived from a screenshot
 does not describe the window the click lands in. AT-SPI cannot be asked instead -- a
-page tab and a list row expose neither an action nor extents under gail, checked.
+page tab and a list row expose no ACTION under gail, checked. (They do expose
+EXTENTS, which this sentence got wrong and 2026-09-18 corrected: `readtext.py
+--where` now answers a control's screen rectangle, and the lane clicks what it is
+told rather than what it assumed. See `CLAUDE.md`.)
 
 Two attempts at guessing those coordinates failed and a third was not made. **A lane
 case that is red because its coordinates are wrong teaches people to ignore red**, which

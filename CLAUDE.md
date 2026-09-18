@@ -190,8 +190,25 @@ XTest, frames through `xwd` decoded by PIL, and a `steps-*-linux.txt` per case,
 covering a debug session, the gutter marks, completion, signature help and find in
 files. One fact from it is worth carrying here, because it cost two runs that read
 as broken panes: **mutter gives this window a different height on different runs**
--- 700, 725, 750 and 775 all seen -- so every click in a Linux script is measured UP
-from the bottom edge, where the output panel is anchored.
+-- 700, 725, 750, 775, 986 and 1011 all seen -- so every click in a Linux script was
+measured UP from the bottom edge, "where the output panel is anchored".
+
+  **THAT RULE IS FALSE AND IT WAS FALSE WHEN IT WAS WRITTEN.** The panel is not
+  anchored with a fixed height; it GROWS with the window. Measured 2026-09-18: the
+  pane tab strip is 191 px up in a 752-tall window and **332 up in a 1011-tall one**.
+  The rule held only across the narrow band of heights mutter happened to hand out
+  that week. In a tall window every tab click lands in the list below the strip, the
+  pane never changes -- and nothing goes red, because the AT-SPI assertions read
+  hidden notebook pages as happily as visible ones.
+
+  **THE FIX IS TO ASK.** `readtext.py --where <name>` answers a control's screen
+  rectangle and `lane-linux.sh`'s `tab <name>` clicks its centre, so the script no
+  longer carries a constant that a window size can invalidate. That closes the half
+  of `docs/roadmap.md:127` which said a page tab "exposes neither an action nor
+  extents under gail": no action is right, no extents is wrong, and the extents are
+  what this needed all along. `--where` matches an exact name or a unique prefix,
+  because a pane caption carries its count while a session is live -- `Call Stack (5)`
+  -- and not before it starts.
 
 If one of the five cannot be met you are **blocked**. Say so precisely; do not lower
 the bar.
