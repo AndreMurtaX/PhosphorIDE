@@ -128,9 +128,31 @@ test of whether the line was drawn in the right place.
 
 ## Two latent defects found on this side while looking, neither of them this one
 
-Both were **reproduced** in a harness over an unmodified copy of the unit, and both are
-recorded rather than fixed, because neither can produce the measured defect and a fix
-smuggled in beside a diagnosis is a fix nobody reviewed:
+Both were **reproduced** in a harness over an unmodified copy of the unit, and both were
+recorded here rather than fixed in the same commit, because neither can produce the
+measured defect and a fix smuggled in beside a diagnosis is a fix nobody reviewed.
+
+**Both are FIXED now**, in their own increment with their own red run — and that run is
+the part worth reading, because **two of the three tests written for them asserted
+nothing on the first attempt.** Reverting each fix in turn:
+
+| fix reverted | first attempt | after |
+| --- | --- | --- |
+| the `try/finally` around the delivery loop | **red**, 2 failures | red |
+| the re-entrancy guard | **stayed green** | red |
+| counting the discarded bytes | **stayed green** | red |
+
+The re-entrancy case queued its second batch *before* the first `Poll`, so the bytes
+were already in the buffer when the outer drain took them and the re-entrant call had
+nothing to reorder; it now writes that batch from **inside** the handler. The overflow
+case looked for the words `discarded` and `newline`, which live in the format string and
+are there whether or not anything was counted; it now asserts the **number**.
+
+Neither would have been caught by writing the tests carefully. They were caught by
+breaking the code on purpose and looking — which is this repository's rule, and this is
+the second time in two days it has found a green that meant nothing.
+
+The defects, for the record:
 
 - **`Deposit`'s overflow cap discards silently and ends the session like a clean exit.**
   Past `MaxFrameBytes` the chunk is dropped, `FOverflow` is set, and `Drain` then fires
@@ -146,4 +168,9 @@ smuggled in beside a diagnosis is a fix nobody reviewed:
   path in the hot loop re-enters today — `DebugStopped` shows no dialog and pumps no
   messages — so it is latent until the first `MessageDlg` is added to a stop handler.
 
-Both are cheap hardening and belong in their own increment, with their own red run.
+The fixes are small. `Deposit` counts what it throws away and the transport exposes
+`EndReason`, which is `''` for an ordinary close and a sentence with a byte count
+otherwise; `HandleDisconnect` asks, and `Note`s it when there is one, so the one channel
+the session has for saying something unprompted gets used for the one case that needs
+it. `Drain` returns immediately when it is already on the stack, and puts the
+undelivered remainder back in a `finally`.

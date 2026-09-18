@@ -135,6 +135,8 @@ type
     FRaisedLink: Boolean;    // the main thread has reported the connection
     FRaisedEnd: Boolean;     // ...and the disconnection
     FOverflow: Boolean;      // guarded by FLock: the cap was hit
+    FOverflowBytes: Int64;   // guarded by FLock: HOW MUCH was thrown away
+    FDraining: Boolean;      // main thread only: Drain is on the stack
     FOnFrame: TDebugFrameEvent;
     FOnConnect: TDebugLinkEvent;
     FOnDisconnect: TDebugLinkEvent;
@@ -165,6 +167,22 @@ type
       Pinned in phosphoridetest: without it, deleting one call in Listen would
       be a silent regression with a symptom only `ss` can see. }
     function HandlesArePrivate: Boolean;
+
+    { WHY THE LINK ENDED, or '' when it ended the way a link is supposed to.
+
+      A CLOSED SOCKET AND A DISCARDED MEGABYTE ARRIVE AT THE SAME CALLBACK, and
+      until 2026-09-18 they were indistinguishable: OnDisconnect fired for both
+      and TDebugSession.HandleDisconnect treats a close as "the end of a session,
+      not an error", because a program that finished perfectly well ends this way
+      too. So the overflow path -- which throws bytes away and then ends the
+      session -- looked exactly like a clean exit, with no diagnostic anywhere.
+      Measured in a harness on 2026-09-18: 38 183 frames gone in one cut, and the
+      only way to know was to instrument the unit.
+
+      A caller that reports this is telling somebody the truth about a session
+      that ended badly. One that ignores it is where this started. }
+    function EndReason: String;
+
     property Port: Word read FPort;
     property OnFrame: TDebugFrameEvent read FOnFrame write FOnFrame;
     property OnConnect: TDebugLinkEvent read FOnConnect write FOnConnect;
@@ -420,12 +438,37 @@ begin
   FLock.Acquire();
   try
     if Length(FPending) + Length(FPartial) > MaxFrameBytes then
-      FOverflow := True
+    begin
+      { COUNTED, NOT JUST FLAGGED. The reader goes on reading and discarding until
+        the main thread next drains, so "the cap was hit" says nothing about how
+        much went. EndReason reports the total, because a number is what tells a
+        reader whether a frame was clipped or a session was lost. }
+      FOverflow := True;
+      Inc(FOverflowBytes, Length(AChunk));
+    end
     else
       FPending := FPending + AChunk;
   finally
     FLock.Release();
   end;
+end;
+
+function TDebugTransport.EndReason: String;
+var
+  over: Boolean;
+  bytes: Int64;
+begin
+  FLock.Acquire();
+  try
+    over := FOverflow;
+    bytes := FOverflowBytes;
+  finally
+    FLock.Release();
+  end;
+  if not over then
+    Exit('');
+  Result := Format('the debug link sent more than %d bytes with no newline in ' +
+    'them and was dropped; %d byte(s) were discarded', [MaxFrameBytes, bytes]);
 end;
 
 function TDebugTransport.TakePending: String;
@@ -458,42 +501,74 @@ begin
     FLock.Release();
   end;
 
-  if connected and (not FRaisedLink) then
-  begin
-    FRaisedLink := True;
-    if Assigned(FOnConnect) then FOnConnect(Self);
-  end;
+  { A RE-ENTRY IS A NO-OP, NOT A NESTED DRAIN, and this is a guard against a
+    defect that is latent rather than live. Everything below runs with the
+    UNDELIVERED REMAINDER in a local and FPartial already emptied, so a second
+    Drain entered from inside a frame handler takes the NEWER bytes and delivers
+    them BEFORE the older frames still sitting in the outer buffer -- and the
+    outer's closing assignment then clobbers whatever the inner left. Measured in
+    a harness on 2026-09-18 by re-entering from every seventh frame: 119
+    reorderings in 20 000, and in a real session an out-of-order stopped/response
+    pair is a Desync.
 
-  buf := FPartial + TakePending();
-  FPartial := '';
-  p := Pos(#10, buf);
-  while p > 0 do
-  begin
-    line := Copy(buf, 1, p - 1);
-    { A #13 before the #10 is tolerated on input and never produced on output --
-      the specification's own words. }
-    if (line <> '') and (line[Length(line)] = #13) then
-      SetLength(line, Length(line) - 1);
-    Delete(buf, 1, p);
-    if (line <> '') and Assigned(FOnFrame) then FOnFrame(Self, line);
-    p := Pos(#10, buf);
-  end;
-  { NO FLUSH. An unterminated tail is held, however long it takes -- see the unit
-    header. Half a frame is not a frame. }
-  FPartial := buf;
+    Nothing in the hot loop re-enters TODAY -- DebugStopped shows no dialog and
+    pumps no messages -- so this costs nothing now and is here for the first
+    MessageDlg somebody adds to a stop handler. The new bytes are not lost by
+    returning: they stay in FPending and the next Drain takes them, in order. }
+  if FDraining then
+    Exit;
+  FDraining := True;
+  try
+    if connected and (not FRaisedLink) then
+    begin
+      FRaisedLink := True;
+      if Assigned(FOnConnect) then FOnConnect(Self);
+    end;
 
-  if over then
-  begin
-    { A peer that will not end a line is not a peer worth keeping. }
+    buf := FPartial + TakePending();
     FPartial := '';
-    NoteEnd();
-    ended := True;
-  end;
+    try
+      p := Pos(#10, buf);
+      while p > 0 do
+      begin
+        line := Copy(buf, 1, p - 1);
+        { A #13 before the #10 is tolerated on input and never produced on output
+          -- the specification's own words. }
+        if (line <> '') and (line[Length(line)] = #13) then
+          SetLength(line, Length(line) - 1);
+        Delete(buf, 1, p);
+        if (line <> '') and Assigned(FOnFrame) then FOnFrame(Self, line);
+        p := Pos(#10, buf);
+      end;
+    finally
+      { NO FLUSH, AND THE REMAINDER GOES BACK WHATEVER HAPPENED. An unterminated
+        tail is held however long it takes -- half a frame is not a frame -- and
+        the try/finally is what makes that true of an exception too. Without it,
+        a handler that raises discards every complete frame still in the buffer
+        AND the tail, and leaves FPartial empty so the next drain resumes
+        mid-frame. In an ordinary build that exception draws a modal box, so it is
+        visible rather than silent; AppNoExceptionMessages is set only under
+        --selftest and --measure-typing, where it would not be. }
+      FPartial := buf;
+    end;
 
-  if ended and (not FRaisedEnd) then
-  begin
-    FRaisedEnd := True;
-    if Assigned(FOnDisconnect) then FOnDisconnect(Self);
+    if over then
+    begin
+      { A peer that will not end a line is not a peer worth keeping -- and
+        EndReason is what says so out loud, because this path and a clean close
+        both arrive at OnDisconnect. }
+      FPartial := '';
+      NoteEnd();
+      ended := True;
+    end;
+
+    if ended and (not FRaisedEnd) then
+    begin
+      FRaisedEnd := True;
+      if Assigned(FOnDisconnect) then FOnDisconnect(Self);
+    end;
+  finally
+    FDraining := False;
   end;
 end;
 

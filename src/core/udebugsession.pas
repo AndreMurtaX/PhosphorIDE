@@ -501,10 +501,26 @@ begin
 end;
 
 procedure TDebugSession.HandleDisconnect(Sender: TObject);
+var
+  why: String;
 begin
   { A closed socket IS the end of a session, not an error. The program may have
     finished perfectly well; the exit code arrives on `exited` when there is one,
-    and the caller's process watcher has the rest. }
+    and the caller's process watcher has the rest.
+
+    EXCEPT WHEN IT IS NOT, and until 2026-09-18 there was no way to tell from
+    here. The transport also ends the link when it has thrown a megabyte away for
+    want of a newline, and that arrived at this same callback and went quietly to
+    dsIdle -- a session that lost everything, reported as a program that finished.
+    EndReason is '' for the ordinary case and a sentence with a byte count for the
+    other, so the one channel this class has for saying something unprompted gets
+    used for the one case that needs it. }
+  if FTransport <> nil then
+  begin
+    why := FTransport.EndReason;
+    if why <> '' then
+      Note(why);
+  end;
   FHandshakeDone := False;
   FCurrentPath := '';
   FCurrentLine := 0;

@@ -3370,6 +3370,20 @@ type
     Frames: TStringList;
     Linked: Boolean;
     Ended: Boolean;
+    { A handler that misbehaves, so the transport can be asked what it does about
+      it. RaiseOn names the frame that throws; ReenterOn names the one that calls
+      Poll again from inside the callback. Both default to '' -- the ordinary
+      sink is unchanged, and every existing assertion goes through it. }
+    Transport: TDebugTransport;
+    RaiseOn: String;
+    ReenterOn: String;
+    { The re-entrant handler writes these to the peer and waits for the reader
+      thread to pick them up BEFORE it calls Poll again. Queuing them earlier is
+      what made the first version of this case useless: the bytes were already in
+      the buffer when the outer drain took them, so the inner drain had nothing to
+      reorder and the case passed with the guard removed. }
+    Peer: LongInt;
+    Extra: String;
     procedure GotFrame(Sender: TObject; const AFrame: String);
     procedure GotLink(Sender: TObject);
     procedure GotEnd(Sender: TObject);
@@ -3378,6 +3392,23 @@ type
 procedure TFrameSink.GotFrame(Sender: TObject; const AFrame: String);
 begin
   Frames.Add(AFrame);
+  { The re-entry goes first: a frame can be told to do both, and the interesting
+    order is deliver, re-enter, then throw. }
+  if (ReenterOn <> '') and (AFrame = ReenterOn) and (Transport <> nil) then
+  begin
+    if (Extra <> '') and (Peer >= 0) then
+    begin
+      fpSend(Peer, @Extra[1], Length(Extra), 0);
+      { Long enough for a loopback write to reach the reader thread and be
+        deposited. Not a barrier -- there is no way to ask the transport whether
+        it has unread bytes -- so this is the one sleep in the suite that is load
+        bearing, and the comment on the case says what a short one would hide. }
+      Sleep(250);
+    end;
+    Transport.Poll;
+  end;
+  if (RaiseOn <> '') and (AFrame = RaiseOn) then
+    raise Exception.Create('a frame handler that throws');
 end;
 
 procedure TFrameSink.GotLink(Sender: TObject);
@@ -3413,6 +3444,8 @@ var
   addr: TInetSockAddr;
   port: Word;
   s: String;
+  threw, over: Boolean;
+  n: Integer;
 begin
   Group('debug transport');
 
@@ -3494,6 +3527,131 @@ begin
     Pump(T, sink, 4);
     Check('a CRLF terminator is accepted and the CR stripped',
           (sink.Frames.Count = 1) and (sink.Frames[0] = '{"never":"terminated"}'));
+
+    { (d) A HANDLER THAT THROWS MUST NOT TAKE THE REST OF THE BUFFER WITH IT.
+
+      Until 2026-09-18 the undelivered remainder lived in a LOCAL while FPartial
+      was already '', and the assignment that put it back was the last statement
+      of the loop -- so an exception escaping OnFrame skipped it, discarding every
+      complete frame still in the buffer AND the unterminated tail, and leaving
+      FPartial empty so the next drain resumed mid-frame. Found by a harness on
+      2026-09-18 while hunting something else; it is latent rather than live,
+      because nothing in the hot loop raises today.
+
+      One write carries three whole frames and a tail. The handler throws on the
+      second. The first must have been delivered, the THIRD must survive to the
+      next poll, and the tail must still be waiting for its newline. }
+    sink.Frames.Clear;
+    sink.Transport := T;
+    sink.RaiseOn := '{"two":2}';
+    s := '{"one":1}' + #10 + '{"two":2}' + #10 + '{"three":3}' + #10 + 'tail-so-far';
+    fpSend(peer, @s[1], Length(s), 0);
+    threw := False;
+    try
+      Pump(T, sink, 4);
+    except
+      on E: Exception do
+        threw := True;
+    end;
+    sink.RaiseOn := '';
+    Check('a throwing frame handler is not swallowed', threw);
+    Check('  the frames before it were delivered',
+          (sink.Frames.Count >= 2) and (sink.Frames[0] = '{"one":1}'));
+    Pump(T, sink, 4);
+    Check('  and the frames after it survive the exception',
+          sink.Frames.IndexOf('{"three":3}') >= 0);
+    { The tail is the sharper half: if FPartial had been left empty the next
+      newline would complete something that is not a frame. }
+    s := #10;
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 4);
+    Check('  and so does the unterminated tail',
+          sink.Frames.IndexOf('tail-so-far') >= 0);
+
+    { (e) RE-ENTERING Poll FROM A FRAME HANDLER DELIVERS NOTHING OUT OF ORDER.
+
+      The same local-versus-field defect the other way round: a second drain
+      entered from inside a callback took the NEWER pending bytes and handed them
+      out BEFORE the older frames still sitting in the outer buffer, and the
+      outer's closing assignment then clobbered whatever the inner had left. A
+      harness re-entering from every seventh frame measured 119 reorderings in
+      20 000, and in a real session an out-of-order stopped/response pair is a
+      Desync.
+
+      Nothing re-enters today -- DebugStopped shows no dialog and pumps no
+      messages -- so this pins a guard rather than a fix somebody can feel.
+
+      HONEST ABOUT WHAT THIS PROVES: the second write has to have reached the
+      reader thread before the re-entrant Poll runs, and that is a sleep, not a
+      barrier. When it has not, the case passes for the wrong reason. Case (d)
+      above is the one that pins the mechanism deterministically; this one is
+      cheap and catches the guard being deleted outright. }
+    sink.Frames.Clear;
+    sink.ReenterOn := '{"first":1}';
+    sink.Peer := peer;
+    { WRITTEN FROM INSIDE THE HANDLER, which is the whole design of this case. The
+      first version queued this batch before the first Poll, so it was already in
+      the buffer when the outer drain took it and the re-entrant call had nothing
+      to reorder -- and removing the guard left the case GREEN, measured
+      2026-09-18. The bytes have to become available WHILE the outer drain is
+      holding an undelivered remainder in a local. }
+    sink.Extra := '{"third":3}' + #10 + '{"fourth":4}' + #10;
+    s := '{"first":1}' + #10 + '{"second":2}' + #10;
+    fpSend(peer, @s[1], Length(s), 0);
+    Pump(T, sink, 8);
+    sink.ReenterOn := '';
+    sink.Extra := '';
+    Check('re-entering from a frame handler loses nothing',
+          sink.Frames.Count = 4);
+    if sink.Frames.Count = 4 then
+      Check('  and delivers in the order the peer wrote them',
+            (sink.Frames[0] = '{"first":1}') and (sink.Frames[1] = '{"second":2}')
+            and (sink.Frames[2] = '{"third":3}') and (sink.Frames[3] = '{"fourth":4}'));
+
+    { (f) A MEGABYTE WITH NO NEWLINE ENDS THE LINK, AND THE LINK SAYS WHY.
+
+      The cap exists because a peer that will not end a line is not a peer worth
+      keeping. What it did until 2026-09-18 was drop the bytes, end the session,
+      and fire OnDisconnect -- the SAME callback a program that finished perfectly
+      well arrives at, which TDebugSession.HandleDisconnect quite rightly treats
+      as "the end of a session, not an error". So a session that lost everything
+      was reported as one that succeeded. A harness measured 38 183 frames gone in
+      one cut with no diagnostic anywhere.
+
+      EndReason is '' for the ordinary close and a sentence with a byte count for
+      this one. Nothing else about the cap changes.
+
+      No Poll while filling: a drain would empty the buffer and the cap would
+      never be reached. }
+    Check('a link that ended normally gives no reason', T.EndReason = '');
+
+    sink.Frames.Clear;
+    SetLength(s, 64 * 1024);
+    FillChar(s[1], Length(s), Ord('x'));
+    over := False;
+    for n := 1 to 20 do
+      if fpSend(peer, @s[1], Length(s), 0) <= 0 then
+        Break;
+    { The reader thread has to get through it before the cap can be seen. }
+    Sleep(400);
+    T.Poll;
+    over := T.EndReason <> '';
+    Check('a megabyte with no newline in it ends the link', over);
+    if over then
+    begin
+      { THE NUMBER, NOT THE WORDS. The first version of this check looked for
+        `discarded` and `newline`, which live in the format string and are there
+        whether or not anything was counted -- so deleting the counter left it
+        GREEN, measured 2026-09-18. What a reader needs from this sentence is how
+        much went, and that is the only part worth asserting. }
+      Check('  and the reason reports a non-zero count',
+            Pos('discarded', T.EndReason) > 0);
+      Check('  which is not zero',
+            Pos('0 byte(s) were discarded', T.EndReason) = 0);
+      Check('  and names the cap it hit',
+            Pos('newline', T.EndReason) > 0);
+    end;
+    Check('  and nothing was delivered as a frame', sink.Frames.Count = 0);
 
     { the editor writes back, and the terminator is the transport's job }
     Check('a frame can be sent to the debuggee', T.SendFrame('{"cmd":"pause"}'));
