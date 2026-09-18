@@ -234,11 +234,25 @@ def main():
         # under gail -- so it cannot be invoked the way a menu item can -- but it
         # does expose EXTENTS, which is the half CLAUDE.md had wrong until
         # 2026-09-18. The centre is printed, because an edge is where a border is.
-        for node, _ in nodes:
-            if label_of(node) != where:
-                continue
-            if not showing(node):
-                continue
+        shown = [n for n, _ in nodes if showing(n)]
+        exact = [n for n in shown if label_of(n) == where]
+        # A PREFIX, BECAUSE A CAPTION CHANGES UNDER A SCRIPT. While a debug
+        # session is live the pane tabs carry their counts -- `Call Stack (5)`,
+        # `Variables (3)` -- and before it starts they do not, so an exact match
+        # finds the tab only when nothing is happening. Measured 2026-09-18: the
+        # same case located the tab on one run and not the next for exactly this
+        # reason.
+        pref = [n for n in shown if label_of(n).startswith(where)]
+        hits = exact or pref
+        if len(hits) > 1:
+            # NOT THE FIRST OF SEVERAL. A locator that guessed would click
+            # whichever the tree listed first, which is the ambiguity --invoke
+            # already had to be taught about.
+            sys.stderr.write('readtext: %r matches %d controls: %s\n'
+                             % (where, len(hits),
+                                ', '.join(repr(label_of(n)) for n in hits[:5])))
+            return 1
+        for node in hits:
             try:
                 e = Atspi.Component.get_extents(node, Atspi.CoordType.SCREEN)
             except Exception as exc:
