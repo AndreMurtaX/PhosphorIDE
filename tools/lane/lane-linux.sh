@@ -272,6 +272,22 @@ tab() {
 # the Output pane, this prints anything with text on it. It asserts NOTHING and
 # deliberately does not touch ASSERTIONS -- a debugging aid that made a case look
 # like it asked a question would be the defect this whole exercise was about.
+# `unassertable <why>` -- THIS CASE CANNOT BE CHECKED ON THIS PLATFORM, and here
+# is the measurement that says so.
+#
+# It counts as a question asked, so the case is not reported as empty, and it can
+# never fail. That is a loophole, and it is a deliberate one with a precedent:
+# roadmap item 1 left the diagnostic double-click Windows-only and WROTE DOWN why
+# rather than shipping a case that is red for a reason nobody can fix, because a
+# red nobody can fix teaches people to ignore red.
+#
+# The reason is printed on every run. A case using this without one is a case
+# lying quietly, which is the thing this whole exercise was about.
+unassertable() {
+    ASSERTIONS=$((ASSERTIONS + 1))
+    echo "NOT CHECKABLE HERE: $1"
+}
+
 dump() {
     echo "--- everything this window is showing ---"
     python3 - <<'DUMPPY'
@@ -338,6 +354,7 @@ while IFS= read -r line; do
         menu\ *) flush; menu "${line#menu }" ;;
         tab\ *) flush; tab "${line#tab }" ;;
         dump) flush; dump ;;
+        unassertable\ *) flush; unassertable "${line#unassertable }" ;;
         drag\ *) flush; drag ${line#drag } ;;
         ''|'#'*) : ;;
         *) buf="$buf$line

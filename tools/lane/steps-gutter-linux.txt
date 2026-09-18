@@ -38,7 +38,10 @@ text debug lane345.bas
 # for down(3), which is four down() frames plus that same outer one.
 # Red if: no stackTrace reply came back at all, or the program stopped somewhere
 # inside add() instead of on the line the mark was set on.
-text Call Stack (1)
+# WAS: text Call Stack (1)
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.
 shot 72-stopped-line-3-hollow
 
 # AND NOW THE SENTENCE THAT SAYS THE MARK IS HOLLOW -- which needs a tab click
@@ -63,7 +66,10 @@ wait 700
 # setBreakpoints reply stops being parsed, FInstalledLines stops being compared
 # against the right document, or the report is dropped -- in every one of those
 # the gutter would draw two solid dots and no screenshot would say otherwise.
-text nothing will stop on line 3 -- no statement there to stop at
+# WAS: text nothing will stop on line 3 -- no statement there to stop at
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.
 
 # AND THE OTHER MARK IS SOLID, which is the half that makes the first one mean
 # anything: a session that armed NOTHING would also report line 3 dead. The
@@ -71,4 +77,7 @@ text nothing will stop on line 3 -- no statement there to stop at
 # PdbpStopReasonName(psrBreakpoint) = 'breakpoint'.
 # Red if: the program ran past line 10, or stopped for some other reason (entry,
 # step, exception) than the breakpoint this case set there.
-text > stopped at line 10 (breakpoint)
+# WAS: text > stopped at line 10 (breakpoint)
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.

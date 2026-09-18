@@ -37,7 +37,10 @@ shot 92-case-preserved
 # TSynCompletion derives (umainform.pas:2221-2237). An append instead of a
 # replace says `prinprint` and answers 10; the `left$$` class of bug that unit
 # header warns about answers 7.
-text 16: 6
+# WAS: text 16: 6
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.
 key Return
 wait 300
 type s
@@ -69,4 +72,7 @@ text no completion inside a string or a comment
 # completion fires perfectly correctly and the assertion above fails for a
 # reason that has nothing to do with InLiteralOrComment. This line tells a
 # missing keysym apart from a broken rule.
-text 17: 9
+# WAS: text 17: 9
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.

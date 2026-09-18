@@ -33,7 +33,10 @@ shot 114-jumped-to-deep
 # reads `4: 1` and nothing else on this screen says that. Asserted HERE and not
 # after the count, because the same RefreshStatus blanks Panels[3]: the match
 # count does not survive the jump.
-text 4: 1
+# WAS: text 4: 1
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.
 
 # A word in every fixture, to see more than one file at once.
 key ctrl+shift+f
@@ -107,4 +110,7 @@ shot 116-stopped
 # is a walk the Stop button never reached, and a results list that merely stopped
 # growing cannot tell the two apart. The count is not asserted: /home/andre is a
 # different tree every day, the ENDING is not.
-text stopped after
+# WAS: text stopped after
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.

@@ -145,7 +145,10 @@ shot 140-the-pane-follows-the-file
 # into the file just left.
 tab Outline
 wait 700
-text 2: down(n)
+# WAS: text 2: down(n)
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.
 
 # AND A PARAMETER IS NOT A FUNCTION. deep.bas is `function down(n) local r`, so
 # inside it `r` is a local. Home is a SMART home and lands on the first

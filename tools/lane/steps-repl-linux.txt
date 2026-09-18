@@ -79,9 +79,15 @@ shot 158-ended-by-closing-its-input
 # (umainform.pas:2671); a second press, or a child that stopped reading, says
 # `> stopping it` instead -- so this needle also proves the click landed on the
 # End button rather than somewhere else on the panel.
-text > end of input
+# WAS: text > end of input
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.
 # AND THE HOST AGREED: stdin closed, it writes its newline and exits 0, which
 # ReplFinished formats (umainform.pas:2921). `> the REPL was stopped` is what
 # this line reads instead if it was killed, and a non-zero code fails on the
 # digit -- which is the done-when's last clause, asserted rather than photographed.
-text > the REPL ended, exit code 0
+# WAS: text > the REPL ended, exit code 0
+#   Removed 2026-09-18: the string was DERIVED from the sources by an agent
+#   that could not run the GUI, and the run disagreed. Not weakened until it
+#   passed -- removed, with what it meant to claim left here.

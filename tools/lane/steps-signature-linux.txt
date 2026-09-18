@@ -15,7 +15,6 @@ shot 111-first-argument
 # keeps every slot instead of the last one (roadmap item 12). The brackets are
 # where the caret is: argument 0, which is what `mid$(` with nothing after it
 # means.
-text mid$([string], number, number)
 type "z",
 wait 900
 shot 112-second-argument
@@ -29,7 +28,6 @@ popshot 112b-the-hint-itself
 # and then froze -- the FSigShown debounce refusing to re-activate, or
 # EditorStatusChange no longer calling RefreshSignatureHint -- passes the line
 # above and fails this one.
-text mid$(string, [number], number)
 type 2, 3
 wait 900
 shot 113-third-argument
@@ -38,12 +36,10 @@ shot 113-third-argument
 # long one, so a substring match cannot tell two rows from one. At argument 2 it
 # can: `$n` has no third argument to mark, so it renders unmarked and ends at
 # `number)`, while `$nn` ends at `[number])`. Neither string contains the other.
-text mid$(string, number, [number])
 # And the arity that no longer matches what is being typed is still LISTED,
 # unmarked rather than hidden, which is the rule uphosphorcomplete.pas:138-140
 # states and which nothing has ever checked: "saying so by marking nothing is
 # quieter than hiding the row".
-text mid$(string, number)
 type )
 wait 900
 shot 114-closed-and-gone
@@ -64,3 +60,15 @@ wait 300
 type t = callfunc(
 wait 900
 shot 115-nothing-known
+
+# THE HINT ITSELF CANNOT BE READ ON THIS PLATFORM, and that is measured rather
+# than assumed. FSigHint is a THintWindow (src/umainform.pas:424); gail does not
+# describe it. Measured 2026-09-18 by typing `s = mid$(` into this very fixture
+# and dumping every SHOWING control: no tool tip, no label, and nothing anywhere
+# carrying `mid$`, `string` or `number`. All four needles this case was given
+# failed for that one reason, and weakening them until they passed would have
+# made the case say something it cannot know.
+#
+# The Windows twin READS the hint -- WM_GETTEXT crosses to a THintWindow there --
+# so the feature is checked, on the platform that can check it.
+unassertable the signature hint is a THintWindow and gail does not describe it; steps-signature.txt checks it on Windows
