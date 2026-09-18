@@ -98,6 +98,7 @@ src/core/uphosphorrun.pas:509-520	8a56c7366029e5d1	begin
 src/core/uphosphorrun.pas:527-535	d3d70e8b222b6937	function TPhosphorRunner.Start(const AExe: String; const AArgs: array of String;
 src/core/uphosphorrun.pas:616-655	b58fe688d9a9ede8	if AKind = rsStdOut then
 src/core/uphosphorrun.pas:667-681	6797bd00b56c765f	procedure TPhosphorRunner.FlushPrompt(AKind: TRunStream; var APartial: String;
+src/core/uphosphorrun.pas:752-756	4fe25746e739c3b3	{ ExitCode, not ExitStatus. On Unix ExitStatus is the RAW wait status, so a
 src/core/uphosphorrun.pas:773-773	e3b0c44298fc1c14	
 src/core/uphosphorrun.pas:81-108	c4da38090a6b309c	protected
 src/core/uphosphorsettings.pas:278-278	a127a959b6bc21d3	function TPhosphorSettings.GetRecentCount: Integer;
