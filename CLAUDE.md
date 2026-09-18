@@ -290,7 +290,7 @@ the bar.
 - **A `.bas` is saved as UTF-8 with NO byte-order mark.** Still the rule, and its reason
   was wrong: measured on 2026-09-16, `phosphor run` on a BOM-saved file works, because
   the console host STRIPS a leading BOM when it reads a file
-  (`host/console/phosphor.lpr:787-806`) and has done since the first commit. What this
+  (`host/console/phosphor.lpr:818-838`) and has done since the first commit. What this
   file used to say -- that a BOM is `unexpected character` on line 1 -- was never true of
   that path.
 

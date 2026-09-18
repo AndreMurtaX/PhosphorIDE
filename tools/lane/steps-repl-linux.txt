@@ -16,7 +16,7 @@ wait 1500
 shot 151-six-times-seven
 # THE PROMPT IS NOT A LINE, AND THE ECHO CLOSES ITS LINE. `phosphor> ` is
 # written before every read with no newline (uphosphorrepl.pas:75, citing
-# host/console/phosphor.lpr:3746), so it reaches the pane only through
+# host/console/phosphor.lpr:3899), so it reaches the pane only through
 # FlushPrompt's two idle drains -- and SendReplLine then appends the typed line
 # to that open line (umainform.pas:2693-2699). One needle asserts both.
 text phosphor> println 6*7

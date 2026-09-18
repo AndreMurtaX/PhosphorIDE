@@ -51,23 +51,20 @@
 ../Phosphor/engine/PhosphorVM.pas:374-374	a2424c186f1ad8d0	and the pc of the boundary. Those four are ONE value in four fields: a step
 ../Phosphor/engine/PhosphorVM.pas:3751-3751	e6f07d43b5c21db0	begin
 ../Phosphor/engine/PhosphorVM.pas:4127-4162	0d7dd6257e075e5c	FStartTick moves forward by the parked milliseconds.
-../Phosphor/engine/PhosphorVM.pas:4217-4217	d7c3c30c90501d22	if InterlockedExchange(FDbgInterrupt, 0) <> 0 then
-../Phosphor/engine/PhosphorVM.pas:4217-4222	8f7a68fc10c2651e	if InterlockedExchange(FDbgInterrupt, 0) <> 0 then
-../Phosphor/engine/PhosphorValue.pas:632-632	0f9d0b2d99d6030d	concatenation, EAccessViolation, and EStackOverflow, and report each of them
+../Phosphor/engine/PhosphorValue.pas:633-633	0f9d0b2d99d6030d	concatenation, EAccessViolation, and EStackOverflow, and report each of them
 ../Phosphor/engine/PhosphorValue.pas:73-74	e98e04fb9e96ac0a	and simply continues. The seam MUST NOT block: the engine treats it as a
 ../Phosphor/engine/libs/PhosphorDictLib.pas:47-53	937de134e3f245a9	{ Each entry's hash, taken once when the entry is made and carried beside
-../Phosphor/host/console/phosphor.lpr:1497-1509	9227e859d1606ede	being empty, and the compile error still arrives the way it always did, when the
-../Phosphor/host/console/phosphor.lpr:1538-1538	68fc7e560b4531d3	if not keep then Continue;
-../Phosphor/host/console/phosphor.lpr:1565-1569	be180bb6d967a15a	function TDebugProto.ConditionAt(ALine: Integer): String;
-../Phosphor/host/console/phosphor.lpr:1774-1775	8ff5d10d11b896eb	for i := 0 to vm.DbgGlobalCount() - 1 do
-../Phosphor/host/console/phosphor.lpr:1868-1874	dc4d4b8da725be2f	`=` INSIDE AN EXPRESSION IS A COMPARISON (opEQ), never a store, so the only
-../Phosphor/host/console/phosphor.lpr:1884-1891	d4423ae5f38a76fb	are not a purity judgement about the library: they are what the COMPILER'S
-../Phosphor/host/console/phosphor.lpr:247-247	2a5fb376e88c36fb	interpolates that same text raw (see the two `phosphor: %s:%d: %s` sites), so
-../Phosphor/host/console/phosphor.lpr:3746-3746	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
-../Phosphor/host/console/phosphor.lpr:787-806	f649f43eb84c64e7	svc.HandleMessage := @GGuiSvc.PumpOne;
+../Phosphor/host/console/phosphor.lpr:1563-1563	68fc7e560b4531d3	if not keep then Continue;
+../Phosphor/host/console/phosphor.lpr:1590-1594	be180bb6d967a15a	function TDebugProto.ConditionAt(ALine: Integer): String;
+../Phosphor/host/console/phosphor.lpr:1651-1661	3678a6b182fa8071	STOP-AT-ENTRY IS ASKED FOR ONCE, AND ONLY BEFORE THE PROGRAM STARTS. The VM
+../Phosphor/host/console/phosphor.lpr:1801-1802	8ff5d10d11b896eb	for i := 0 to vm.DbgGlobalCount() - 1 do
+../Phosphor/host/console/phosphor.lpr:1895-1901	dc4d4b8da725be2f	`=` INSIDE AN EXPRESSION IS A COMPARISON (opEQ), never a store, so the only
+../Phosphor/host/console/phosphor.lpr:1911-1918	d4423ae5f38a76fb	are not a purity judgement about the library: they are what the COMPILER'S
+../Phosphor/host/console/phosphor.lpr:3899-3899	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
+../Phosphor/host/console/phosphor.lpr:818-838	5e9b8ddac1bf6d5b	{ Reads a whole file as raw bytes and strips a leading UTF-8 BOM if present, so
 ../Phosphor/scripts/build.ps1:57-59	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
 ../Phosphor/scripts/check-seams.py:98-98	14b1846b246f3bde	# report-and-continue; there is nowhere for a host to pause to" -- which is
-../Phosphor/tests/debug_protocol_test.py:141-141	7f9629fae2691404	caps.get('setVariable') is False, str(caps))
+../Phosphor/tests/debug_protocol_test.py:143-143	7f9629fae2691404	caps.get('setVariable') is False, str(caps))
 src/core/udebugproto.pas:108-108	f7321e3307743907	Line: Integer;
 src/core/udebugproto.pas:109-109	3cad279a8445c86c	end;
 src/core/udebugproto.pas:110-110	d4dcb1753ba80358	TPdbpFrames = array of TPdbpFrame;

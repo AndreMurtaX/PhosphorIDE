@@ -26,7 +26,7 @@ unit uphosphorrepl;
   on STDERR and exit 0. Four things in that are load-bearing:
 
   - THE PROMPT IS NOT A LINE. It is written before every read and carries no
-    newline (`Phosphor host/console/phosphor.lpr:3746`), so it reaches the editor
+    newline (`Phosphor host/console/phosphor.lpr:3899`), so it reaches the editor
     through `TPhosphorRunner.FlushPrompt` as an unterminated tail with
     `ACompleteLine = False`. It is also not conditional on stdout being a
     console, which is why it arrives over a pipe at all.
@@ -69,7 +69,7 @@ uses
   Classes, SysUtils;
 
 const
-  { Phosphor host/console/phosphor.lpr:3746, both of them, on one line:
+  { Phosphor host/console/phosphor.lpr:3899, both of them, on one line:
       if pending = '' then host.Output('phosphor> ') else host.Output('     ...> ');
     The trailing space is part of each, and the continuation is FIVE spaces. }
   ReplPrompt = 'phosphor> ';

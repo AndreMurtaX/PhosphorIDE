@@ -154,7 +154,7 @@ moved.
 ## A3. `str$` loses Double precision with no escape hatch
 
 *Measured.* `vkDouble: Result := FloatToStr(V.Num, InvariantFS)` -- FPC's 15-significant-digit
-default (`PhosphorValue.pas:632`). A loop computing 200 Doubles (`x = x*1.0000001 +
+default (`PhosphorValue.pas:633`). A loop computing 200 Doubles (`x = x*1.0000001 +
 0.000000123`) and comparing `val(str$(x))` to `x` reports **196 of 200 changed**.
 
 `print #` then `input #` is the documented way to persist a number, and it alters every

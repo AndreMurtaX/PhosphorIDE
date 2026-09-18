@@ -938,7 +938,7 @@ where a prompt ends, and how Up and Down walk what was typed -- so
 `phosphoridetest` pins it without a window or a child process. The prompt
 literals are CITED rather than extracted, which is the documented fallback when
 there is no registry to read: they are two string literals inside a `Writeln` in
-another repository (`host/console/phosphor.lpr:3746`).
+another repository (`host/console/phosphor.lpr:3899`).
 
 ---
 

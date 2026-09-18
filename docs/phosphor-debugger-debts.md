@@ -51,7 +51,7 @@ is the tell: that boundary *is* reached and *is* polled.
 
 Three sites, in the order they act:
 
-1. `host/console/phosphor.lpr:1774-1775` — the `launch` handler keeps what the editor
+1. `host/console/phosphor.lpr:1801-1802` — the `launch` handler keeps what the editor
    asked in `FEditorEntry` and then sets `FStopAtEntry := True` **unconditionally**.
    Its own comment says why: arming with stop-at-entry is how the socket thread gets a
    safe moment to take `FRunVM`, because the engine offers no thread-safe way to find
@@ -61,7 +61,7 @@ Three sites, in the order they act:
    `if (not stop) and (Length(FDbgLines) > 0) and DebugLineArmed(ALine)`. At the first
    boundary the reason is therefore **always** `srEntry`, and the armed line set is
    never consulted there.
-3. `host/console/phosphor.lpr:1884-1891` — seeing `srEntry` with `FEditorEntry` false,
+3. `host/console/phosphor.lpr:1911-1918` — seeing `srEntry` with `FEditorEntry` false,
    the host takes the VM pointer, sets `FState := dbgRunning` and `Exit(daRun)`:
    it resumes without a word. The user's breakpoint went with it.
 
@@ -88,7 +88,7 @@ One case the fix must get right, and it is the reason `stopAtEntry` is in the ta
 above: when the editor **did** ask for an entry stop and a breakpoint is armed on that
 same first statement, exactly **one** `stopped` event may be sent. Two would make the
 editor look as though it stopped twice for one statement — which is the defect
-`phosphor.lpr:1497-1509` already records having fixed once, for re-arming mid-run.
+`phosphor.lpr:1651-1661` already records having fixed once, for re-arming mid-run.
 
 ### How to know it is fixed
 
@@ -121,7 +121,7 @@ The names and the depth are right; `variables` works for every one of those fram
 (`frame: 3` returns `n = 3`). Only the line is missing, which is what a call stack is
 mostly **for** — a pane can list the callers and cannot take you to any of them.
 
-The host says so itself, at `host/console/phosphor.lpr:1565-1569`: *"Only the innermost
+The host says so itself, at `host/console/phosphor.lpr:1590-1594`: *"Only the innermost
 frame has a line this host can name: the VM keeps the boundary it stopped at, not a
 return line per frame."*
 
@@ -145,7 +145,7 @@ a stopped editor asks a question.
 function DbgFrameCallerLine(AFrame: Integer): Integer;
 ```
 
-**Host** — in `DoStackTrace` (`host/console/phosphor.lpr:1538`), where the walk already
+**Host** — in `DoStackTrace` (`host/console/phosphor.lpr:1563`), where the walk already
 runs `for i := ADepth - 1 downto -1`:
 
 ```
@@ -187,7 +187,7 @@ In `tests/debug_protocol_test.py`, against a recursion at least three deep:
   filtering correctly here — both lost breakpoints were reported installed because they
   genuinely are stoppable statements.)
 - **Do not remove the always-arm-with-entry trick** without replacing the way `FRunVM`
-  is captured. `phosphor.lpr:1868-1874` says what that moment is for.
+  is captured. `phosphor.lpr:1895-1901` says what that moment is for.
 - **Do not paper over debt 2 in the editor.** Finding a function's header by searching
   the source for its name is an invented location, and PhosphorIDE deliberately does
   not do it.

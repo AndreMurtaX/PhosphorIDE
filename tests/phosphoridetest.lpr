@@ -1617,7 +1617,7 @@ begin
   Group('uphosphorrepl: the prompt, and what was typed at it');
 
   { --- the prompts, exactly as the host writes them ------------------------ }
-  { Phosphor host/console/phosphor.lpr:3746 writes both on one line, and the
+  { Phosphor host/console/phosphor.lpr:3899 writes both on one line, and the
     trailing space is part of each. The five spaces before `...>` are the
     difference between a continuation that lines up under the first prompt and
     one that does not. }

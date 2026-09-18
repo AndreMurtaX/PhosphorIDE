@@ -35,10 +35,19 @@ and no package to open. `src/phosphoride.lpi` names them in `RequiredPackages` a
 `lazbuild` resolves them out of the Lazarus installation, which is also why the `.lpi`
 contains no path to them.
 
-**Python 3 -- for one script only.** `tools/gen-keywords.py` regenerates
-`src/core/uphosphorlang.pas`. That unit is committed generated output, so a plain build
-needs no Python at all. You need Python to regenerate the tables or to run the `--check`
-gate, and for nothing else in this repository.
+**Python 3 -- for three checks the build runs, not one.** `tools/gen-keywords.py`
+and `tools/gen-icons.py` regenerate `src/core/uphosphorlang.pas` and
+`src/core/uphosphoricons.pas`; both are committed generated output, so a plain
+`lazbuild` needs no Python. But `scripts/build.{ps1,sh}` runs all three of
+`gen-keywords.py --check`, `gen-icons.py --check` and `check-citations.py`, and the
+last of those can turn the build red.
+
+**Without Python the build is GREEN and has checked less**, which is the part worth
+knowing: each step prints `SKIPPED: python not found` and carries on. A green build
+on a machine with no Python is not the same green as a green build on a machine with
+it -- this paragraph used to say Python was needed "for one script only ... and for
+nothing else in this repository", which is how a stranger's red build came as a
+surprise.
 
 **A Phosphor checkout, or at least a `phosphor` binary.** The editor builds, starts and
 edits text with no Phosphor anywhere on the machine -- it never links the engine -- but

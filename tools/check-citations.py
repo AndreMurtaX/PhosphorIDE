@@ -22,12 +22,28 @@ text so the report can say where the lines went.
 
     python tools/check-citations.py            # check; non-zero if anything rotted
     python tools/check-citations.py --update   # re-baseline, PRINTING every change
+    python tools/check-citations.py --strict   # sibling drift is fatal too (CI)
 
 --update PRINTS WHAT IT CHANGED, and that is not a convenience. A re-baseline that
 happens quietly is how the rot comes back: somebody runs it to make the build green
 and nobody ever reads the lines again. Printing puts the old and new text in the
 diff of the commit that accepted it, where a reviewer can see whether the citation
 still supports the claim beside it.
+
+AND --update REFUSES A CITATION THAT MERELY MOVED, which printing alone did not
+cover. It re-stamps at the SAME line number, so for text that has shifted -- the
+ordinary case -- it would point the citation at unrelated code and mark it fresh.
+On 2026-09-18 that was all ten drifted citations at once: an edit in the sibling
+had grown one file by 153 lines. The tool knows where the text went, so it now
+says the number to write and exits non-zero instead of laundering it. Text that is
+GONE rather than moved is still re-baselined, loudly, because there is nothing
+better to suggest and the claim itself may need rewriting.
+
+TWO OF THOSE TEN WERE STILL WRONG AFTER SHIFTING, which is why the refusal says to
+read them anyway. One cited a BOM-stripping claim at six lines of GUI wiring that
+merely ran into the right function at its tail; the other cited "re-arming schedules
+a second entry stop" at a routine about sources that fail to compile. A shifted
+number can be the right offset of the wrong thing, and no mechanism sees that.
 
 WHAT THIS DOES NOT CATCH, said out loud because the item asks for it. It checks
 that a citation points at the text it pointed at before. It cannot check that the
@@ -217,8 +233,9 @@ def save_lock(entries):
 
 def main():
     update = '--update' in sys.argv[1:]
+    strict = '--strict' in sys.argv[1:]
     for a in sys.argv[1:]:
-        if a not in ('--update',):
+        if a not in ('--update', '--strict'):
             sys.stderr.write('check-citations.py: unknown argument %r\n' % a)
             return 2
 
@@ -273,9 +290,45 @@ def main():
             stale.append((key, lock[key][1], first, moved_to, where))
 
     if update:
+        # REFUSED WHERE THE RIGHT ANSWER IS KNOWN, and that is the whole of this
+        # block. Re-stamping happens at the SAME line number with whatever is
+        # there now -- so for a citation whose text merely MOVED, --update would
+        # leave it pointing at unrelated code with a fresh fingerprint, green.
+        # That is the rot this tool was written to prevent, laundered into the
+        # lock, and on 2026-09-18 it was every one of ten drifted citations: a
+        # sibling file had grown by 153 lines and the delta was mechanical.
+        #
+        # The tool must not edit the prose -- it cannot read the sentence beside
+        # the number, which its own header says out loud. So it refuses and
+        # prints the line to write. Where the text is GONE rather than moved
+        # there is nothing to suggest, the claim itself may be dead, and the
+        # re-baseline is allowed with the old and new text in the diff for a
+        # reviewer -- which is what the header promises.
+        movers = [t for t in stale if t[3]]
+        if movers:
+            print('REFUSED -- %d citation(s) did not rot, they MOVED. Re-stamping'
+                  % len(movers))
+            print('these would point them at unrelated code and call it fresh.')
+            print('Change the NUMBER in the citing file, then run --update again:')
+            print('')
+            for key, was, now, moved, where in movers:
+                path, _, rng = key.rpartition(':')
+                lo_s, _, hi_s = rng.partition('-')
+                lo_i, hi_i = int(lo_s), int(hi_s or lo_s)
+                print('  %s' % key)
+                print('      the remembered text is now at line %d -- write :%s'
+                      % (moved, ('%d-%d' % (moved, moved + hi_i - lo_i))
+                         if hi_i != lo_i else str(moved)))
+                print('      cited in: %s' % ', '.join(where))
+                print('      READ IT ANYWAY: a number that is merely shifted can')
+                print('      still be the right offset of the WRONG thing. Two of')
+                print('      the ten on 2026-09-18 were, and had been for months.')
+                print('')
+            return 1
         changed = len(stale) + len(missing)
         for key, was, now, moved, where in stale:
-            print('  UPDATED %s' % key)
+            print('  UPDATED %s  (the remembered text is GONE, not moved --')
+            print('           the claim beside it may be dead; read the diff)')
             print('      was: %s' % was[:100])
             print('      now: %s' % now[:100])
         for key, first, where in missing:
@@ -310,12 +363,39 @@ def main():
         bad += 1
 
     if bad:
+        # WHOSE REPOSITORY MOVED? A citation into THIS repository is under this
+        # repository's control and stays fatal. One into the sibling depends on
+        # another repository's HEAD, which whoever cloned this one does not
+        # control and may not have at the same commit -- and on 2026-09-18 a
+        # stranger who followed getting-started.md and cloned both side by side
+        # got BUILD FAILED from thirteen of exactly that kind, every one of them
+        # prose bookkeeping in five internal documents. Nothing their build
+        # needed. The binaries had already been produced and every functional
+        # check had passed.
+        #
+        # So: drifted sibling citations are a WARNING here and fatal under
+        # --strict, which is what CI passes, because CI pins both checkouts and
+        # is the place this is supposed to be caught. This is a split by who can
+        # act on it, not a relaxation -- the count is still printed, in full,
+        # every time.
+        external = sum(1 for k in ([x[0] for x in oob] + [x[0] for x in stale] +
+                                   [x[0] for x in missing]) if k.startswith('../'))
+        internal = bad - external
         print('')
         print('%d citation(s) need attention. READ THE CITED LINES and either fix the'
               % bad)
         print('number or fix the claim beside it; then run:')
         print('    python tools/check-citations.py --update')
-        return 1
+        if internal or strict:
+            return 1
+        print('')
+        print('WARNING -- all %d are citations into the SIBLING repository, whose HEAD'
+              % external)
+        print('this checkout does not control. Your build is fine and the binaries it')
+        print('produced are good; this is maintainer bookkeeping drifting against')
+        print('%s.' % SIBLING)
+        print('Run with --strict (as CI does) to make these fatal.')
+        return 0
 
     print('citations: %d into %d file(s) still point at what they claimed'
           % (len(entries), len(set(k.rsplit(':', 1)[0] for k in entries))))

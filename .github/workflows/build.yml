@@ -98,6 +98,22 @@ jobs:
       - name: Build the phosphor host
         run: lazbuild --build-mode=Default Phosphor/host/console/phosphor.lpi
 
+      # STRICT ONLY HERE, and this is the job entitled to be. A local build
+      # treats a citation that drifted INTO the sibling as a warning: whoever
+      # cloned this repository does not control Phosphor's HEAD and may not have
+      # it at the same commit, and on 2026-09-18 a stranger who followed
+      # getting-started.md and cloned both side by side got BUILD FAILED from
+      # thirteen of exactly that kind -- every one of them prose bookkeeping in
+      # five internal documents, with the binaries already built and every
+      # functional check already green.
+      #
+      # This job pins both checkouts, so here the excuse does not apply and the
+      # drift is fatal. Citations into THIS repository are fatal everywhere,
+      # strict or not; that half never moved.
+      - name: Citations, strictly -- both checkouts are pinned here
+        working-directory: PhosphorIDE
+        run: python tools/check-citations.py --strict
+
       # Fails HERE rather than three steps later inside a build script, and puts
       # the version in the log so that a contract failure can be attributed to
       # the binary that produced it.

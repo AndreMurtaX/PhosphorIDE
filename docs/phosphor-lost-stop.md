@@ -1,5 +1,16 @@
 # The lost stop: a breakpoint swallowed by a pause, diagnosed 2026-09-18
 
+> **Historical. Closed 2026-09-18, and this report was wrong about the side.**
+> The mechanism below is right and the measurements stand. The conclusion — that
+> the repair was one branch in the host — was not: `FDbgMode` is private to
+> `TPhosphorVM`, so a host cannot see a pending step at all, and a host-only fix
+> would have left a 100%-reproducible half standing. It went in as a precedence
+> change in the engine (`95fb4fb`), which then caused a regression of its own in
+> the host's queue drain, closed by `bce5ceb`. The code quoted here is quoted as
+> it WAS; the line numbers it used to carry are gone on purpose, because a
+> quotation of old code must not be anchored to live lines. See
+> `../Phosphor/docs/dev-agent-playbook.md` for the round's retrospective.
+
 **This document describes work in the OTHER repository** — `AndreMurtaX/Phosphor`, the
 engine — and it lives here for the reason
 [`phosphor-engine-work-order.md`](phosphor-engine-work-order.md) gives, and that
@@ -65,7 +76,7 @@ looks like from outside.
 Two sites, each defensible alone, composing into a swallowed breakpoint.
 
 **One — the armed-line test is skipped when an interrupt is consumed**
-(`engine/PhosphorVM.pas:4217-4222`):
+(`engine/PhosphorVM.pas`, in `DebugPoll`, as it stood at `95fb4fb^`):
 
 ```pascal
   if InterlockedExchange(FDbgInterrupt, 0) <> 0 then
@@ -83,7 +94,7 @@ therefore makes the second `if` — the one that would have said `srBreakpoint` 
 unreachable. The stop is reported as `srPause`.
 
 **Two — the pause drain resumes without re-checking the line**
-(`host/console/phosphor.lpr`, the `srPause` branch around `:2664-2688`):
+(`host/console/phosphor.lpr`, the `srPause` branch, as it stood at `95fb4fb^`):
 
 ```pascal
       if pending then InterruptRun();

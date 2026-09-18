@@ -88,11 +88,26 @@ cd ~/PhosphorIDE
 bash scripts/build.sh
 ```
 
-The script does four things and refuses to say "built" unless all four worked: it
-regenerates nothing but **checks** that the two generated units are current, builds
-the editor clean, builds the test program, and runs `--selftest` under a timeout.
+The script builds three Lazarus projects (the editor, the unit tests, the host
+contract test), runs `--selftest` under a timeout, and runs three Python tools that
+**check** rather than regenerate: `gen-keywords.py --check` and `gen-icons.py --check`
+confirm the two generated units are current, and `check-citations.py` confirms every
+`file:line` in this repository's prose still points at what it claimed.
 
 It ends with `built and checked:` and the path.
+
+**One of those can go red without your checkout being wrong.** The citation check
+also reads citations into the *sibling* Phosphor repository, and its HEAD is not
+something this checkout controls -- you may simply have a newer Phosphor than the
+prose here was written against. Those are reported as a WARNING and the build
+continues; the binaries in `bin/` are good. Only citations *into this repository*
+fail the build. CI pins both checkouts and runs the same tool with `--strict`, which
+is where that drift is meant to be caught.
+
+Until 2026-09-18 it was fatal either way, and a newcomer who did exactly what §1
+says -- clone both side by side -- got `BUILD FAILED` from thirteen stale citations
+in five internal documents, with all three binaries already built and every
+functional check already green.
 
 ---
 

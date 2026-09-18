@@ -334,7 +334,7 @@ answered.
   through it, because every fixture's loop body had more than one line. If you write a
   fixture, write that one.
 
-- **Do not copy `tests/debug_protocol_test.py:141`.** It compares the reply to the
+- **Do not copy `tests/debug_protocol_test.py:143`.** It compares the reply to the
   *request*, which is exactly why the requested-versus-installed defect survived a green
   suite for a year.
 

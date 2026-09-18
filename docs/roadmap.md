@@ -1091,7 +1091,7 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
 **Two things will bite, and both are known now rather than after the fact.**
 
 - **The prompt arrives, but it is not a line, and the pane must know that.** The REPL
-  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:3746`), and the
+  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:3899`), and the
   runner already handles that case: `DrainTimer` counts drains in which a stream produced
   nothing and `FlushPrompt` emits the unterminated tail after two of them
   (`src/core/uphosphorrun.pas:667-681`), marked `ACompleteLine=False`; `RunnerOutput`
@@ -2482,12 +2482,30 @@ because an item is something somebody has decided to do:
 - `uphosphorhost.RunAndCapture` measures its 5000 ms deadline with `Now`, which
   this repository's own invariant forbids without an exception for deadlines. It
   is a start-up path; `tests/uhostprobe.pas` uses the monotonic clock and says so.
-- ~~**A hot breakpoint loses between 1 and 13 stops in ten thousand.** Measured, not
-  diagnosed -- and which side it is on is not known.~~ **Diagnosed 2026-09-18, and
-  it is the HOST's.** An interrupt consumed at `engine/PhosphorVM.pas:4217` makes the
-  armed-line test at `:4222` unreachable, so a breakpoint due at that line is reported
-  as a pause -- and the host's pause drain resumes with no `ArmedAt` check, the one its
-  `srEntry` sibling already has. One branch, over there.
+- ~~**A hot breakpoint loses between 1 and 13 stops in ten thousand.**~~ ~~Diagnosed
+  2026-09-18, and it is the HOST's ... one branch, over there.~~ **CLOSED 2026-09-18,
+  and the diagnosis quoted here was wrong about the side.** The mechanism was right:
+  an interrupt consumed at the same boundary as an armed line made the armed-line test
+  unreachable, so a breakpoint due there was reported as a pause. The repair was NOT
+  one host branch. `FDbgMode` is private to `TPhosphorVM` with no accessor and no
+  seam, so a host cannot see a pending STEP at all -- a host-only fix would have left
+  a 100%-reproducible half of the defect standing and every other embedder unfixed.
+
+  It went in over there as a precedence change in `DebugPoll` (`95fb4fb`): the
+  interrupt is still consumed unconditionally, in one InterlockedExchange, but it is
+  ANSWERED FOR LAST, so a fact about where the program is -- an armed line, a pending
+  step -- outranks a fact about the host's queue. 762/751/753 stops out of 1000 before;
+  1000 of 1000 after.
+
+  **And that commit then caused a regression, which is the part worth carrying.**
+  Reporting the boundary under its most specific fact meant an interrupt landing on an
+  armed line arrived as `breakpoint`, while the host's only queue drain was still keyed
+  on `pause`. With an ordinary conditional mark whose condition was false, the editor's
+  Pause did nothing and every frame queued behind it died. Closed in `bce5ceb` by one
+  drain at every boundary whatever the reason, plus a new `daKeep` action -- "resume
+  without deciding anything" -- because `daRun` also means *the user pressed Continue*
+  and was cancelling steps in flight. The wire cases are in the sibling's
+  `tests/debug_protocol_test.py`.
 
   **And the editor does not provoke it**, which is the correction worth carrying: the
   1-to-13 rate was a prompt-reply driver's, and the editor drains from a timer at 40 ms
@@ -2495,16 +2513,33 @@ because an item is something somebody has decided to do:
   hammers the socket -- a 1000 Hz background takes it from 1 per 1000 to 193.
   `docs/phosphor-lost-stop.md` has it, with two latent editor-side defects found on the
   way and deliberately left for their own increment.
-- The compiled chunk of a breakpoint condition is not cached: 2,3 ms per hit on a
-  606-line program. The technique is proven and written down in
-  `../Phosphor/docs/debugging.md`; building it is host-side work.
+- ~~The compiled chunk of a breakpoint condition is not cached: 2,3 ms per hit on a
+  606-line program.~~ **Still not cached, deliberately, and the 2,3 ms framing was
+  retired 2026-09-18.** A close review overturned every load-bearing number: the
+  5,9 ms an unconditional stop was priced at is not work but one `Sleep(5)` poll
+  quantum (it stays flat while the program grows four-fold), and the crossover put
+  "past 2000 lines" is at about 1200, measured three times independently. The decision
+  is unchanged but now rests on priority rather than on a ratio against a constant the
+  host chose. `../Phosphor/docs/attack-plan.md` carries the measurement so nobody takes
+  it a fourth time.
 
 Three more belong to the sibling repository and not to this list: the host emits a
-**non-UTF-8 byte** on the `cannot write to` path (CP850 from the RTL's localised
-message, against an invariant that says the host emits UTF-8), `--sandbox` with a
-root that does not exist is silently accepted and then fails every file operation
-mid-run, and the comment at `phosphor.lpr:247` says there are "two"
-`phosphor: %s:%d: %s` sites where there are four.
+**non-UTF-8 byte** on the `cannot write to` path and the comment that undercounted
+the `phosphor: %s:%d: %s` sites. **Both closed 2026-09-18** (`00f061e`), and the
+first one was reported with the wrong cause: it was not a localised RTL message but
+the RTL stamping EVERY output text file with the console codepage when it opens it,
+so all ~107 `Writeln(StdErr, ...)` in that host were transcoded, whatever was in
+them. Wrapping the one message would have fixed the instance and double-encoded
+under `chcp 65001`. It is now pinned at the door, and only where the handle is not
+an interactive console -- pinning it unconditionally made a person's console
+mojibake, which was caught the same day.
+
+**The third was never true and is struck.** `--sandbox` with a root that does not
+exist is not "silently accepted": `engine/PhosphorSandbox.pas` creates it on
+purpose, and says why in a comment two lines above the call -- *"a host points at a
+fresh scratch directory far more often than at an existing one"*. A root that cannot
+be created refuses the run. This one is recorded rather than deleted because it was
+asserted confidently, twice, before anyone opened the file.
 
 **The bar did not move to get here.** The last increment, like every one before
 it, is green on Windows and on Linux, in both build modes, with zero warnings and
