@@ -28,12 +28,12 @@ key ctrl+shift+m
 wait 900
 shot 421-jumped-to-the-end-function
 # WHICH PARTNER IT FOUND. ActMatchBlockExecute writes `%s: line %d` from
-# BlockName(M.Block) and M.ThereLine (umainform.pas:3133), so this is the pairing
+# BlockName(M.Block) and M.ThereLine (umainform.pas:3138), so this is the pairing
 # itself: `function` on 7 against the merged `end function` on 13.
 text function: line 13
 
 # AND THE CARET REALLY MOVED. Panel 0 is `%d: %d` over CaretLine/CaretCol
-# (umainform.pas:4572); `end` starts at byte 1 of line 13. The message above is
+# (umainform.pas:4577); `end` starts at byte 1 of line 13. The message above is
 # written AFTER the assignment, so it would still read `line 13` if the caret had
 # not gone anywhere -- this is the half that says it did.
 text 13: 1
@@ -75,7 +75,7 @@ wait 900
 shot 424-a-next-that-closes-nothing
 # A TERMINATOR WITH NOTHING OPEN ABOVE IT IS A SENTENCE, NOT A JUMP. `next = 5`
 # is a legal assignment; bmUnopened is what keeps it from closing the `for` on 16
-# or the `while` on 32. Verbatim from umainform.pas:3140.
+# or the `while` on 32. Verbatim from umainform.pas:3145.
 text this closes a for, and none is open
 
 # `function` in an expression: not at a statement position, so not a block word.
@@ -115,6 +115,6 @@ key ctrl+shift+m
 wait 900
 shot 427-a-while-that-is-never-closed
 # AN OPENER NOTHING CLOSES. `while` on 32 runs to the end of the file, so its
-# node keeps Partner = -1 with Kind = feOpen -- bmUnterminated, umainform.pas:3137.
+# node keeps Partner = -1 with Kind = feOpen -- bmUnterminated, umainform.pas:3142.
 # It is the opposite refusal to the one on line 20, and it names the block.
 text this while is never closed

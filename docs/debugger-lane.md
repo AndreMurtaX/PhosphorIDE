@@ -233,7 +233,16 @@ the leak.
 
 ---
 
-## What is next, in order
+## The plan those five steps followed
+
+> **This section is a PLAN, not a state, and it has not been maintained.** The
+> account above it records what happened when the five steps ran. Every
+> present-tense sentence here describes the day it was written, and its
+> `file:line` citations have drifted — some by thousands of lines. Read it for
+> what each step was aimed at; do not read a citation out of it without opening
+> the lines first. Marked 2026-09-18.
+
+### What it was next, in order
 
 ### 1. Start Debugging, one breakpoint, one stop
 
@@ -244,7 +253,8 @@ and **no `OnExecute` at all** — `ActDebugStart` (Shift+F9), `ActStepOver` (F8)
 
 `ActDebugStart` gets the first handler: save if configured, `BeginListen`, spawn
 through the existing `StartHost` / `TPhosphorRunner` with
-`['debug','--port',N,path]` (`umainform.pas:868-905`), then drive `Poll` from a
+`['debug','--port',N,path]` (`umainform.pas`, and see the banner above about the
+line numbers in this section), then drive `Poll` from a
 40 ms `TTimer`. On `stopped`, paint the line through `EditorSpecialLineMarkup`
 (`:1383-1400`) and navigate with `GotoSource`.
 
@@ -332,8 +342,13 @@ answered.
 
 ## What is deliberately not in scope
 
-**`evaluate`.** The capability arrives `false`, the host refuses the command, and the
+**`evaluate` — EXPIRED; the Watches pane and conditional breakpoints have since
+shipped (roadmap items 25 and 26).** What did NOT happen is the engine getting the
+entry point this entry asks for: `../Phosphor`'s host says so itself, in the comment
+that turned the capability on. The rest is struck. Marked 2026-09-18.
+
+~~**`evaluate`.** The capability arrives `false`, the host refuses the command, and the
 editor should grey the box rather than build one. It needs a side-effect-free
 expression entry point that does not exist in the engine at all — roughly 750 lines
 there — and none of the five steps above wants it. A watch window is the step after a
-working debugger, not part of one.
+working debugger, not part of one.~~

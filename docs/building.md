@@ -376,7 +376,9 @@ the three gates can stand in for. The protocol CODEC is pinned headless in
 script against the real host on both platforms, with the transcripts read out of the
 Output pane as TEXT rather than photographed; `tools/lane/` is that script, with its
 own README, and `docs/debugger-lane.md` says what each step was checked against.
-Roadmap item 2a is the contract test that would turn part of it into a gate.
+~~Roadmap item 2a is the contract test that would turn part of it into a gate.~~ It closed:
+`bin/phosphorcontract` is that test and runs as a gate. Nothing automated starts a debug
+session, which is the part `tools/lane/` still covers on its own.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows-steps.ps1
@@ -434,7 +436,7 @@ unit's initialization section can start a thread.
 
 **`CompareFilenames`, never `=` or `SameText`, for paths.** The LazUtils function already
 knows that Windows is case-insensitive and Linux is not. Two behaviours depend on getting
-this right: "is this file already open in a tab" (`src/umainform.pas:503`) and the
+this right: "is this file already open in a tab" (`src/umainform.pas:508`) and the
 recent-files list (`src/core/uphosphorsettings.pas:278`). Compare with `=` and Windows
 opens one file into two tabs; compare with `SameText` and Linux merges two genuinely
 different files.

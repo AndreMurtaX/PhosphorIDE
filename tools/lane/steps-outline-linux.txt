@@ -11,7 +11,7 @@ shot 130-ten-definitions
 # TWO definitions on one line, after a NAMED LABEL, and this row is the SECOND
 # of them. A first-word scanner finds neither; a scanner that stops at the first
 # statement on a line finds only fifth%. The row text is
-# `Format('%d: %s', [Line, OutlineRowText])` (umainform.pas:2986), and
+# `Format('%d: %s', [Line, OutlineRowText])` (umainform.pas:2991), and
 # OutlineRowText is Display + '(' + Trim(Params) + ')' -- the suffix `%` is part
 # of the name (uphosphorfold.WalkTakeIdent), so the row reads `23: sixth%()`.
 # No `tab` is needed: Ctrl+Shift+O is ActOutlineExecute, which sets
@@ -64,7 +64,7 @@ shot 134-f12-jumped-to-the-definition
 # its GotoSource call, so the message survives that jump's RefreshStatus.
 # It has to be asserted here, before the next keypress: any caret move runs
 # EditorStatusChange -> RefreshStatus, which blanks panel 3 when nothing is
-# running (umainform.pas:4593-4596).
+# running (umainform.pas:4598-4601).
 text second is defined on line 11
 
 # The caret is now ON that definition's name, which is its own answer.

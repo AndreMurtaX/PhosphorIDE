@@ -466,7 +466,7 @@ the bar.
   already knows that Windows is case-insensitive and Linux is not, which is one fewer
   platform rule spelled out by hand. Three sites depend on it:
   `uphosphorhost.pas:196` (de-duplicating host candidates),
-  `uphosphorsettings.pas:278` (the recent list) and `umainform.pas:503` (is this file
+  `uphosphorsettings.pas:278` (the recent list) and `umainform.pas:508` (is this file
   already open -- get it wrong and two tabs of one file quietly diverge).
 - **A discovered host path is never written back to the settings.** Empty `HostPath`
   means "search on every start". Writing a lucky guess back freezes a decision the user
@@ -504,7 +504,7 @@ marked 2026-09-16 were paid for driving it.
   window creates its first tab from `FormCreate`, before it is on screen, so the file
   named on the command line was reported as unopenable with the focus error as its
   reason. Focus is asked for once there is somewhere to put it: `FormShow` does it.
-  (`umainform.pas:438-450`.)
+  (`umainform.pas:443-455`.)
 - **A test program that links the LCL but must run headless names the widgetset unit
   directly.** `InterfaceBase` plus `Win32Int`/`Gtk2Int`, never `Interfaces`, whose
   initialisation opens the display before `main`. The technique is Phosphor's and the
@@ -583,11 +583,25 @@ that does the driving is `tools/lane/`, and `docs/debugger-lane.md` records the 
 steps, what each one was verified against, and the one thing gtk2 would not let a
 script reach.
 
-This paragraph replaces one that said, for a year and in the present tense, that
-stepping was impossible. It was true when written -- the `BREAKPOINT` seam could not
-block and returned void, the VM had no step API, the frame stack was private, the
-console host installed no seam -- and every one of those four facts stopped being true
-on 2026-09-15, in the **Phosphor** repository. The lesson worth keeping is not about
+This paragraph replaces one that said, in the present tense, that stepping was
+impossible. It was true when written -- the VM had no step API, the frame stack was
+private, the console host installed no seam -- and those facts stopped being true in
+the **Phosphor** repository.
+
+**CLAIMS WERE STRUCK FROM THIS SENTENCE ON 2026-09-18.** It said the replaced
+paragraph had stood "for a year": this repository's first commit is `0fe7bb4`,
+2026-09-10. It listed, among the facts that turned over, that "the `BREAKPOINT` seam
+could not block and returned void" -- which is STILL TRUE. That seam is still
+report-and-continue and still "must never block"
+(`../Phosphor/engine/PhosphorVM.pas:558`); what was added beside it is a DIFFERENT
+seam, `TPhosphorDebugProc`, documented as the one that MAY BLOCK
+(`engine/PhosphorEngine.pas:146`). And it dated the turn to a single day, which the
+commits do not support.
+
+They were found by an adversarial pass over a correction elsewhere in the tree that
+carried the same errors. Which one was written first is not recorded, and does not
+matter: a wrong fact in a design record is quoted rather than re-derived, so it
+spreads wherever somebody is being careful enough to cite it. The lesson worth keeping is not about
 debugging: **a limitation recorded in the present tense is a claim with an expiry date
 nobody set.** When one of these files says something cannot be done, say who would have
 to change it, so the reader knows where to check.

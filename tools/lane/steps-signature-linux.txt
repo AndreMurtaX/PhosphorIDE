@@ -62,7 +62,7 @@ wait 900
 shot 115-nothing-known
 
 # THE HINT ITSELF CANNOT BE READ ON THIS PLATFORM, and that is measured rather
-# than assumed. FSigHint is a THintWindow (src/umainform.pas:424); gail does not
+# than assumed. FSigHint is a THintWindow (src/umainform.pas:429); gail does not
 # describe it. Measured 2026-09-18 by typing `s = mid$(` into this very fixture
 # and dumping every SHOWING control: no tool tip, no label, and nothing anywhere
 # carrying `mid$`, `string` or `number`. All four needles this case was given

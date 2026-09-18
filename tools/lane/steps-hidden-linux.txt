@@ -23,10 +23,10 @@ key F5
 wait 600
 shot 220-a-breakpoint-on-line-8
 # WHICH LINE THE BREAKPOINT WENT ON. F5 toggles at the CARET --
-# ActToggleBreakpointExecute passes Doc.CaretLine (umainform.pas:2125) -- so the
+# ActToggleBreakpointExecute passes Doc.CaretLine (umainform.pas:2130) -- so the
 # only witness that the mark landed inside the function is where the caret is,
 # and RefreshStatus prints that in the status bar's first panel as
-# Format('%d: %d') (umainform.pas:4572). Line 8, column 1, because GotoSource
+# Format('%d: %d') (umainform.pas:4577). Line 8, column 1, because GotoSource
 # uses column 1 for everything but an outline jump.
 # DROPPED by the 2026-09-18 critique: text 8: 1
 #   Green with the feature deleted, or defeated by substring. See tools/lane/README.md.
@@ -45,7 +45,7 @@ shot 222-the-click-opened-it-instead-of-adding-one
 # THE ITEM ITSELF, in the one channel that carries it. EditorGutterClick asks
 # HiddenBreakpointCount for the row it was handed; one hidden breakpoint means
 # the fold is opened and Panels[3] is set to this exact sentence
-# (umainform.pas:4485-4490) INSTEAD of a second breakpoint being toggled onto
+# (umainform.pas:4490-4495) INSTEAD of a second breakpoint being toggled onto
 # the header. Singular: two would read `hiding 2 breakpoints` and this goes red,
 # which is the count as well as the rule.
 text opened: this fold was hiding a breakpoint
@@ -70,7 +70,7 @@ shot 225-a-fold-hiding-nothing-still-toggles
 # AND NO GUTTER CLICK MOVED THE CARET. `ctrl+g 1` put it on line 1 and the two
 # clicks since -- collapsing the `while` and the ordinary toggle on 13 -- leave
 # it there: "nothing is refused and the caret does not move" is the item's own
-# rule (umainform.pas:4482, roadmap 20). SynEdit's marks column carries no mouse
+# rule (umainform.pas:4487, roadmap 20). SynEdit's marks column carries no mouse
 # command of its own, so the click reaches emcOnMainGutterClick and nothing
 # else (syngutter.pp:486); a caret that had followed the click would read
 # `13: 1` here. It proves the second Go to Line as well, which is what shot 223

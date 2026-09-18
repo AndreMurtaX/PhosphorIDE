@@ -23,6 +23,7 @@
 ../Phosphor/engine/PhosphorCompiler.pas:796-797	08bc6ba8dfbd1da4	if FLabelCount = Length(FLabelName) then
 ../Phosphor/engine/PhosphorCompiler.pas:932-936	169078ab66ce781a	Expect(tkRParen, '")"');
 ../Phosphor/engine/PhosphorCompiler.pas:996-996	f6472a4586333027	else if FLex.Peek().Kind = tkLParen then begin FLex.Advance(); ParseCall(t.StrVal, t.Line); end
+../Phosphor/engine/PhosphorEngine.pas:146-146	6a5461a5f8b5c746	this engine that MAY BLOCK -- see TPhosphorDebugProc, and TPhosphorVM's
 ../Phosphor/engine/PhosphorEngine.pas:313-313	9d8c1c0bd8e9f4f3	before. A seam that wants the VM mid-run asks DebugVM, which is the next
 ../Phosphor/engine/PhosphorLexer.pas:189-224	d0af7633d68933f6	procedure TLexer.MergeCompoundKeywords;
 ../Phosphor/engine/PhosphorLexer.pas:207-209	532efb2378427822	end
@@ -67,19 +68,19 @@
 ../Phosphor/scripts/build.ps1:57-59	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
 ../Phosphor/scripts/check-seams.py:98-98	14b1846b246f3bde	# report-and-continue; there is nowhere for a host to pause to" -- which is
 ../Phosphor/tests/debug_protocol_test.py:141-141	7f9629fae2691404	caps.get('setVariable') is False, str(caps))
-src/core/udebugproto.pas:104-104	f7321e3307743907	Line: Integer;
-src/core/udebugproto.pas:105-105	3cad279a8445c86c	end;
-src/core/udebugproto.pas:106-106	d4dcb1753ba80358	TPdbpFrames = array of TPdbpFrame;
-src/core/udebugproto.pas:165-167	65d6aae9003f9ed2	// "42" was an int% or a number, and a watch pane that guessed would be
-src/core/udebugproto.pas:18-26	40a645246ba86c61	WHY NOT DAP. The Debug Adapter Protocol would bring an editor-agnostic
-src/core/udebugproto.pas:199-202	0897e7e9233e1567	function EncodeInitialize(ASeq: Integer; const AClientName: String): String;
-src/core/udebugproto.pas:241-244	a9e9312fc6fe43f6	function PdbpStopReasonName(AReason: TPdbpStopReason): String;
-src/core/udebugproto.pas:28-33	8da847bdb92d020c	WHY NOT stdout. The obvious transport -- protocol frames on the child's own
-src/core/udebugproto.pas:344-346	18091aacf5d2d017	function EncodeSimple(ASeq: Integer; ACommand: TPdbpCommand): String;
-src/core/udebugproto.pas:43-46	776055311eaa0298	the two would come to disagree about which field is which. Both units are
-src/core/udebugproto.pas:84-87	47c73dcb4bc60373	psrStep,
-src/core/udebugproto.pas:90-90	dc475917ee048a46	expression evaluator says so here, and the editor greys out what is missing
-src/core/udebugproto.pas:94-100	2d72b42e186aa951	Evaluate: Boolean;
+src/core/udebugproto.pas:108-108	f7321e3307743907	Line: Integer;
+src/core/udebugproto.pas:109-109	3cad279a8445c86c	end;
+src/core/udebugproto.pas:110-110	d4dcb1753ba80358	TPdbpFrames = array of TPdbpFrame;
+src/core/udebugproto.pas:169-171	65d6aae9003f9ed2	// "42" was an int% or a number, and a watch pane that guessed would be
+src/core/udebugproto.pas:203-206	0897e7e9233e1567	function EncodeInitialize(ASeq: Integer; const AClientName: String): String;
+src/core/udebugproto.pas:22-30	40a645246ba86c61	WHY NOT DAP. The Debug Adapter Protocol would bring an editor-agnostic
+src/core/udebugproto.pas:245-248	a9e9312fc6fe43f6	function PdbpStopReasonName(AReason: TPdbpStopReason): String;
+src/core/udebugproto.pas:32-37	8da847bdb92d020c	WHY NOT stdout. The obvious transport -- protocol frames on the child's own
+src/core/udebugproto.pas:348-350	18091aacf5d2d017	function EncodeSimple(ASeq: Integer; ACommand: TPdbpCommand): String;
+src/core/udebugproto.pas:47-50	776055311eaa0298	the two would come to disagree about which field is which. Both units are
+src/core/udebugproto.pas:88-91	47c73dcb4bc60373	psrStep,
+src/core/udebugproto.pas:94-94	dc475917ee048a46	expression evaluator says so here, and the editor greys out what is missing
+src/core/udebugproto.pas:98-104	2d72b42e186aa951	Evaluate: Boolean;
 src/core/udebugsession.pas:105-105	0b17240cd2fcf3f8	FPendingArg: array of Integer;
 src/core/udebugsession.pas:111-121	dad094dfd1a64fb3	{ A transport that must be torn down, but not from where the request came.
 src/core/udebugsession.pas:142-142	bbd42012ba23dc34	{ Ask AHostPath what it can do. Safe to call with '' (no host found), and
@@ -117,42 +118,41 @@ src/core/usynphosphor.pas:5-12	abe3e2dc52151184	WHY THERE IS NO RANGE STATE. A S
 src/phosphoride.lpr:40-41	4676b961ee761e29	A hand-written .lfm that names a component the .pas does not publish streams
 src/phosphoride.lpr:5-10	b8f150e9ccef2120	This program never links the Phosphor engine. It edits text and it spawns the
 src/phosphoride.lpr:668-668	b0d7362318c9e966	Application.Scaled := True;
-src/umainform.pas:1029-1029	3fe690cc263feb4d	Full: String;
-src/umainform.pas:1047-1047	3cad279a8445c86c	end;
-src/umainform.pas:1085-1085	c467b620cd99dff4	RefreshStatus;
-src/umainform.pas:1141-1141	fbcf15b20e75777c	SaveDialog1.FileName := Doc.FileName
-src/umainform.pas:1237-1237	c86872dc97dd35aa	var
-src/umainform.pas:1319-1323	0434f65ab1b32416	Cond) then
-src/umainform.pas:1345-1345	4bc3eeedbfa28f8f	roadmap item 26's own sentence -- "says plainly when one cannot be evaluated
-src/umainform.pas:2125-2125	e3549248ab9de9fd	Doc.ToggleBreakpoint(Doc.CaretLine);
-src/umainform.pas:2187-2190	e91c1a194f651526	if InLiteralOrComment(Line, Doc.Edit.LogicalCaretXY.X) then
-src/umainform.pas:2221-2237	ae0ee3d794f5b205	procedure TFrmMain.CompletionAccepted(var AValue: String;
-src/umainform.pas:266-270	f5a0315f248cc1a4	procedure ActionList1Update(AAction: TBasicAction; var Handled: Boolean);
-src/umainform.pas:2671-2671	8ae527a7b67d5007	AddReplNote('> end of input');
-src/umainform.pas:2688-2694	85272bdd4ac23d53	{ THE ECHO, AND IT CLOSES THE PROMPT'S LINE. The prompt arrived without a
-src/umainform.pas:270-270	6671e28942d75669	procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-src/umainform.pas:2920-2922	d1b093fad31639c8	AddReplNote('> the REPL was stopped')
-src/umainform.pas:2986-2986	b1e37daab5e485ff	Row := Format('%d: %s', [FOutline[I].Line, OutlineRowText(FOutline[I])]);
-src/umainform.pas:2989-2991	82bc626467643a39	it is being written, so it is a note and not a complaint. }
-src/umainform.pas:3133-3133	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
-src/umainform.pas:3137-3137	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
-src/umainform.pas:3140-3140	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
-src/umainform.pas:3314-3314	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
-src/umainform.pas:424-424	524379aa7ecdc4c6	FSigHint: THintWindow;
-src/umainform.pas:4326-4326	db3b17fc873c1059	procedure TFrmMain.RefreshSignatureHint;
-src/umainform.pas:438-450	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
-src/umainform.pas:4482-4482	be91e9295a09973c	line. Nothing is refused and the caret does not move -- the block opens, the
-src/umainform.pas:4485-4490	53251615674ed61c	Hidden := Doc.HiddenBreakpointCount(ALine);
-src/umainform.pas:4572-4572	f5ff5490b9c83e5e	StatusBar1.Panels[0].Text := Format('%d: %d', [Doc.CaretLine, Doc.CaretCol]);
-src/umainform.pas:4593-4596	36d9f9e543341d59	if FRunner.Running then
-src/umainform.pas:4594-4596	6d34575bcc090f71	StatusBar1.Panels[3].Text := FRunLabel + ' ...'
-src/umainform.pas:503-503	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
-src/umainform.pas:555-556	a00bc809040cdbe5	procedure GotoSource(const APath: String; ALine: Integer;
+src/umainform.pas:1034-1034	3fe690cc263feb4d	Full: String;
+src/umainform.pas:1052-1052	3cad279a8445c86c	end;
+src/umainform.pas:1090-1090	c467b620cd99dff4	RefreshStatus;
+src/umainform.pas:1146-1146	fbcf15b20e75777c	SaveDialog1.FileName := Doc.FileName
+src/umainform.pas:1242-1242	c86872dc97dd35aa	var
+src/umainform.pas:1324-1328	0434f65ab1b32416	Cond) then
+src/umainform.pas:1350-1350	4bc3eeedbfa28f8f	roadmap item 26's own sentence -- "says plainly when one cannot be evaluated
+src/umainform.pas:2130-2130	e3549248ab9de9fd	Doc.ToggleBreakpoint(Doc.CaretLine);
+src/umainform.pas:2192-2195	e91c1a194f651526	if InLiteralOrComment(Line, Doc.Edit.LogicalCaretXY.X) then
+src/umainform.pas:2226-2242	ae0ee3d794f5b205	procedure TFrmMain.CompletionAccepted(var AValue: String;
+src/umainform.pas:2676-2676	8ae527a7b67d5007	AddReplNote('> end of input');
+src/umainform.pas:2693-2699	85272bdd4ac23d53	{ THE ECHO, AND IT CLOSES THE PROMPT'S LINE. The prompt arrived without a
+src/umainform.pas:271-275	f5a0315f248cc1a4	procedure ActionList1Update(AAction: TBasicAction; var Handled: Boolean);
+src/umainform.pas:275-275	6671e28942d75669	procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+src/umainform.pas:2925-2927	d1b093fad31639c8	AddReplNote('> the REPL was stopped')
+src/umainform.pas:2991-2991	b1e37daab5e485ff	Row := Format('%d: %s', [FOutline[I].Line, OutlineRowText(FOutline[I])]);
+src/umainform.pas:2994-2996	82bc626467643a39	it is being written, so it is a note and not a complaint. }
+src/umainform.pas:3138-3138	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
+src/umainform.pas:3142-3142	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
+src/umainform.pas:3145-3145	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
+src/umainform.pas:3319-3319	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
+src/umainform.pas:429-429	524379aa7ecdc4c6	FSigHint: THintWindow;
+src/umainform.pas:4331-4331	db3b17fc873c1059	procedure TFrmMain.RefreshSignatureHint;
+src/umainform.pas:443-455	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
+src/umainform.pas:4487-4487	be91e9295a09973c	line. Nothing is refused and the caret does not move -- the block opens, the
+src/umainform.pas:4490-4495	53251615674ed61c	Hidden := Doc.HiddenBreakpointCount(ALine);
+src/umainform.pas:4577-4577	f5ff5490b9c83e5e	StatusBar1.Panels[0].Text := Format('%d: %d', [Doc.CaretLine, Doc.CaretCol]);
+src/umainform.pas:4598-4601	36d9f9e543341d59	if FRunner.Running then
+src/umainform.pas:4599-4601	6d34575bcc090f71	StatusBar1.Panels[3].Text := FRunLabel + ' ...'
+src/umainform.pas:508-508	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
+src/umainform.pas:560-561	a00bc809040cdbe5	procedure GotoSource(const APath: String; ALine: Integer;
 src/umainform.pas:6-10	6e5a2b104154c318	The one rule this unit exists to keep: NOTHING HERE WAITS. Every call into the
-src/umainform.pas:631-631	7effb3a1ae7eb275	DebugPollIntervalMs = 40;
-src/umainform.pas:642-698	14826a9d8e11015e	and point at slots that exist by the time anything paints.
-src/umainform.pas:693-693	1fba61ea27a1be58	FFind.OnDone := @FindDone;
-src/umainform.pas:868-905	8bfb1ba23a3e68a3	the debug session and empties the stack and variables panes; the longer
+src/umainform.pas:636-636	7effb3a1ae7eb275	DebugPollIntervalMs = 40;
+src/umainform.pas:647-703	14826a9d8e11015e	and point at slots that exist by the time anything paints.
+src/umainform.pas:698-698	1fba61ea27a1be58	FFind.OnDone := @FindDone;
 tests/phosphoridetest.lpr:24-40	0d691bbe687f8276	uses
 tests/phosphoridetest.lpr:26-38	e2a259ad94377259	{ LINKING THE LCL IS NOT WHAT CONNECTS TO A DISPLAY. `Interfaces` is: its
 tools/gen-keywords.py:135-135	e256ee8e7aff6957	continue

@@ -236,7 +236,7 @@ one green. How that went is the part worth keeping:
   strings the program does not say. They were REMOVED, not weakened until they
   passed, and each leaves a `# WAS:` line saying what it meant to claim.
 - One case cannot be checked here at all. The signature hint is a `THintWindow`
-  (`src/umainform.pas:424`) and gail does not describe it: measured by typing
+  (`src/umainform.pas:429`) and gail does not describe it: measured by typing
   `s = mid$(` and dumping every showing control -- no tool tip, no label, nothing
   carrying `mid$`. It declares `unassertable` with that reason, which prints on
   every run, and the Windows twin checks the feature where WM_GETTEXT can reach it.
@@ -248,12 +248,18 @@ was the defect, and not the tab clicked and then left. `tab` closes it where it
 matters by asserting the notebook actually switched; a `text` on pane contents
 without a `tab` in front of it is weaker than it looks.
 
-**Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
+~~**Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
 not down from the top. mutter gives this window a different height on different
 runs -- 700, 725 and 750 all seen on one afternoon -- so everything below the editor
 moves between runs, and an offset from the top lands in a different pane each time.
 Two attempts at the call-stack pane clicked into the variables list instead, and both
-read as a pane that did not work.
+read as a pane that did not work.~~
+
+**SUPERSEDED for a named control. Do not add a `bot` to reach one.**
+`readtext.py --where <name>` answers a control's screen rectangle and the `tab <name>`
+verb clicks its centre and reads back which page is selected, so a pane tab needs no
+coordinate. A click at a point no named control covers still needs one. Seven step
+files carry a `bot` or `bot2` line. Marked 2026-09-18.
 
 **AND THE BOTTOM EDGE IS NOT THE SAME CONTROL ON BOTH PLATFORMS.** `StatusBar1` and
 `PagesOutput` are both `alBottom`, and the two widgetsets order that pair differently:
@@ -262,8 +268,10 @@ it, gtk2 puts the status bar ABOVE the output panel, so on this side the input r
 flush with the window's bottom edge. An offset carried over from a Windows script is
 therefore one control out. Measured on 2026-09-17 by scanning a screenshot's rows for
 where the bands change, which is the cheap way to calibrate a `bot` and worth doing
-once per pane rather than reasoning from control heights. The output panel is bottom-anchored; from the bottom
-every row keeps its place.
+once per pane rather than reasoning from control heights. ~~The output panel is
+bottom-anchored; from the bottom every row keeps its place.~~ **Struck 2026-09-18:**
+that is the claim the measurement 60 lines above this one contradicts, and it is the
+sentence the correction there is about.
 
 Still not driveable **through XTest**: the gtk2 **menu bar**, from a synthetic click or
 from F10 navigation. It IS driveable through **AT-SPI** -- `readtext.py --invoke <name>`,

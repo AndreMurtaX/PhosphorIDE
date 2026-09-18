@@ -9,13 +9,18 @@ unit umainform;
   can still stop, save around, and edit while it spins -- which is the entire
   reason the interpreter is a separate process.
 
-  The Debug menu is deliberately half-built and says so out loud. Breakpoints can
+  EXPIRED, AND CORRECTED ON 2026-09-18. The paragraph below was written into the
+  first commit and went on being read as the state of this program long after it
+  stopped describing it. All six Debug actions carry an OnExecute and a body, and
+  a session stops, steps and ends.
+
+  ~~The Debug menu is deliberately half-built and says so out loud. Breakpoints can
   be set and they survive editing; stepping cannot be offered, because the host
   has no way to pause a running program and its breakpoint seam is documented as
   report-and-continue. Offering greyed-out Step buttons with an explanation
   attached is more honest than hiding the menu and more useful than a Step that
   silently does nothing. docs/debug-protocol.md is the specification for the half
-  that is missing, and the Debug menu links to it. }
+  that is missing, and the Debug menu links to it.~~ }
 
 {$mode objfpc}{$H+}
 

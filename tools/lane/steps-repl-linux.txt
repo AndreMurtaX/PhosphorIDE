@@ -18,7 +18,7 @@ shot 151-six-times-seven
 # written before every read with no newline (uphosphorrepl.pas:75, citing
 # host/console/phosphor.lpr:3746), so it reaches the pane only through
 # FlushPrompt's two idle drains -- and SendReplLine then appends the typed line
-# to that open line (umainform.pas:2688-2694). One needle asserts both.
+# to that open line (umainform.pas:2693-2699). One needle asserts both.
 text phosphor> println 6*7
 # 42, which is the whole of what a REPL is for: a number the host computed and
 # handed back over the pipe, not a string this repository wrote down.
@@ -76,7 +76,7 @@ bot 949 37
 wait 2500
 shot 158-ended-by-closing-its-input
 # WHICH OF THE TWO ENDINGS IT WAS. End with the input still open closes stdin
-# (umainform.pas:2671); a second press, or a child that stopped reading, says
+# (umainform.pas:2676); a second press, or a child that stopped reading, says
 # `> stopping it` instead -- so this needle also proves the click landed on the
 # End button rather than somewhere else on the panel.
 # WAS: text > end of input
@@ -84,7 +84,7 @@ shot 158-ended-by-closing-its-input
 #   that could not run the GUI, and the run disagreed. Not weakened until it
 #   passed -- removed, with what it meant to claim left here.
 # AND THE HOST AGREED: stdin closed, it writes its newline and exits 0, which
-# ReplFinished formats (umainform.pas:2920-2922). `> the REPL was stopped` is what
+# ReplFinished formats (umainform.pas:2925-2927). `> the REPL was stopped` is what
 # this line reads instead if it was killed, and a non-zero code fails on the
 # digit -- which is the done-when's last clause, asserted rather than photographed.
 # WAS: text > the REPL ended, exit code 0

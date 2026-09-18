@@ -25,7 +25,7 @@ wait 800
 
 # THE BEFORE HALF. Line 1 is `functio measured()` and defines nothing, so the
 # first row of the outline is f1's, on line 7 -- `Format('%d: %s', [Line,
-# OutlineRowText])` (umainform.pas:2986), and OutlineRowText is Display plus the
+# OutlineRowText])` (umainform.pas:2991), and OutlineRowText is Display plus the
 # parameter text in parentheses (uphosphoroutline.pas:349-355). Asserting it
 # here is what makes the assertion after the keystroke mean something: a pane
 # that said nothing either way would read the same on both sides of the edit.
@@ -33,7 +33,7 @@ wait 800
 #   It is green with the feature deleted. See tools/lane/README.md.
 
 # AND THE KEYBOARD BACK TO THE EDITOR, which the tab click took. Ctrl+G ends in
-# GotoSource with AFocus defaulted True (umainform.pas:555-556, 2018-2019), so
+# GotoSource with AFocus defaulted True (umainform.pas:560-561, 2018-2019), so
 # the caret lands on line 1 with the editor focused and the ctrl+Home below then
 # puts it exactly where it would have been. Same idiom as
 # steps-stack-linux.txt:13-18.
@@ -58,7 +58,7 @@ key Right
 wait 400
 
 # COLUMN 8, WHICH IS THE WHOLE SETUP OF THIS CASE. The status bar's first panel
-# is `Format('%d: %d', [Doc.CaretLine, Doc.CaretCol])` (umainform.pas:4572),
+# is `Format('%d: %d', [Doc.CaretLine, Doc.CaretCol])` (umainform.pas:4577),
 # rewritten on every scCaretX/scCaretY (EditorStatusChange), and it is always
 # showing. If the seven Rights landed anywhere else -- a key the queue dropped,
 # a smart Home that moved off column 1 -- the `n` below goes into the middle of
@@ -82,7 +82,7 @@ shot 191-the-definition-completed-and-the-marker-with-it
 #
 # The needle stops at the parentheses on purpose: nothing below line 1 closes
 # this block, so the row carries `   (no endfunction yet)` after it
-# (umainform.pas:2989-2991), and the count of definitions is not what is being
+# (umainform.pas:2994-2996), and the count of definitions is not what is being
 # asked.
 text 1: measured()
 

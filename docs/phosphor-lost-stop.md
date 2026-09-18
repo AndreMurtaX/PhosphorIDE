@@ -23,7 +23,7 @@ diagnosed."** That sentence was honest and it was incomplete in a way that matte
 
 The measurement that produced "1 to 13" was taken in a prompt-reply regime — answer
 each `stopped` as fast as the driver can. The editor does not run that way: it drains
-its socket from a timer at `DebugPollIntervalMs = 40` (`src/umainform.pas:631`), and
+its socket from a timer at `DebugPollIntervalMs = 40` (`src/umainform.pas:636`), and
 at 40 ms the same 10 000-iteration loop measured **10000/10000, zero gaps** — in the
 Python driver and again in a Pascal harness built from the editor's own byte-identical
 units. Drive the same host with no delay and it is 9995 to 9996 out of 10 000.

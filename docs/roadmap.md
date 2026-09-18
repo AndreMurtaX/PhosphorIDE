@@ -389,7 +389,7 @@ the next trap.
 **The cost to name rather than hide.** A program spinning in a tight loop reaches the trap
 once per statement, so pause interrupts it. A program blocked inside `INPUT` does not, and
 pause will not reach it. `TPdbpCapabilities` carries a `Pause` field
-(`src/core/udebugproto.pas:90`) precisely so that a host can decline rather than accept a
+(`src/core/udebugproto.pas:94`) precisely so that a host can decline rather than accept a
 request it cannot honour.
 
 **Done when.**
@@ -418,11 +418,11 @@ Three Phosphor facts shape the shape of it, and none may be papered over:
 - **An undeclared variable inside a function resolves to a GLOBAL.** Only names in the
   `local` list are frame slots. A pane that showed every name a function mentions as a local
   would be lying, which is why `TPdbpVariable` carries `Scope` as `'local' | 'global'`
-  (`src/core/udebugproto.pas:106`).
+  (`src/core/udebugproto.pas:110`).
 - **The type suffix is part of the name.** `count%`, `name$`, `list@`. The accessor reports
-  the suffixed name and the editor shows it unchanged (`src/core/udebugproto.pas:104`).
+  the suffixed name and the editor shows it unchanged (`src/core/udebugproto.pas:108`).
 - **The host renders the value, "as PRINT would render it"**
-  (`src/core/udebugproto.pas:105`). The editor must never format a number itself.
+  (`src/core/udebugproto.pas:109`). The editor must never format a number itself.
   Duplicating `PRINT`'s formatting here would be a second copy of a fact that lives in
   another repository -- the exact mistake `uphosphorlang.pas` exists to prevent.
 
@@ -446,7 +446,7 @@ Three Phosphor facts shape the shape of it, and none may be papered over:
 line-delimited JSON specified in `docs/debug-protocol.md`, and runs the program under items
 3 to 5.
 
-**Why a socket and not the child's stdout.** `src/core/udebugproto.pas:28-33` gives the
+**Why a socket and not the child's stdout.** `src/core/udebugproto.pas:32-37` gives the
 reason and it is not stylistic: for a language whose entire observable behaviour is `PRINT`,
 a frame-shaped line on stdout is a frame the program under test can forge. One `PRINTLN` of
 a fake `exited` event would end the session from inside the program being debugged. The
@@ -465,10 +465,10 @@ shape.
   `stackTrace` -> `variables` -> `continue` -> `exited` against a fixed program, and the
   transcript is byte-exact green.
 - The handshake refuses a mismatch: a client sending `protocol: 999` is refused with an
-  error rather than half-connected. `src/core/udebugproto.pas:43-46` is why -- a debugger
+  error rather than half-connected. `src/core/udebugproto.pas:47-50` is why -- a debugger
   that half-works is harder to diagnose than one that will not start.
 - The `capabilities` object names only what is implemented. The editor defaults every
-  capability to `False` (`src/core/udebugproto.pas:344-346`), so an omission is safe; a
+  capability to `False` (`src/core/udebugproto.pas:348-350`), so an omission is safe; a
   false claim is not.
 - A run **without** the subcommand is unchanged: exit codes 0, 1, 2, 3 keep their meanings,
   and stderr still carries exactly one diagnostic per failed run, in the shape
@@ -495,9 +495,9 @@ it does applies unchanged to a socket: a reader thread, a guarded buffer, and a 
 turning bytes into whole lines on the main thread. A protocol frame is exactly one line --
 `TJSONObject.AsJSON` is compact and JSON escaping turns any newline inside a value into
 `\n`, "which is the property the framing rests on"
-(`src/core/udebugproto.pas:199-202`) -- so the existing partial-tail logic is the right
+(`src/core/udebugproto.pas:203-206`) -- so the existing partial-tail logic is the right
 logic. A decoder fed half a frame returns `Valid=False`, and that is a desync to report and
-disconnect over, not a crash (`src/core/udebugproto.pas:165-167`).
+disconnect over, not a crash (`src/core/udebugproto.pas:169-171`).
 
 Two things must be right or the session will fail in ways that look like host bugs:
 
@@ -534,10 +534,10 @@ Two things must be right or the session will fail in ways that look like host bu
 **What.** Drive `TDebugState` (`src/core/udebugsession.pas:52-59`) from the inbound events;
 wire the six actions that already exist and are greyed out -- `ActDebugStart`, `ActStepOver`,
 `ActStepInto`, `ActStepOut`, `ActContinue`, `ActDebugStop`, all handled in
-`RefreshDebugActions` at `src/umainform.pas:1141`; send the breakpoint set on launch and on
+`RefreshDebugActions` at `src/umainform.pas:1146`; send the breakpoint set on launch and on
 every change; and paint the line execution is stopped on.
 
-**The marker is nearly free.** `EditorSpecialLineMarkup` (`src/umainform.pas:1237`) already
+**The marker is nearly free.** `EditorSpecialLineMarkup` (`src/umainform.pas:1242`) already
 colours breakpoint lines by looking a number up in a short sorted array, and the same handler
 answers for the stopped line. The precedence matters: a line that is both a breakpoint and
 the stopped line must read as **stopped**, or the user cannot see where they are. Keep the
@@ -546,7 +546,7 @@ handler cheap -- SynEdit asks it for every visible line.
 **Breakpoints go over the wire as a whole set per file, never as add/remove.**
 `EncodeSetBreakpoints` replaces, and says why: the editor's list moves every time a line is
 inserted above a mark, so the two ends will not agree on what is currently set
-(`src/core/udebugproto.pas:241-244`). `TBreakpointSet.TrackEdit`
+(`src/core/udebugproto.pas:245-248`). `TBreakpointSet.TrackEdit`
 (`src/core/ubreakpoints.pas`) is what moves them, driven by `TEditorDoc.LinesChanged`
 off SynEdit's `senrLineCount` notification, so a re-send after an edit while stopped is
 mandatory rather than an optimisation.
@@ -554,7 +554,7 @@ mandatory rather than an optimisation.
 **Keep telling the truth.** An action stays greyed with a reason attached whenever the
 capability is absent. A host reporting `stepOut: false` gets a greyed Step Out whose hint
 says so -- not a request the other end will refuse. That is the entire reason
-`TPdbpCapabilities` exists (`src/core/udebugproto.pas:84-87`).
+`TPdbpCapabilities` exists (`src/core/udebugproto.pas:88-91`).
 
 **Done when.**
 
@@ -563,7 +563,7 @@ says so -- not a request the other end will refuse. That is the entire reason
 - The greyed-out state is driven by `Capabilities`, not by a constant.
 - Stop terminates: `disconnect` with `terminate: true`, the child is gone, the marker is
   cleared, the editor is in `dsIdle`.
-- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3314`) still
+- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3319`) still
   shows a correct sentence against a host with no debug subcommand.
 - Inserting a line above a breakpoint while stopped re-sends the set, and the host stops on
   the statement the user chose rather than the one below it.
@@ -628,9 +628,9 @@ other repository any more. Two things found on 2026-09-16 belong with it:
 
 **What.** A list of frames. The decoding is already written and tested: `TPdbpFrames`
 carries `Index`, `Name` (the function's name, or `(main)`), `Path` and `Line`
-(`src/core/udebugproto.pas:94-100`, parsed at `:354-377`).
+(`src/core/udebugproto.pas:98-104`, parsed at `:354-377`).
 
-Double-click jumps through `GotoSource` (`src/umainform.pas:1047`) rather than a second
+Double-click jumps through `GotoSource` (`src/umainform.pas:1052`) rather than a second
 navigator, because that is the one place that clamps a line past the end of a file -- and a
 line number may in principle exceed the file's line count -- though the example this
 sentence used to give, an unterminated block in a three-line file reporting line 4,
@@ -869,10 +869,10 @@ a different pane on the second run.
 with double-click to jump.
 
 **Why.** Find, Find Next and Replace are all scoped to the active buffer
-(`src/umainform.pas:642-698`). A program that spans files, or a search of the Phosphor
+(`src/umainform.pas:647-703`). A program that spans files, or a search of the Phosphor
 examples, has no answer today short of leaving the editor.
 
-**The jump is already built.** `ListProblemsDblClick` (`src/umainform.pas:1029`) resolves a
+**The jump is already built.** `ListProblemsDblClick` (`src/umainform.pas:1034`) resolves a
 path and calls `GotoSource` (`:1047`). Reuse `GotoSource`; do not write a second navigator.
 
 **Do not walk a tree on the main thread.** The one rule `umainform` exists to keep is that
@@ -982,7 +982,7 @@ typing into it; and it must not rebuild on every keystroke -- coalesce on a time
 **Done when.** A file with ten functions shows ten entries in source order; clicking one
 moves the caret; F12 on a call defined in the same file jumps to it, and on a name it cannot
 find writes to the status bar rather than opening a dialog; F12 on a built-in offers the
-function-reference link instead (`UrlFunctionReference`, `src/umainform.pas:270`); and the
+function-reference link instead (`UrlFunctionReference`, `src/umainform.pas:275`); and the
 scanner is checked headless against a file containing the word `function` inside a string
 literal and inside a `'` comment, neither of which may produce an entry.
 
@@ -1080,7 +1080,7 @@ name; the gtk2 script cannot read text back -- that VM has no text reader, only 
 **What.** A pane that runs `phosphor` with no arguments and feeds it a line at a time. A bare
 `phosphor` is a REPL whose variables and functions persist across lines, which is the one
 thing Run cannot offer: Run hands the host a **file**
-(`EnsureSavedForRun`, `src/umainform.pas:1141`) and every run starts from nothing.
+(`EnsureSavedForRun`, `src/umainform.pas:1146`) and every run starts from nothing.
 
 **Most of it exists.** `TPhosphorRunner` already spawns, reads both pipes on their own
 threads, and writes to the child's stdin (`SendInput`, `src/core/uphosphorrun.pas:773`); the
@@ -1095,7 +1095,7 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
   runner already handles that case: `DrainTimer` counts drains in which a stream produced
   nothing and `FlushPrompt` emits the unterminated tail after two of them
   (`src/core/uphosphorrun.pas:667-681`), marked `ACompleteLine=False`; `RunnerOutput`
-  (`src/umainform.pas:1345`) already appends such a fragment to the pane and already
+  (`src/umainform.pas:1350`) already appends such a fragment to the pane and already
   refuses to hand it to `uphosphormsg`, because a parser fed half of
   `phosphor: x.bas:2: unexpected token` finds no error at all. So the prompt will arrive,
   about 80 ms late, which is invisible. What is untested is the whole path: no check and
@@ -1105,7 +1105,7 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
   executable. That is a recorded trap in the Phosphor repository, and it weighs more here
   because the editor starts the process on the user's behalf. The pane must `CloseInput` and
   then terminate the child when the pane closes, when the editor closes, and when the host
-  path changes -- and `FormCloseQuery` (`src/umainform.pas:693`) must count a REPL child the
+  path changes -- and `FormCloseQuery` (`src/umainform.pas:698`) must count a REPL child the
   way it already counts a run.
 
   **AND `CloseInput` DID NOT CLOSE ANYTHING.** Found on 2026-09-16 while reading for this
@@ -1278,8 +1278,10 @@ repository cannot compress.
 defects have actually come from: not from code that was wrong when it was written, but
 from prose that stopped being true while nobody was reading it.
 
-**Item 2a is still open** and still worth doing; it has not moved, and it is the only gate
-on the first list that never closed.
+~~**Item 2a is still open** and still worth doing; it has not moved, and it is the only gate
+on the first list that never closed.~~ **Expired: item 2a carries a DONE marker above.** This
+sentence outlived it by a day, in the paragraph that introduces the two items about keeping
+the answers honest. Marked 2026-09-18.
 
 ---
 
@@ -1850,7 +1852,7 @@ what the LAST run said, it is cleared when the next run starts, and a line that 
 been edited loses its mark rather than keeping a claim about text that has changed.
 
 Note that the existing clear is not a model to copy: `StartHost` empties the Problems pane
-only when the `Clear output on run` preference is on (`src/umainform.pas:1319-1323`), and a
+only when the `Clear output on run` preference is on (`src/umainform.pas:1324-1328`), and a
 mark in the TEXT that outlived the run that produced it would be a lie whatever that
 preference says. This one clears unconditionally.
 
@@ -2524,7 +2526,7 @@ writes its leak report to stdout at exit, a Windows GUI-subsystem binary has no 
 the process hangs on exit instead of reporting. A leak-checking build is a console build run
 from a console. That is a procedure, not a roadmap item.
 
-**DAP.** Not a rejection. `src/core/udebugproto.pas:18-26` says why PDBP is first -- DAP's
+**DAP.** Not a rejection. `src/core/udebugproto.pas:22-30` says why PDBP is first -- DAP's
 framing is HTTP-style headers, its message set is large, and the half that has to be written
 in Free Pascal inside the phosphor host is the half that pays for that -- and it says that
 PDBP's message names are DAP's, so a bridge later is a rename rather than a redesign. It
@@ -2533,4 +2535,4 @@ harder.
 
 **A copy of the language reference in this repository.** Help points at the Phosphor
 repository's documents on purpose: "a copy of a reference for a language that is still
-moving is a copy that lies" (`src/umainform.pas:266-270`).
+moving is a copy that lies" (`src/umainform.pas:271-275`).

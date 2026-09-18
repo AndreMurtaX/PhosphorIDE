@@ -8,13 +8,17 @@ unit ueditordoc;
   Everything a tab needs to know about itself lives on this object, so the main
   form's job is reduced to asking the active document questions.
 
-  BREAKPOINTS ARE KEPT EVEN THOUGH NOTHING CAN STOP AT ONE YET. The phosphor host
+  EXPIRED, AND CORRECTED ON 2026-09-18. Breakpoints stop programs. The paragraph
+  below is the bet that was made before they could, and it is struck rather than
+  deleted because the bet is why this list exists at all.
+
+  ~~BREAKPOINTS ARE KEPT EVEN THOUGH NOTHING CAN STOP AT ONE YET. The phosphor host
   has no way for an outside process to pause a running program -- see
   docs/debug-protocol.md -- so a breakpoint set today is a mark in a margin and a
-  line in a session file, and that is all. Keeping them anyway is deliberate: the
-  editor side of debugging is the half that can be built and tested now, and a
-  breakpoint list that already survives editing is what the other half will need
-  the day the host can answer.
+  line in a session file, and that is all.~~ Keeping them anyway was deliberate: the
+  editor side of debugging is the half that could be built and tested first, and a
+  breakpoint list that already survives editing is what the other half needed the
+  day the host could answer.
 
   Which is the interesting part: breakpoints are attached to LINE NUMBERS, and
   line numbers move when text above them is edited. The set itself lives in
