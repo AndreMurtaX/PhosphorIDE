@@ -87,6 +87,8 @@ src/core/udebugsession.pas:206-212	084455e698e19466	implementation
 src/core/udebugsession.pas:211-211	f75c659650787893	const
 src/core/udebugsession.pas:22-24	d050ad8b85ea937c	would be a second way in. BeginListen returns the port; the caller starts
 src/core/udebugsession.pas:52-59	a1d3a3566a01dd8b	dsUnavailable, // this host cannot debug; nothing else is reachable
+src/core/uphosphorcomplete.pas:137-140	03e0d64b647f9e8e	THE BRACKETS MARK WHERE THE CARET IS, and are the only thing AArgIndex is for.
+src/core/uphosphorcomplete.pas:138-140	5b8a73e7a539cada	A signature with fewer arguments than that index is rendered unmarked, because
 src/core/uphosphorhost.pas:118-118	5a76766549442798	P := TProcessUTF8.Create(nil);
 src/core/uphosphorhost.pas:196-196	3cad279a8445c86c	end;
 src/core/uphosphorhost.pas:8-24	fcaaac870a6f7c63	The search order below is not arbitrary. It goes from the most deliberate answer
@@ -96,6 +98,10 @@ src/core/uphosphorlang.pas:21-22	f82c3abd25a9bbef	A name's type suffix ($ % @ ?)
 src/core/uphosphorlang.pas:30-31	21cb6e7136468331	{ Which host a built-in needs. Ordered by how universally available it is, so
 src/core/uphosphorlang.pas:73-74	bdd8c8e109f697f1	{ The raw lists, for a completion box or a documentation lookup. Sorted, lower
 src/core/uphosphormsg.pas:427-430	2b71d9eb975e0125	function HasSourceLocation(const AMsg: TPhosphorMessage): Boolean;
+src/core/uphosphoroutline.pas:349-349	cb3f6d95e2b87a0b	function OutlineRowText(const AFunc: TOutlineFunc): String;
+src/core/uphosphoroutline.pas:349-355	8da5ff733f9def9b	function OutlineRowText(const AFunc: TOutlineFunc): String;
+src/core/uphosphorrepl.pas:75-75	92051006ea3c815b	ReplPrompt = 'phosphor> ';
+src/core/uphosphorrepl.pas:76-76	373e3abb3561dfa2	ReplContinuation = ' ...> ';
 src/core/uphosphorrun.pas:259-259	27b2dab379728398	AKind: TRunStream);
 src/core/uphosphorrun.pas:509-520	8a56c7366029e5d1	begin
 src/core/uphosphorrun.pas:527-535	d3d70e8b222b6937	function TPhosphorRunner.Start(const AExe: String; const AArgs: array of String;
@@ -112,15 +118,34 @@ src/phosphoride.lpr:5-10	b8f150e9ccef2120	This program never links the Phosphor 
 src/phosphoride.lpr:668-668	b0d7362318c9e966	Application.Scaled := True;
 src/umainform.pas:1029-1029	3fe690cc263feb4d	Full: String;
 src/umainform.pas:1047-1047	3cad279a8445c86c	end;
+src/umainform.pas:1085-1085	c467b620cd99dff4	RefreshStatus;
 src/umainform.pas:1141-1141	fbcf15b20e75777c	SaveDialog1.FileName := Doc.FileName
 src/umainform.pas:1237-1237	c86872dc97dd35aa	var
 src/umainform.pas:1319-1323	0434f65ab1b32416	Cond) then
 src/umainform.pas:1345-1345	4bc3eeedbfa28f8f	roadmap item 26's own sentence -- "says plainly when one cannot be evaluated
+src/umainform.pas:2125-2125	e3549248ab9de9fd	Doc.ToggleBreakpoint(Doc.CaretLine);
+src/umainform.pas:2187-2190	e91c1a194f651526	if InLiteralOrComment(Line, Doc.Edit.LogicalCaretXY.X) then
+src/umainform.pas:2221-2237	ae0ee3d794f5b205	procedure TFrmMain.CompletionAccepted(var AValue: String;
 src/umainform.pas:266-270	f5a0315f248cc1a4	procedure ActionList1Update(AAction: TBasicAction; var Handled: Boolean);
+src/umainform.pas:2671-2671	8ae527a7b67d5007	AddReplNote('> end of input');
+src/umainform.pas:2688-2694	85272bdd4ac23d53	{ THE ECHO, AND IT CLOSES THE PROMPT'S LINE. The prompt arrived without a
 src/umainform.pas:270-270	6671e28942d75669	procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+src/umainform.pas:2920-2922	d1b093fad31639c8	AddReplNote('> the REPL was stopped')
+src/umainform.pas:2986-2986	b1e37daab5e485ff	Row := Format('%d: %s', [FOutline[I].Line, OutlineRowText(FOutline[I])]);
+src/umainform.pas:2989-2991	82bc626467643a39	it is being written, so it is a note and not a complaint. }
+src/umainform.pas:3133-3133	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
+src/umainform.pas:3137-3137	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
+src/umainform.pas:3140-3140	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
 src/umainform.pas:3314-3314	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
+src/umainform.pas:424-424	524379aa7ecdc4c6	FSigHint: THintWindow;
 src/umainform.pas:438-450	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
+src/umainform.pas:4467-4467	be91e9295a09973c	line. Nothing is refused and the caret does not move -- the block opens, the
+src/umainform.pas:4470-4475	53251615674ed61c	Hidden := Doc.HiddenBreakpointCount(ALine);
+src/umainform.pas:4557-4557	f5ff5490b9c83e5e	StatusBar1.Panels[0].Text := Format('%d: %d', [Doc.CaretLine, Doc.CaretCol]);
+src/umainform.pas:4577-4580	cf7d16eff8262e99	if FRunner.Running then
+src/umainform.pas:4579-4581	6d34575bcc090f71	StatusBar1.Panels[3].Text := FRunLabel + ' ...'
 src/umainform.pas:503-503	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
+src/umainform.pas:555-556	a00bc809040cdbe5	procedure GotoSource(const APath: String; ALine: Integer;
 src/umainform.pas:6-10	6e5a2b104154c318	The one rule this unit exists to keep: NOTHING HERE WAITS. Every call into the
 src/umainform.pas:631-631	7effb3a1ae7eb275	DebugPollIntervalMs = 40;
 src/umainform.pas:642-698	14826a9d8e11015e	and point at slots that exist by the time anything paints.

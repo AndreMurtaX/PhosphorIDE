@@ -84,7 +84,7 @@ shot 158-ended-by-closing-its-input
 #   that could not run the GUI, and the run disagreed. Not weakened until it
 #   passed -- removed, with what it meant to claim left here.
 # AND THE HOST AGREED: stdin closed, it writes its newline and exits 0, which
-# ReplFinished formats (umainform.pas:2921). `> the REPL was stopped` is what
+# ReplFinished formats (umainform.pas:2920-2922). `> the REPL was stopped` is what
 # this line reads instead if it was killed, and a non-zero code fails on the
 # digit -- which is the done-when's last clause, asserted rather than photographed.
 # WAS: text > the REPL ended, exit code 0

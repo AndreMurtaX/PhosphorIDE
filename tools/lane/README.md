@@ -173,6 +173,32 @@ counter that is never incremented is zero. A screenshot is evidence on the day a
 person looks at it and a gate only when something compares it; both drivers now
 print the assertion count and refuse a case that asked nothing.
 
+**ALL SEVENTEEN LINUX CASES NOW ASK SOMETHING**, 72 assertions between them, every
+one green. How that went is the part worth keeping:
+
+- Thirteen sets were derived from the sources by agents that could not run the
+  GUI, then read by an adversary looking for assertions that pass anyway. It found
+  **five that would be green with the feature deleted** -- four of them matched
+  `1: 1`, which `umainform.lfm:120` ships as the design-time value of status panel
+  0, so they hold on a program that built its window and did nothing. One was worse:
+  `text 8: 1` is a substring of `18: 1`, and 18 is exactly where a missed Go To Line
+  lands, so it passed precisely when its own named failure happened.
+- Then the run judged the rest. **Eight more needles were simply wrong** -- derived
+  strings the program does not say. They were REMOVED, not weakened until they
+  passed, and each leaves a `# WAS:` line saying what it meant to claim.
+- One case cannot be checked here at all. The signature hint is a `THintWindow`
+  (`src/umainform.pas:424`) and gail does not describe it: measured by typing
+  `s = mid$(` and dumping every showing control -- no tool tip, no label, nothing
+  carrying `mid$`. It declares `unassertable` with that reason, which prints on
+  every run, and the Windows twin checks the feature where WM_GETTEXT can reach it.
+
+**WHAT THE SUITE STILL DOES NOT PROVE.** `text` requires SHOWING, and gtk2 leaves
+SHOWING set on the notebook page that LEAVES -- so a pane visited once stays
+assertable for the rest of the run. That catches the tab nobody ever clicked, which
+was the defect, and not the tab clicked and then left. `tab` closes it where it
+matters by asserting the notebook actually switched; a `text` on pane contents
+without a `tab` in front of it is weaker than it looks.
+
 **Click coordinates on Linux are measured UP FROM THE BOTTOM EDGE** (`bot DX DYUP`),
 not down from the top. mutter gives this window a different height on different
 runs -- 700, 725 and 750 all seen on one afternoon -- so everything below the editor
