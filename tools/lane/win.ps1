@@ -36,6 +36,19 @@ public class Wnd {
     return found;
   }
 
+  // THE LAST COLUMN IS NOT A CONTROL'S TEXT, and no caller in this directory
+  // treats it as one. GetWindowTextLengthW does not cross a process boundary for
+  // a control any more than GetWindowText does -- it is the same documented
+  // limitation one API earlier, and it fails the same way, by answering 0. So the
+  // read below is skipped and the column comes back EMPTY for exactly the panes
+  // and edits a lane wants to assert on.
+  //
+  // Measured on 2026-09-17 against EditInput, whose hint was drawn in the
+  // screenshot at the time: GetWindowTextLengthW said 0, an explicit
+  // WM_GETTEXTLENGTH said 45. Believing the 0 cost an afternoon -- it read as a
+  // hint that lived somewhere no message could reach, and sent lane-windows.ps1
+  // through EM_GETCUEBANNER and UI Automation before the wrong API was the
+  // suspect. Send WM_GETTEXT yourself; LaneWin.Text does.
   public static List<string> Kids(IntPtr top) {
     var outp = new List<string>();
     EnumChildWindows(top, delegate(IntPtr h, IntPtr l) {

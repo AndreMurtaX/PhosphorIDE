@@ -1,0 +1,74 @@
+# The stdin row says what it is -- Windows.
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 `
+#              -Fixture tools\lane\stdin.bas -Steps tools\lane\steps-stdin.txt
+#
+# WHAT THIS CASE IS FOR. On 2026-09-17 the author of this editor ran an INPUT
+# program in it, saw `Name? ` in the Output pane, did not connect it to the edit
+# box below the transcript, and killed the process instead of answering. The row
+# now carries a TextHint; this drives the exchange he could not finish and asserts
+# the hint is READABLE at the moment he needed it -- with the prompt showing and
+# nothing typed yet.
+#
+# NOTHING HERE FOCUSES THE BOX FOR THE SCRIPT, and that is the point rather than an
+# omission. Focusing EditInput when a run starts was the candidate that was turned
+# down: F9 saves and runs while the caret is in the code, and moving it is a second
+# surprise. So this script does what a person has to do -- read the hint, then click
+# the box -- and the click is a step like any other.
+#
+# NOTHING IS ASSERTED ABOUT THE HINT AFTER THE CLICK, and that is not an oversight
+# either. The LCL emulates a TextHint on both widgetsets here -- see the WHY block
+# above TFrmMain.BtnSendInputClick for why win32 takes the emulated path too -- and
+# the emulation removes the hint on FOCUS (customedit.inc:492-494). So the box is
+# empty the moment it is clicked, which is what a placeholder is supposed to do and
+# is the reason the assertion belongs before the click rather than after it. The
+# first cut of this script asserted it after, from a reading of EM_SETCUEBANNER's
+# fDrawWhenFocused flag rather than from a measurement, and went red.
+
+# BEFORE ANYTHING RUNS. The row is disabled here -- it greys out when nothing is
+# running, which was the only signal it ever carried -- and the hint is drawn
+# anyway. That is worth pinning: somebody reading this window for the first time
+# learns what the row is before they ever start a program.
+says
+text An answer for the running program, then Enter
+shot 1-idle
+
+# RUN. F9 hands stdin.bas to the host, which prints `Name? ` without a newline and
+# waits. The tail reaches the pane through the idle-drain path, not through a
+# newline, which is why this waits rather than asserting straight away.
+#
+# `raise` FIRST, EVERY TIME. SendKeys goes to the FOREGROUND window, not to a
+# handle, so anything that took the foreground since the driver focused the form
+# eats the keystroke -- and the run then simply does not happen. On 2026-09-17 that
+# produced a run in which F9 did nothing, the prompt never came, and three
+# assertions went red as if the editor had broken. A step script that presses a key
+# says `raise` before it, the way the Linux ones do.
+raise
+key {F9}
+wait 2500
+text Name?
+shot 2-prompt
+
+# THE ASSERTION THIS CASE EXISTS FOR: the prompt is up, nothing has been typed,
+# and the row says what to do about it.
+text An answer for the running program, then Enter
+
+# NOW ANSWER IT, the way the hint says to: click the box, type, Enter.
+at 460 709
+wait 300
+type Andre
+wait 300
+shot 3-typed
+key {ENTER}
+wait 2000
+shot 4-answered
+memo
+
+# WHAT THE CHILD ACTUALLY RECEIVED. `< Andre` is the echo BtnSendInputClick writes
+# so the transcript does not read as if the program invented the value, and
+# `hello, Andre` is the program's own answer -- which is also the proof that the
+# hint did NOT travel: under an emulated TextHint the hint is the widget's text,
+# and a naive read of EditInput.Text would have sent `hello, An answer for the
+# running program, then Enter` instead.
+text < Andre
+text hello, Andre

@@ -504,6 +504,16 @@ marked 2026-09-16 were paid for driving it.
   a pane full of text looks blank to a test. `SendMessage(WM_GETTEXT)` sent explicitly
   does marshal the string, and reading the transcript as TEXT is a far better witness to
   the ORDER of its lines than a photograph of it.
+
+  **`GetWindowTextLengthW` fails the same way, and that is the half that misleads**
+  (2026-09-17). `Wnd::Kids` in `tools/lane/win.ps1` asks it first and skips the read on
+  0, so the text column it returns is empty for exactly the controls a lane wants to
+  assert on -- an artefact that looks like an answer. Against `EditInput`, whose hint
+  was drawn in the screenshot at the time: `GetWindowTextLengthW` 0, explicit
+  `WM_GETTEXTLENGTH` 45. Believing the 0 cost an afternoon and two wrong theories --
+  that the hint lived in an `EM_SETCUEBANNER` banner (it does not, here) and that UI
+  Automation was needed to read it (it is not). **When a Windows API answers "nothing"
+  about another process's control, suspect the API before the control.**
 - **A changed `.lfm` needs `lazbuild -B`.** Without it the old form resource is kept
   and the binary streams the previous version of the form -- so the fix above appeared
   not to work, twice, until the rebuild was made a clean one. Both build scripts pass

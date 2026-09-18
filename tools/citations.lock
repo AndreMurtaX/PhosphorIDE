@@ -102,9 +102,9 @@ src/core/uphosphorrun.pas:81-108	c4da38090a6b309c	protected
 src/core/uphosphorsettings.pas:278-278	a127a959b6bc21d3	function TPhosphorSettings.GetRecentCount: Integer;
 src/core/usynphosphor.pas:24-31	6e9a638df26ca96d	WHAT IT DELIBERATELY GETS WRONG. Phosphor's lexer has NO keyword table -- every
 src/core/usynphosphor.pas:5-12	abe3e2dc52151184	WHY THERE IS NO RANGE STATE. A SynEdit highlighter normally has to carry state
-src/phosphoride.lpr:114-114	3cad279a8445c86c	end;
 src/phosphoride.lpr:40-41	4676b961ee761e29	A hand-written .lfm that names a component the .pas does not publish streams
 src/phosphoride.lpr:5-10	b8f150e9ccef2120	This program never links the Phosphor engine. It edits text and it spawns the
+src/phosphoride.lpr:668-668	b0d7362318c9e966	Application.Scaled := True;
 src/umainform.pas:1029-1029	3fe690cc263feb4d	Full: String;
 src/umainform.pas:1047-1047	3cad279a8445c86c	end;
 src/umainform.pas:1141-1141	fbcf15b20e75777c	SaveDialog1.FileName := Doc.FileName
@@ -113,7 +113,7 @@ src/umainform.pas:1319-1323	0434f65ab1b32416	Cond) then
 src/umainform.pas:1345-1345	4bc3eeedbfa28f8f	roadmap item 26's own sentence -- "says plainly when one cannot be evaluated
 src/umainform.pas:266-270	f5a0315f248cc1a4	procedure ActionList1Update(AAction: TBasicAction; var Handled: Boolean);
 src/umainform.pas:270-270	6671e28942d75669	procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-src/umainform.pas:3247-3247	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
+src/umainform.pas:3302-3302	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
 src/umainform.pas:438-450	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
 src/umainform.pas:503-503	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
 src/umainform.pas:6-10	6e5a2b104154c318	The one rule this unit exists to keep: NOTHING HERE WAITS. Every call into the

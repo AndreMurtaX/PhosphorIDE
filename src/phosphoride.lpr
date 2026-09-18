@@ -98,6 +98,17 @@ begin
         [FrmMain.ListWatch.Columns.Count,
          BoolToStr(FrmMain.EditWatch <> nil, True),
          FrmMain.PanelWatch.ControlCount - 1]));
+      { AND THE STDIN ROW, WITH ITS HINT SPELLED OUT rather than counted. The
+        defect this line exists for is not a control that failed to stream: it is
+        a control that streamed perfectly and says nothing, which is what this row
+        was until 2026-09-17, when the author of the editor met his own program's
+        `Name? ` prompt and killed it rather than answer it. A TextHint that
+        arrived empty puts the window straight back there, with no error anywhere
+        and nothing a screenshot of an unshown form could show -- and the hint is
+        the only thing in this row a person reads, so the text is printed and not
+        its length. See the WHY block above TFrmMain.BtnSendInputClick. }
+      Report.Add(Format('stdin row: %d controls, hint "%s"',
+        [FrmMain.PanelInput.ControlCount, FrmMain.EditInput.TextHint]));
       { AN IMAGE LIST THAT STREAMED EMPTY IS A TOOLBAR OF BLANK BUTTONS, and
         that is not a failure anywhere: the buttons still have captions, the
         form still builds, and only a screenshot would show it. Counted here

@@ -1,0 +1,84 @@
+# The stdin row says what it is -- gtk2.
+#
+#   cd tools/lane
+#   fpc -O2 -k-lXtst xdrive.lpr          # once
+#   ./lane-linux.sh ./stdin.bas ./steps-stdin-linux.txt
+#
+# The twin of steps-stdin.txt. Same case, written twice, because the two drivers
+# share six verbs of eight and no key names at all: `key {F9}` there is `key F9`
+# here, and a click measured DOWN from the top there is measured UP from the
+# bottom here, because mutter gives this window a different height on different
+# runs and everything below the editor moves with it.
+#
+# WHAT THIS CASE IS FOR. On 2026-09-17 the author of this editor ran an INPUT
+# program in it, saw `Name? ` in the Output pane, did not connect it to the edit
+# box below the transcript, and killed the process instead of answering. The row
+# now carries a TextHint; this drives the exchange he could not finish and asserts
+# the hint is READABLE at the moment he needed it.
+#
+# THE HINT IS READ AS ORDINARY TEXT HERE, which is the whole reason `text` can ask
+# about it. gtk2 is not in the LCL's lcTextHint list, so TWidgetSet.GetLCLCapability
+# answers NO (interfacebase.inc:96-111) and the LCL emulates the hint by writing it
+# into the widget's real text (customedit.inc:707-721) -- so AT-SPI reads it back
+# like any other string. Windows reaches the same place by a different road: that
+# binary ships no comctl32 v6 manifest, so win32 answers NO too. See the WHY block
+# above TFrmMain.BtnSendInputClick.
+#
+# NOTHING HERE FOCUSES THE BOX FOR THE SCRIPT. Focusing EditInput when a run starts
+# was the candidate that was turned down -- F9 saves and runs while the caret is in
+# the code -- so this script does what a person has to do: read the hint, then click
+# the box. And nothing is asserted about the hint AFTER that click, because the
+# emulation removes it on focus (customedit.inc:492-494), which is what a
+# placeholder is supposed to do.
+
+raise
+
+# BEFORE ANYTHING RUNS. The row is disabled here -- greying out when nothing is
+# running was the only signal it ever carried -- and the hint is there anyway, so
+# somebody reading this window learns what the row is before they start a program.
+say Output
+text An answer for the running program, then Enter
+shot 1-idle
+
+# RUN. `input "Name"; who$` prints its prompt WITHOUT a newline, so it arrives as
+# an unterminated tail and is flushed after two idle drain ticks rather than on a
+# newline. Hence the wait before asserting.
+key F9
+wait 2500
+text Name?
+shot 2-prompt
+
+# THE ASSERTION THIS CASE EXISTS FOR: the prompt is up, nothing has been typed,
+# and the row says what to do about it.
+text An answer for the running program, then Enter
+
+# NOW ANSWER IT, the way the hint says to.
+#
+# 15 UP, NOT 38, AND THE DIFFERENCE IS THE WIDGETSET'S. StatusBar1 and PagesOutput
+# are both alBottom, and the two widgetsets order that pair differently: win32 puts
+# the status bar at the very bottom with the input row above it, gtk2 puts the
+# status bar ABOVE the output panel, so here the input row is flush with the
+# window's bottom edge. Measured on 2026-09-17 by scanning the screenshot rather
+# than by counting control heights -- the first cut of this line said 37, which is
+# where the row would be if this side were laid out like the other one, and the
+# click landed in the memo. A row anchored to the bottom edge is also the most
+# stable thing on this side to aim at, which is the whole reason `bot` exists.
+bot 400 15
+wait 300
+type Andre
+wait 300
+shot 3-typed
+key Return
+wait 2000
+shot 4-answered
+say Output
+
+# WHAT THE CHILD ACTUALLY RECEIVED. `< Andre` is the echo BtnSendInputClick writes
+# so the transcript does not read as if the program invented the value, and
+# `hello, Andre` is the program's own answer -- which is also the proof that the
+# hint did NOT travel. The hint IS the widget's text here, so a read of
+# EditInput.Text would have sent `hello, An answer for the running program, then
+# Enter`; TCustomEdit.RealGetText answers '' while the emulation is showing
+# (customedit.inc:534-540), and this is the assertion that says so out loud.
+text < Andre
+text hello, Andre

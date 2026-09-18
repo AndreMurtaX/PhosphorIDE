@@ -87,6 +87,18 @@ been written the day before.
   line that has gone quiet is a prompt. That path had never been asserted on this
   platform, and a photograph of a pane showing the prompt cannot say whether it arrived
   before anything.
+
+  **AND THIS CLAUSE WAS GREEN WHILE THE FEATURE WAS UNUSABLE, which is worth more than
+  the clause was.** On 2026-09-17, hours after it closed, the author of this editor ran
+  an INPUT program in it, saw `Name? ` in the Output pane, did not connect it to the
+  edit box below the transcript, and killed the process rather than answer it. Nothing
+  about the clause was wrong. **A script is told where to click and therefore never has
+  to find the box** -- it proves the row WORKS and says nothing about whether it can be
+  found, and those are different questions that look identical from inside a lane run.
+  The row now carries a TextHint; `tools/lane/steps-stdin.txt` and its `-linux` twin
+  drive the same exchange and assert the hint is readable BEFORE anything is typed,
+  which is the part a coordinate cannot stand in for. When a lane case is the only
+  witness to a feature, ask what the script was handed that a person would not be.
 - **A runaway is stopped with Ctrl+F2 while the window stays responsive.** `line input`
   with nobody answering is a program that will not end on its own. After the stop the
   lane's process table shows no `phosphor` child, and the window answers two more text
@@ -489,7 +501,7 @@ says so -- not a request the other end will refuse. That is the entire reason
 - The greyed-out state is driven by `Capabilities`, not by a constant.
 - Stop terminates: `disconnect` with `terminate: true`, the child is gone, the marker is
   cleared, the editor is in `dsIdle`.
-- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3247`) still
+- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3302`) still
   shows a correct sentence against a host with no debug subcommand.
 - Inserting a line above a breakpoint while stopped re-sends the set, and the host stops on
   the statement the user chose rather than the one below it.
@@ -732,7 +744,7 @@ which is why it is a good thing to pick up when something else is blocked.
 single-resolution image list is scaled by the widgetset, and the two widgetsets scale
 differently -- one gives a blurred mark and the other gives a missing one, and neither is a
 build failure, so nobody finds out until a screenshot arrives from the other platform.
-`Application.Scaled` is `True` (`src/phosphoride.lpr:114`), so this is live on the first run
+`Application.Scaled` is `True` (`src/phosphoride.lpr:668`), so this is live on the first run
 on a high-DPI Windows machine.
 
 **Done when.** The toolbar renders sharp at 100% and 150% scaling on Windows and on gtk2;
