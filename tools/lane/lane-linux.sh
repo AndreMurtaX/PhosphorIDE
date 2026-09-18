@@ -267,6 +267,52 @@ tab() {
     fi
 }
 
+# `dump` -- PRINT EVERY SHOWING CONTROL, for writing a case rather than running
+# one. The counterpart of the Windows driver's `memo`, and wider: that one prints
+# the Output pane, this prints anything with text on it. It asserts NOTHING and
+# deliberately does not touch ASSERTIONS -- a debugging aid that made a case look
+# like it asked a question would be the defect this whole exercise was about.
+dump() {
+    echo "--- everything this window is showing ---"
+    python3 - <<'DUMPPY'
+import gi
+gi.require_version('Atspi', '2.0')
+from gi.repository import Atspi
+
+
+def show(n):
+    try:
+        role = n.get_role_name()
+        on = n.get_state_set().contains(Atspi.StateType.SHOWING)
+    except Exception:
+        return
+    txt = ''
+    try:
+        t = n.get_text_iface()
+        if t:
+            txt = Atspi.Text.get_text(t, 0, Atspi.Text.get_character_count(t))
+    except Exception:
+        pass
+    name = n.get_name() or ''
+    body = (txt or name).replace('\n', ' | ').strip()
+    if on and body and role not in ('menu', 'menu item', 'application', 'frame'):
+        print('  %-12s %s' % (role, body[:160]))
+    for i in range(n.get_child_count()):
+        try:
+            show(n.get_child_at_index(i))
+        except Exception:
+            pass
+
+
+d = Atspi.get_desktop(0)
+for i in range(d.get_child_count()):
+    a = d.get_child_at_index(i)
+    if a and a.get_name() == 'phosphoride':
+        show(a)
+DUMPPY
+    echo "--- end ---"
+}
+
 menu() {
     ASSERTIONS=$((ASSERTIONS + 1))
     if python3 "$HERE/readtext.py" --invoke "$1" >/dev/null 2>&1; then
@@ -291,6 +337,7 @@ while IFS= read -r line; do
         text\ *) flush; text "${line#text }" ;;
         menu\ *) flush; menu "${line#menu }" ;;
         tab\ *) flush; tab "${line#tab }" ;;
+        dump) flush; dump ;;
         drag\ *) flush; drag ${line#drag } ;;
         ''|'#'*) : ;;
         *) buf="$buf$line
