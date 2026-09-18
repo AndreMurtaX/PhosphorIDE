@@ -2,6 +2,29 @@ A desktop editor for **Phosphor BASIC**: tabs, a purpose-built highlighter, fold
 an outline, completion, signature help, find and replace across a tree, an integrated
 REPL, and a step debugger.
 
+## What changed since 0.1.0
+
+Two latent defects in the debug transport, neither of them reachable in an ordinary
+session, both found while diagnosing something else and both fixed with their own
+red run:
+
+- **A debug link that ended badly now says so.** Past a megabyte with no newline in
+  it the transport drops what it has and ends the session -- through the *same*
+  callback a program that finished perfectly well arrives at, so a session that lost
+  everything was reported as one that succeeded. It now counts what it discarded and
+  reports it.
+- **Draining the socket survives a frame handler that misbehaves.** A handler that
+  raised discarded every frame still in the buffer; one that re-entered the drain
+  delivered newer frames before older ones. Neither can happen today, because nothing
+  in the stop path shows a dialog or pumps messages -- this is for the first one that
+  does.
+
+The 0.1.0 binary is not wrong about anything a user could see; this release exists so
+the published build matches the source.
+
+Also: the `initialize` sample in `docs/debug-protocol.md` showed a `client` string the
+editor has never sent.
+
 ## Get it running
 
 1. Download the archive for your platform below and unpack it. There is no installer;

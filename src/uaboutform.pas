@@ -38,7 +38,7 @@ const
   { Bumped by hand. There is no build number and no git hash baked in: this is a
     source tree, and a version that claims more precision than it has is worse
     than one that admits it is a name. }
-  PhosphorIDEVersion = '0.1.0';
+  PhosphorIDEVersion = '0.1.1';
 
 implementation
 

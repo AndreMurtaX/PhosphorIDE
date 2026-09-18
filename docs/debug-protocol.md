@@ -107,7 +107,7 @@ arrive out of order relative to requests; events may be interleaved with both.
 Must be the first frame. Nothing else is answered before it.
 
 ```json
-{"seq":1,"cmd":"initialize","protocol":1,"client":"PhosphorIDE 0.1.0"}
+{"seq":1,"cmd":"initialize","protocol":1,"client":"PhosphorIDE"}
 ```
 
 | field | type | meaning |
