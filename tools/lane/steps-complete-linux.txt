@@ -22,6 +22,22 @@ wait 1200
 key Return
 wait 600
 shot 92-case-preserved
+# THE CARET IS THE ONLY WITNESS THIS SIDE HAS FOR THE BUFFER. AT-SPI reads a
+# GtkLabel and a GtkTextView; SynEdit is a drawing area with no text interface,
+# so the word just completed cannot be read back. The status bar's FIRST panel
+# can be: RefreshStatus writes Format('%d: %d', [CaretLine, CaretCol]) into it
+# (umainform.pas:4557) and gtk2 gives every panel its own GtkStatusbar label
+# (gtk2proc.inc:6293), which is why `text Phosphor BASIC` already works.
+#
+# BOTH NUMBERS ARE ONES THE FEATURE COMPUTED. Line 16, because each of the two
+# Returns above was EATEN BY THE POPUP: with Ctrl+Space opening nothing they
+# would have inserted newlines instead and the caret would be at 18: 1. Column
+# 6, because five characters replaced four -- `prin` -> `print`, `PRIN` ->
+# `PRINT` -- over the range CompletionAccepted overrides rather than the one
+# TSynCompletion derives (umainform.pas:2221-2237). An append instead of a
+# replace says `prinprint` and answers 10; the `left$$` class of bug that unit
+# header warns about answers 7.
+text 16: 6
 key Return
 wait 300
 type s
@@ -34,3 +50,23 @@ wait 400
 key ctrl+space
 wait 1000
 shot 93-silent-in-a-string
+# AND THE THIRD CASE FINALLY ASKS ITS QUESTION. A popup inside a string literal
+# is worse than no popup at all, and until now this case proved only that a
+# picture could be taken of one. ActCompleteExecute refuses at
+# umainform.pas:2187-2190 and SAYS SO in the fourth panel rather than doing
+# nothing, because a shortcut that silently does nothing cannot be told from a
+# broken one -- so the refusal is readable, word for word, and this is the line
+# that reads it.
+#
+# IT IS STILL THERE BECAUSE NOTHING MOVED THE CARET. RefreshStatus is the only
+# thing that blanks panel 3 (umainform.pas:4579-4581) and it runs from
+# EditorStatusChange on scCaretX/scCaretY/scModified; Ctrl+Space moves none of
+# them, and no timer in this form calls it.
+text no completion inside a string or a comment
+# THE KEYS ACTUALLY ARRIVED -- the other way the line above could go red. The
+# caret sits after `s = "pri`, eight characters, so panel 0 says 17: 9. If
+# `quotedbl` never landed the line is `s = pri`, the caret is at 17: 8,
+# completion fires perfectly correctly and the assertion above fails for a
+# reason that has nothing to do with InLiteralOrComment. This line tells a
+# missing keysym apart from a broken rule.
+text 17: 9

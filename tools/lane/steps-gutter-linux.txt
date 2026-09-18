@@ -20,4 +20,55 @@ wait 600
 shot 71-before-any-session
 key shift+F9
 wait 5000
+
+# THE SESSION IS LIVE AND IT IS THIS FILE. `debug lane345.bas ...` is the run
+# label: StartDebugSession passes Format('debug %s', [ExtractFileName(Path)]) to
+# StartHost, StartHost keeps it in FRunLabel, and RefreshStatus writes
+# FRunLabel + ' ...' into StatusBar1.Panels[3] while the runner is up. The status
+# bar is SHOWING whatever pane is forward, so this needs no tab click.
+# Red if: the host was never found and Start Debugging did nothing, the debug
+# child failed to spawn, or the session had already ended by the time this ran.
+text debug lane345.bas
+
+# ONE FRAME, SO THE STOP IS AT TOP LEVEL. TabStack.Caption becomes
+# Format('Call Stack (%d)', [Length(AFrames)]) only when a stackTrace reply
+# arrives, and a tab CAPTION is showing even when its page is not -- which is
+# what makes it assertable here. Line 10 has not called add() yet, so the host
+# reports the program frame alone; steps-stack-linux.txt asserts (5) on deep.bas
+# for down(3), which is four down() frames plus that same outer one.
+# Red if: no stackTrace reply came back at all, or the program stopped somewhere
+# inside add() instead of on the line the mark was set on.
+text Call Stack (1)
 shot 72-stopped-line-3-hollow
+
+# AND NOW THE SENTENCE THAT SAYS THE MARK IS HOLLOW -- which needs a tab click
+# first. DebugStopped does `PagesOutput.ActivePage := TabVariables` on the first
+# stop, so the Output transcript is on a page nobody switched to, and `text`
+# refuses to vouch for a control that is not SHOWING. Asserting on it without
+# this click is exactly the silent pass readtext.py's `showing()` was written to
+# stop. Clicked here, after the screenshot, so shot 72 still photographs the pane
+# it always did.
+tab Output
+wait 700
+
+# THE HOST'S ANSWER TO `setBreakpoints`, READ BACK IN WORDS. A line with no
+# executable statement on it comes back ABSENT from the installed set, and that
+# absence is the only verified/unverified marker the protocol has:
+# DebugLinesInstalled walks this document's breakpoints, asks BreakpointIsArmed
+# for each, and names the ones that are not in FInstalledLines. Line 3 is blank,
+# so it is named -- and the same False is what draws the gutter mark hollow. The
+# picture and this line are two copies of one fact; this is the copy a script can
+# read.
+# Red if: the host starts binding a blank line to the next statement, the
+# setBreakpoints reply stops being parsed, FInstalledLines stops being compared
+# against the right document, or the report is dropped -- in every one of those
+# the gutter would draw two solid dots and no screenshot would say otherwise.
+text nothing will stop on line 3 -- no statement there to stop at
+
+# AND THE OTHER MARK IS SOLID, which is the half that makes the first one mean
+# anything: a session that armed NOTHING would also report line 3 dead. The
+# wording is DebugStopped's own -- Format('> stopped at line %d (%s)', ...) with
+# PdbpStopReasonName(psrBreakpoint) = 'breakpoint'.
+# Red if: the program ran past line 10, or stopped for some other reason (entry,
+# step, exception) than the breakpoint this case set there.
+text > stopped at line 10 (breakpoint)

@@ -12,9 +12,44 @@ key F5
 wait 600
 key shift+F9
 wait 5000
+
+# THE PANE BY NAME, NOT BY A CONSTANT. `bot 191 184` below measures the tab strip
+# up from the bottom edge, and that rule assumed the output panel keeps a fixed
+# height -- it GROWS with the window (191 up at 752 tall, 332 up at 1011), so in a
+# tall window that click lands in the list below the strip and the pane never
+# changes. The first stop brings the VARIABLES tab forward by itself
+# (umainform.pas DebugStopped: `PagesOutput.ActivePage := TabVariables`), so the
+# Call Stack page is behind until something clicks it. A prefix, because the
+# caption carries its count while a session is live.
+tab Call Stack
+wait 600
 bot 191 184
 wait 700
 shot 31-call-stack-with-lines
+
+# FIVE FRAMES: `down` four times plus (main). The caption is written from the
+# host's answer -- `Format('Call Stack (%d)', [Length(AFrames)])` -- so this is a
+# number the session computed, not one this window knows. A tab caption is showing
+# whether or not its page is, which is what makes it assertable at all here.
+text Call Stack (5)
+
+# AND THE ROW THIS CASE IS ABOUT TO DOUBLE-CLICK. `(main)` is the host's name for
+# the frame that is not a function; it appears in no line of deep.bas and in no
+# other pane, so it is SHOWING only if the tab click above actually landed. That
+# is the exact failure that let the neighbouring case return three byte-identical
+# screenshots and exit 0.
+text (main)
 bot2 100 43
 wait 900
+
+# THE CARET LANDED ON LINE 11, WHICH IS THE WHOLE CASE. Status bar panel 0 is
+# `LINE: COL` -- `Format('%d: %d', [Doc.CaretLine, Doc.CaretCol])` in
+# RefreshStatus -- and it read `4: 1` a moment ago, because the stop jumped there
+# itself. Line 11 of deep.bas is `total = down(3)`: the call site the (main) frame
+# reports, and the line Phosphor owed until fce3db1. GotoSource asks for column 1
+# for everything that did not come from the outline, so the column is exact.
+# Red if the (main) row carries no line (ListStackDblClick then does nothing, by
+# design), if the double-click missed the row, or if the jump used the innermost
+# frame's line instead of the selected one.
+text 11: 1
 shot 32-jumped-to-main

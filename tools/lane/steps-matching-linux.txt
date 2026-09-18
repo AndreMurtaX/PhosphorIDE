@@ -27,11 +27,24 @@ shot 420-the-pair-is-painted
 key ctrl+shift+m
 wait 900
 shot 421-jumped-to-the-end-function
+# WHICH PARTNER IT FOUND. ActMatchBlockExecute writes `%s: line %d` from
+# BlockName(M.Block) and M.ThereLine (umainform.pas:3133), so this is the pairing
+# itself: `function` on 7 against the merged `end function` on 13.
+text function: line 13
+
+# AND THE CARET REALLY MOVED. Panel 0 is `%d: %d` over CaretLine/CaretCol
+# (umainform.pas:4557); `end` starts at byte 1 of line 13. The message above is
+# written AFTER the assignment, so it would still read `line 13` if the caret had
+# not gone anywhere -- this is the half that says it did.
+text 13: 1
 
 # It is symmetric: from the terminator back to the opener.
 key ctrl+shift+m
 wait 900
 shot 422-and-back-again
+# SYMMETRIC. From the terminator back to the opener, and the number changes:
+# a second press that had done nothing would still read `function: line 13`.
+text function: line 7
 
 # A PAIR THAT OPENS AND CLOSES ON ONE LINE still has a partner. Folding drops
 # these because they hide nothing; matching keeps them.
@@ -43,6 +56,12 @@ wait 600
 key ctrl+shift+m
 wait 900
 shot 423-a-pair-on-one-line
+# A BLOCK THAT OPENS AND CLOSES ON ONE LINE STILL HAS A PARTNER. This is the
+# one number in the case that only the RAW scan can produce: `next` starts at
+# byte 26 of `for i = 1 to 2 println i next`, and ScanFoldLine -- rule 6 -- drops
+# both events of a line that folds nothing, so a match built on it would answer
+# bmNone here and leave the caret on 16: 1.
+text 16: 26
 
 # --- AND THE THREE ANSWERS THAT ARE NOT A JUMP ---------------------------
 # `next` as a variable, with nothing open above it.
@@ -54,6 +73,10 @@ wait 600
 key ctrl+shift+m
 wait 900
 shot 424-a-next-that-closes-nothing
+# A TERMINATOR WITH NOTHING OPEN ABOVE IT IS A SENTENCE, NOT A JUMP. `next = 5`
+# is a legal assignment; bmUnopened is what keeps it from closing the `for` on 16
+# or the `while` on 32. Verbatim from umainform.pas:3140.
+text this closes a for, and none is open
 
 # `function` in an expression: not at a statement position, so not a block word.
 key ctrl+g
@@ -91,3 +114,7 @@ wait 600
 key ctrl+shift+m
 wait 900
 shot 427-a-while-that-is-never-closed
+# AN OPENER NOTHING CLOSES. `while` on 32 runs to the end of the file, so its
+# node keeps Partner = -1 with Kind = feOpen -- bmUnterminated, umainform.pas:3137.
+# It is the opposite refusal to the one on line 20, and it names the block.
+text this while is never closed

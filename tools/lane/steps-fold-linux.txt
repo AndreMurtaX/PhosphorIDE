@@ -25,3 +25,33 @@ wait 900
 shot 173-an-inner-block-collapsed
 at 57 210
 wait 600
+
+# NOTHING MOVED THE CARET, WHICH IS WHAT SAYS THE FOUR CLICKS LANDED IN THE FOLD
+# COLUMN. SynEdit answers a left click on a fold mark with emcCodeFoldCollaps /
+# emcCodeFoldExpand and with no caret placement at all
+# (synguttercodefolding.pp:1058-1072), so after four of them the status bar still
+# reads the position the file opened at. RefreshStatus writes that panel as
+# Format('%d: %d') -- umainform.pas:4557 -- and OpenPath calls it once the file is
+# in (umainform.pas:1085), so `1: 1` is the untouched caret and not an empty
+# panel.
+# DROPPED by the 2026-09-18 critique: text 1: 1
+#   It is green with the feature deleted. See tools/lane/README.md.
+
+# AND THE SCANNER THAT DECIDES WHERE A FOLD MAY OPEN, ASKED THROUGH THE ONE PANE
+# THAT PUTS ITS ANSWER IN WORDS. `where may a statement begin` is written once in
+# uphosphorfold.TLineWalk and the fold gutter and the outline are both its
+# callers, so the outline's row for the very line this case collapses is that
+# walk's answer in a control AT-SPI can read: the line it counted, the name it
+# resolved and the arity it took out of the parentheses. The string is
+# Format('%d: %s') over OutlineRowText -- umainform.pas:2986,
+# uphosphoroutline.pas:349 -- which for `function outer(n) local acc` on line 6 is
+# exactly `6: outer(n)`; the `local` clause is not in the row and the annotations
+# are only ever appended.
+#
+# The tab click first, because the rows are on a page nobody switched to: AT-SPI
+# describes every page of a notebook and `text` only counts a control that is
+# SHOWING, which is the rule that made thirteen cases pass while their clicks
+# landed in the wrong place.
+tab Outline
+wait 700
+text 6: outer(n)

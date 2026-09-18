@@ -22,12 +22,42 @@ key F9
 wait 4000
 shot 461-line-4-is-marked
 
+# THE HOST BLAMED LINE 4, IN WORDS. StartHost switches PagesOutput to TabOutput
+# before the child starts, so the Output memo is SHOWING and no tab click is
+# needed. AppendOutput adds the stderr line unprefixed and only a WHOLE line
+# reaches it, which is what uphosphorrun's lines-not-bytes rule is for: half of
+# this string is a diagnostic nobody can find. The host echoes the path it was
+# GIVEN, which the lane passes absolute, so only the tail of it is named here.
+text blame.bas:4: unexpected token in expression
+
+# AND THE CARET WENT THERE. With exactly one Problems row RunnerFinished calls
+# ListProblemsDblClick ITSELF, so this is the whole chain in one number:
+# ParsePhosphorMessage found `:4: ` past the drive-letter scan, AddProblem
+# recorded it, GotoSource clamped and set LogicalCaretXY, and RefreshStatus put
+# Format('%d: %d') over CaretY/CaretX into panel 0. It said `1: 1` a moment ago.
+text 4: 1
+
 # THE MARK SURVIVES SCROLLING. To the end of the file and back.
 key ctrl+End
 wait 600
 key ctrl+Home
 wait 600
 shot 462-still-marked-after-scrolling
+
+# THE ROW THE EDITOR BUILT, which is a different claim from the line the host
+# printed. AddProblem formats '%s(%d): %s' over ExtractFileName(Path), Msg.Line
+# and Msg.Text -- so `blame.bas(4): ` exists only if the parser took the path and
+# the line OUT of a message that carries three colons and left the text intact.
+#
+# THE TAB CLICK COMES FIRST, and it is not decoration. RunnerFinished found
+# exactly one row, so it JUMPED instead of switching the pane -- the Problems
+# page is alive, describable and NOT SHOWING, which is precisely the state
+# `text` refused to accept from 2026-09-18. Asking without the click asserts
+# nothing about what is on screen. The caption is plain `Problems`: only Call
+# Stack and Variables grow a `(n)`, and only while a session is live.
+tab Problems
+wait 600
+text blame.bas(4): unexpected token in expression
 
 # A SECOND RUN CLEARS IT AND SAYS IT AGAIN. The file has not changed, so the
 # host blames the same line -- what this shows is that the mark is a memory of
@@ -47,6 +77,15 @@ key End
 type 1
 wait 900
 shot 464-edited-so-the-mark-is-gone
+
+# AND THE EDIT LANDED ON THE BLAMED LINE, which is the only reason the mark is
+# gone: TEditorDoc.LineEdited clears FBlameLine for the lines it names and for no
+# others, so an edit anywhere else would have left the band where it was and this
+# screenshot would be a lie a picture cannot catch. Line 4 is `println 1 +`,
+# eleven characters, so End is column 12 and the one character typed makes 13.
+# A Go To Line that missed, or a keystroke that went into a dialog that never
+# closed, reads as some other number here.
+text 4: 13
 outtab
 
 # --- AND THE ONE CLAUSE THAT IS STILL WINDOWS-ONLY ------------------------

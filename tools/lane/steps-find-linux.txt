@@ -10,6 +10,16 @@ type bottom
 key Return
 wait 1800
 shot 111-one-row
+# THE PANE FORWARD FIRST. ActFindInFiles already sets PagesOutput.ActivePage,
+# but AT-SPI describes every page of a notebook and `text` may only read the one
+# that is SHOWING, so the page is brought on screen by asking where its tab is.
+tab Find in Files
+# AND THE ROW ITSELF, which is the thing the search PRODUCED: FindHits formats
+# `%s:%d: %s` from the leaf name, the line and the matching line, and Deposit
+# trims that line's ends. deep.bas line 4 is `    println "bottom"`, so a walk
+# that never reached the file, a line number off by one, or a row that stopped
+# carrying its text all go red here -- and the screenshot alone never could.
+text deep.bas:4: println "bottom"
 
 # THE JUMP. deep.bas is not open -- lane345.bas is -- so this is GotoSource's
 # open-it branch, and the status bar's line:column is the proof that the 4 in
@@ -17,6 +27,13 @@ shot 111-one-row
 bot2 200 97
 wait 1800
 shot 114-jumped-to-deep
+# THE CARET IS THE PROOF, and it is the only one: GotoSource opened a file that
+# was NOT open, clamped nothing and set LogicalCaretXY to (1, 4), and
+# RefreshStatus writes Panels[0] as `%d: %d` -- so the always-showing status bar
+# reads `4: 1` and nothing else on this screen says that. Asserted HERE and not
+# after the count, because the same RefreshStatus blanks Panels[3]: the match
+# count does not survive the jump.
+text 4: 1
 
 # A word in every fixture, to see more than one file at once.
 key ctrl+shift+f
@@ -36,6 +53,12 @@ type nosuchwordanywhere
 key Return
 wait 1800
 shot 113-no-matches
+# THE ANSWER ARRIVES WHERE THE QUESTION WAS ASKED, which is what the comment
+# above claims and what nothing checked. FindDone appends '-- ' + What to the
+# LIST, and only when the count is zero, the search failed, or it was stopped --
+# so this row exists only because the search ended having found nothing, in the
+# pane rather than only in the status bar at the far end of the window.
+text -- 0 matches in
 
 # NO GARBAGE ROWS. `LooksBinary` is a symbol in ufindinfiles.pas AND a string
 # inside the compiled binaries beside it; emptying the mask puts all of them in
@@ -79,3 +102,9 @@ shot 115-running
 bot 612 155
 wait 1200
 shot 116-stopped
+# STOPPING IS AN ENDING AND IT SAYS SO. Cancelling delivers `stopped after N
+# files, M matches` into Panels[3] -- a status bar that still reads `searching...`
+# is a walk the Stop button never reached, and a results list that merely stopped
+# growing cannot tell the two apart. The count is not asserted: /home/andre is a
+# different tree every day, the ENDING is not.
+text stopped after

@@ -6,6 +6,17 @@ raise
 key ctrl+shift+o
 wait 1000
 shot 130-ten-definitions
+# THE FIXTURE'S WHOLE POINT, ASKED AS A QUESTION. Line 23 is
+# `head: function fifth%() return 5 : end function : function sixth%() ...` --
+# TWO definitions on one line, after a NAMED LABEL, and this row is the SECOND
+# of them. A first-word scanner finds neither; a scanner that stops at the first
+# statement on a line finds only fifth%. The row text is
+# `Format('%d: %s', [Line, OutlineRowText])` (umainform.pas:2986), and
+# OutlineRowText is Display + '(' + Trim(Params) + ')' -- the suffix `%` is part
+# of the name (uphosphorfold.WalkTakeIdent), so the row reads `23: sixth%()`.
+# No `tab` is needed: Ctrl+Shift+O is ActOutlineExecute, which sets
+# PagesOutput.ActivePage := TabOutline itself, so the pane is SHOWING.
+text 23: sixth%()
 
 # Row 6 is `22: sixth%()`, the SECOND of the two definitions on line 22, so the
 # column in the status bar is the proof that the jump used the name's column.
@@ -45,11 +56,27 @@ wait 400
 key F12
 wait 1000
 shot 134-f12-jumped-to-the-definition
+# WHAT F12 RESOLVED, in the words the action wrote. The caret is inside `second`
+# on line 42 (`println second(2, 3)`), the call passes TWO arguments, and
+# FindOutlineFunc resolves by NAME AND ARITY -- the definition is on line 11,
+# after a `:`. ActGotoDefinitionExecute writes
+# Format('%s is defined on line %d', [Display, Line]) into status panel 3, AFTER
+# its GotoSource call, so the message survives that jump's RefreshStatus.
+# It has to be asserted here, before the next keypress: any caret move runs
+# EditorStatusChange -> RefreshStatus, which blanks panel 3 when nothing is
+# running (umainform.pas:4577-4580).
+text second is defined on line 11
 
 # The caret is now ON that definition's name, which is its own answer.
 key F12
 wait 1000
 shot 135-f12-on-the-definition-itself
+# AND THE SECOND PRESS ANSWERS INSTEAD OF SAYING "NOT FOUND". This arm fires
+# only when Funcs[I].Line = CaretY AND Funcs[I].Column = the name's start -- so
+# this one string also proves the FIRST jump landed on column 18, where `second`
+# begins on line 11, and not on column 1. That is the column rule GotoSource
+# exists for, asserted without depending on a click coordinate.
+text this is the definition of second
 
 # F12 on a real built-in OFFERS the reference. The dialog is a top-level window
 # of its own, so it needs popshot rather than shot -- the same fact the
@@ -106,6 +133,19 @@ wait 1200
 bot 264 184
 wait 900
 shot 140-the-pane-follows-the-file
+# AND THE PANE IS NOW DESCRIBING deep.bas. The tab header is clicked BY ASKING
+# AT-SPI WHERE IT IS rather than by the constant above -- same click, located
+# rather than assumed, which matters because the output panel GROWS with the
+# window and `bot ... 184` lands below the strip in a tall one. Ctrl+Shift+O is
+# still not used, because the action rebuilds and the header does not: what is
+# on screen here is whatever GotoSource left behind.
+# deep.bas is `function down(n) local r` on line 2, so its one row is
+# `2: down(n)`. Without the rebuild this pane still lists outline.bas's ten
+# functions -- the defect fixed in 96f7170, where clicking a row jumped back
+# into the file just left.
+tab Outline
+wait 700
+text 2: down(n)
 
 # AND A PARAMETER IS NOT A FUNCTION. deep.bas is `function down(n) local r`, so
 # inside it `r` is a local. Home is a SMART home and lands on the first

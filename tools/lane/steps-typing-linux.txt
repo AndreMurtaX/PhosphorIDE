@@ -13,6 +13,37 @@ raise
 wait 900
 shot 190-two-thousand-lines-and-an-unfinished-word
 
+# THE OUTLINE PANE FORWARD, AND FORWARD NOW. `text` only sees controls the
+# program is SHOWING, and the outline is a notebook page nobody has switched to
+# -- but clicking its tab AFTER the keystroke would take the keyboard off the
+# editor in the middle of the one edit this case exists to make. So the click
+# happens here, before anything is typed, and the pane stays forward for the
+# rest of the run. It costs the Output pane in shots 191-193, which held
+# nothing this case ever asserted on.
+tab Outline
+wait 800
+
+# THE BEFORE HALF. Line 1 is `functio measured()` and defines nothing, so the
+# first row of the outline is f1's, on line 7 -- `Format('%d: %s', [Line,
+# OutlineRowText])` (umainform.pas:2986), and OutlineRowText is Display plus the
+# parameter text in parentheses (uphosphoroutline.pas:349-355). Asserting it
+# here is what makes the assertion after the keystroke mean something: a pane
+# that said nothing either way would read the same on both sides of the edit.
+# DROPPED by the 2026-09-18 critique: text 7: f1(a, b)
+#   It is green with the feature deleted. See tools/lane/README.md.
+
+# AND THE KEYBOARD BACK TO THE EDITOR, which the tab click took. Ctrl+G ends in
+# GotoSource with AFocus defaulted True (umainform.pas:555-556, 2018-2019), so
+# the caret lands on line 1 with the editor focused and the ctrl+Home below then
+# puts it exactly where it would have been. Same idiom as
+# steps-stack-linux.txt:13-18.
+key ctrl+g
+wait 700
+key ctrl+a
+type 1
+key Return
+wait 500
+
 # The caret to column 8, the end of `functio` -- NOT End, which would put it
 # after `measured()` where an `n` opens nothing at all.
 key ctrl+Home
@@ -26,11 +57,34 @@ key Right
 key Right
 wait 400
 
+# COLUMN 8, WHICH IS THE WHOLE SETUP OF THIS CASE. The status bar's first panel
+# is `Format('%d: %d', [Doc.CaretLine, Doc.CaretCol])` (umainform.pas:4557),
+# rewritten on every scCaretX/scCaretY (EditorStatusChange), and it is always
+# showing. If the seven Rights landed anywhere else -- a key the queue dropped,
+# a smart Home that moved off column 1 -- the `n` below goes into the middle of
+# a word, opens no block, and this case measures a keystroke that cascades
+# nothing while every screenshot still looks right.
+text 1: 8
+
 # The keystroke the whole item is about. The fold marker appearing in the gutter
 # beside line 1 is the visible proof that this is the cascading edit.
 type n
 wait 800
 shot 191-the-definition-completed-and-the-marker-with-it
+
+# THE CASCADE'S READABLE PRODUCT -- the one assertion here that is about the
+# feature and not about the keys. The fold marker in the gutter is a PICTURE and
+# this side cannot read one; the outline is the other consumer of the same walk
+# (uphosphorfold.TLineWalk, one scanner and two readers since item 18), so a row
+# for LINE 1 is proof that the one-character edit was rescanned and read as a
+# definition. Before the `n` there was no such row, which the line above shot 190
+# asserted.
+#
+# The needle stops at the parentheses on purpose: nothing below line 1 closes
+# this block, so the row carries `   (no endfunction yet)` after it
+# (umainform.pas:2989-2991), and the count of definitions is not what is being
+# asked.
+text 1: measured()
 
 # Three more characters, none of which changes a block.
 type ame
@@ -44,3 +98,9 @@ key BackSpace
 key BackSpace
 wait 800
 shot 193-and-back-with-the-marker-gone
+
+# AND EXACTLY FOUR CHARACTERS CAME BACK OUT. Column 8 again: the four BackSpaces
+# removed the `ame` and the `n`, leaving `functio measured()` as the file was
+# found. Three delivered instead of four, or a fifth arriving, leaves a buffer
+# that photographs identically at this size and would be called done.
+text 1: 8

@@ -14,6 +14,15 @@ type println 6*7
 key Return
 wait 1500
 shot 151-six-times-seven
+# THE PROMPT IS NOT A LINE, AND THE ECHO CLOSES ITS LINE. `phosphor> ` is
+# written before every read with no newline (uphosphorrepl.pas:75, citing
+# host/console/phosphor.lpr:3746), so it reaches the pane only through
+# FlushPrompt's two idle drains -- and SendReplLine then appends the typed line
+# to that open line (umainform.pas:2688-2694). One needle asserts both.
+text phosphor> println 6*7
+# 42, which is the whole of what a REPL is for: a number the host computed and
+# handed back over the pipe, not a string this repository wrote down.
+text 42
 
 # AND THE PERSISTENCE THAT JUSTIFIES THE PANE: Run hands the host a FILE and
 # every run starts from nothing; these two lines are one session.
@@ -33,6 +42,11 @@ type println i
 key Return
 wait 1000
 shot 153-the-continuation-prompt
+# THE CONTINUATION PROMPT IS FIVE SPACES AND `...> ` (uphosphorrepl.pas:76), and
+# the echo lands on it exactly as it lands on `phosphor> `. Leading spaces are
+# left off the needle on purpose -- the driver takes everything after `text `,
+# and a count of spaces is not what this asserts.
+text ...> println i
 type next
 key Return
 wait 1500
@@ -61,3 +75,13 @@ key Delete
 bot 949 37
 wait 2500
 shot 158-ended-by-closing-its-input
+# WHICH OF THE TWO ENDINGS IT WAS. End with the input still open closes stdin
+# (umainform.pas:2671); a second press, or a child that stopped reading, says
+# `> stopping it` instead -- so this needle also proves the click landed on the
+# End button rather than somewhere else on the panel.
+text > end of input
+# AND THE HOST AGREED: stdin closed, it writes its newline and exits 0, which
+# ReplFinished formats (umainform.pas:2921). `> the REPL was stopped` is what
+# this line reads instead if it was killed, and a non-zero code fails on the
+# digit -- which is the done-when's last clause, asserted rather than photographed.
+text > the REPL ended, exit code 0

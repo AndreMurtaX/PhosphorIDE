@@ -30,11 +30,31 @@ key shift+Down
 key shift+Down
 wait 500
 shot 440-five-lines-selected
+# THE SELECTION IS THE FEATURE'S INPUT, and the status bar is the only place
+# that says so in words. Ctrl+G 7 puts the caret at 7:1 and five Shift+Downs
+# leave it at 12:1 -- the exact shape ActSendToReplExecute's rule reads: a block
+# that ENDS at column 1 does not include that line, so 7 to 12 is lines 7..11.
+# Without this, a Ctrl+G that never reached its dialog would send whatever line
+# the caret happened to be on and the rest of this case would fail one step later
+# with no clue which half broke.
+text 12: 1
 
 # SEND. No REPL is running yet, so this starts one and waits for its prompt.
 key ctrl+shift+Return
 wait 6000
 shot 441-the-definition-reached-the-prompt
+# FIVE LINES REACHED THE PROMPT AS FIVE LINES, which is the whole of item 23.
+# The first one lands on the `phosphor> ` that the REPL this send STARTED printed
+# -- nothing was running before line 35 -- and the echo closes that prompt's line
+# (AddReplText continues the open fragment), so the transcript reads exactly as
+# if it had been typed.
+text phosphor> function twice(n) local r
+# AND THE LAST OF THE FIVE ARRIVED MID-BLOCK. `endfunction` is fixture line 11,
+# and it is sitting behind a CONTINUATION prompt -- five spaces and `...> ` --
+# which only happens if the queue waited for each prompt and sent one line per
+# prompt. A send that dumped all five at once, or that stopped after the first,
+# cannot produce this line.
+text ...> endfunction
 
 # AND IT IS CALLABLE. Ctrl+Shift+R puts the caret in the prompt's box.
 key ctrl+shift+r
@@ -43,6 +63,11 @@ type println twice(21)
 key Return
 wait 2500
 shot 442-and-twice-is-callable
+# AND `twice` IS CALLABLE, which is the other half of the done-when -- and this
+# is the host EXECUTING what was sent, not the editor echoing it. `inside twice`
+# is printed by fixture line 9, the MIDDLE of the block: it can only appear if
+# every one of the five lines arrived, in order, behind its own prompt.
+text inside twice
 
 # One more, to show the transcript keeps reading like a session.
 type println twice(4)
