@@ -2034,6 +2034,61 @@ end;
 
 { ------------------------------------------------------------------ stdin --- }
 
+{ THE ROW HAS TO SAY WHAT IT IS, and until 2026-09-17 it did not.
+
+  On that day the author of this editor ran ../Phosphor/tests/classic/04_input.bas
+  in it, watched `Name? ` arrive in the Output pane, did not connect that prompt
+  to the wide edit box a few pixels below it, and killed the process. That is as
+  strong as evidence about an affordance gets: the person who WROTE the window
+  could not find the control in it. The only signal the row carried was that it
+  greyed out when nothing was running -- which is something you notice after you
+  already know what it is for, and the two Hints on it answer a question you have
+  to have had first, by hovering a box you have no reason to hover.
+
+  So EditInput carries a TextHint, which is the idiom EditWatch has had since the
+  watch pane landed and the same shape of sentence: what goes in, then Enter. The
+  stdin row is the one that was left out, and it is the one that needed it most --
+  the watch row sits in a pane called Watches under a list of watches, and this one
+  sits in the pane where OUTPUT goes, which is the last place a reader looks for
+  somewhere to type.
+
+  THE OTHER TWO CANDIDATES WERE REJECTED, not overlooked. A static label to the
+  left would take width from the only control in this row that uses it and would
+  still be sitting there saying it when nothing is running; the hint costs no
+  layout and removes itself the instant it would be in the way. Focusing the box
+  when a run begins is a worse defect than the one being fixed: F9 saves and runs
+  while the caret is in the code, and moving it out from under somebody who is
+  still typing is not a fix, it is a second surprise. (CLAUDE.md's "Can not focus"
+  trap is a DIFFERENT one and is not the reason -- that is about a form that is
+  not shown yet, and a run starts from a shown form.)
+
+  AND A TextHint IS THE CONTROL'S REAL TEXT HERE -- on BOTH widgetsets, which is
+  not what the LCL's own documentation leads you to expect and is the fact
+  BtnSendInputClick below is standing on.
+
+  The LCL has two implementations. A widgetset that answers lcTextHint YES gets the
+  native one; every other widgetset gets an EMULATION that writes the hint into the
+  control's text in a grey font (customedit.inc:707-721) and takes it out again on
+  focus (customedit.inc:492-494). gtk2 is not in the YES list at all, so
+  TWidgetSet.GetLCLCapability answers NO for it (interfacebase.inc:96-111). win32
+  answers YES only for ComCtl IE6 and newer (win32object.inc:599-605) -- and THIS
+  BINARY SHIPS NO COMCTL32 V6 MANIFEST, so it answers NO here too, and both
+  platforms take the emulated path. Measured on 2026-09-17: WM_GETTEXTLENGTH on
+  EditInput answers 45 from another process, which is the length of the hint.
+
+  SO A READ OF EditInput.Text WOULD POST THE HINT INTO THE CHILD'S STDIN, and the
+  only reason it does not is that TCustomEdit.RealGetText answers '' while the
+  emulation is showing (customedit.inc:534-540). BtnSendInputClick depends on that
+  line. Do not replace it with a read of the widget's text, and do not "simplify"
+  it by asking the widgetset -- tools/lane/steps-stdin.txt asserts that the child
+  received `Andre` and not this sentence, on both platforms, for this reason.
+
+  The manifest is worth knowing about for a second reason: adding one would flip
+  win32 to EM_SETCUEBANNER, where no cross-process message gives the hint back --
+  EM_GETCUEBANNER was measured the same day and answers FALSE from outside. The
+  Windows lane case would go red and the Linux one would stay green.
+  tools/lane/lane-windows.ps1 carries the route out of that for whoever meets it. }
+
 procedure TFrmMain.BtnSendInputClick(Sender: TObject);
 begin
   if not FRunner.Running then

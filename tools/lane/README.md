@@ -17,9 +17,17 @@ The two drivers share **six verbs of eight**, and do not share key names at all.
 
 | | |
 | --- | --- |
-| both | `key`, `type`, `wait`, `raise`, `shot`, `at` |
-| Windows only | `dblclick`, `memo` |
-| Linux only | `at2` (what `dblclick` is called there), `bot` and `bot2` (a click measured UP from the bottom edge, because mutter gives the window a different height on different runs), `outtab`, `rootshot`, `popshot` |
+| both | `key`, `type`, `wait`, `raise`, `shot`, `at`, `text` |
+| Windows only | `dblclick`, `memo`, `says` |
+| Linux only | `at2` (what `dblclick` is called there), `bot` and `bot2` (a click measured UP from the bottom edge, because mutter gives the window a different height on different runs), `outtab`, `rootshot`, `popshot`, `say`, `menu` |
+
+`text <needle>` is the one verb that means the same thing on both sides and gets there
+by different roads: it ASSERTS that some control in the window says the needle, counts
+what fails, and decides the run's exit code. Linux asks AT-SPI through `readtext.py`;
+Windows sends `WM_GETTEXT` to every visible child. It arrived here on 2026-09-17, with
+the stdin row's hint -- before that this side only had `memo`, which PRINTS, and a lane
+that only prints is a lane somebody has to read. `says` and `say` are the matching dump
+verbs, for writing a case rather than for asserting in one.
 
 `key` is **SendKeys** on Windows (`^g`, `{ENTER}`, `{F5}`, `+{F9}`) and an **X
 keysym** on Linux (`ctrl+g`, `Return`, `F5`, `shift+F9`).
@@ -68,6 +76,7 @@ generic driver existed, with the steps baked into the PowerShell.
 | `steps-typing.txt` + `typing.bas` | roadmap item 19, DRIVEN: 2000 lines, a word one character short of a definition at the top, the keystroke that completes it, and the fold marker arriving. The NUMBER is not here -- it comes from `phosphoride --measure-typing`, and the script says why two ways of timing it from outside the process both lie |
 | `steps-accent.txt` + `acentos.bas` | the byte column: the same statement with and without accents, and the popup filtered on both |
 | `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |
+| `steps-stdin.txt`, `steps-stdin-linux.txt` + `stdin.bas` | the stdin row, and the hint that says what it is: the prompt arriving as an unterminated tail, the hint readable before anything is typed, the box clicked the way a person has to click it, and the child receiving `Andre` rather than the 45 characters of the hint. Written because the clause this proves had been GREEN since the morning -- see roadmap item 1 -- while the author of the editor was killing an INPUT program rather than answering it |
 | `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
 | `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, the same VERBS as the Linux one — but not the same key names, see below |
@@ -136,7 +145,16 @@ not down from the top. mutter gives this window a different height on different
 runs -- 700, 725 and 750 all seen on one afternoon -- so everything below the editor
 moves between runs, and an offset from the top lands in a different pane each time.
 Two attempts at the call-stack pane clicked into the variables list instead, and both
-read as a pane that did not work. The output panel is bottom-anchored; from the bottom
+read as a pane that did not work.
+
+**AND THE BOTTOM EDGE IS NOT THE SAME CONTROL ON BOTH PLATFORMS.** `StatusBar1` and
+`PagesOutput` are both `alBottom`, and the two widgetsets order that pair differently:
+win32 puts the status bar at the very bottom with the output panel's input row above
+it, gtk2 puts the status bar ABOVE the output panel, so on this side the input row is
+flush with the window's bottom edge. An offset carried over from a Windows script is
+therefore one control out. Measured on 2026-09-17 by scanning a screenshot's rows for
+where the bands change, which is the cheap way to calibrate a `bot` and worth doing
+once per pane rather than reasoning from control heights. The output panel is bottom-anchored; from the bottom
 every row keeps its place.
 
 Still not driveable **through XTest**: the gtk2 **menu bar**, from a synthetic click or
@@ -180,6 +198,17 @@ The two facts that are not obvious:
 - **`GetWindowText` does not cross a process boundary for a control.** It is
   documented, and it fails by returning `""`, so a full Output pane reads as
   blank. `gettext.ps1` sends `WM_GETTEXT` explicitly.
+
+  **AND NEITHER DOES `GetWindowTextLengthW`, WHICH IS THE HALF THAT BITES.**
+  `Wnd::Kids` asks it first and skips the read when it answers 0, so the text
+  column of every row it returns is empty for exactly the panes and edits a lane
+  wants to assert on -- a column that looks like an answer and is an artefact.
+  Measured on 2026-09-17 against `EditInput`, whose TextHint was plainly drawn in
+  the screenshot at the time: `GetWindowTextLengthW` said 0 and an explicit
+  `WM_GETTEXTLENGTH` said 45. Believing the 0 cost an afternoon and two wrong
+  theories -- that the hint lived in a cue banner no message could reach, and then
+  that UI Automation was needed to get it out. Nothing in this directory reads that
+  column; every caller sends `WM_GETTEXT` for itself, and so should you.
 
 **`-KeepOpen` leaves a binary locked, and the next build says something else.**
 A phosphoride left running holds `bin\phosphoride.exe` open, and lazbuild then fails

@@ -173,6 +173,7 @@ object FrmMain: TFrmMain
           Hint = 'What a running program reads with INPUT or LINE INPUT'
           OnKeyDown = EditInputKeyDown
           TabOrder = 1
+          TextHint = 'An answer for the running program, then Enter'
         end
       end
       object MemoOutput: TMemo

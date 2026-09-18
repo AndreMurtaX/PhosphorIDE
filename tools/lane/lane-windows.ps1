@@ -6,7 +6,41 @@
 #
 # Commands, one per line: key <chord>, type <text>, wait <ms>, shot <name>,
 # at <dx> <dy> (click, relative to the window's top-left), memo (print the Output
-# pane's text), dblclick <dx> <dy>.
+# pane's text), dblclick <dx> <dy>, says (dump what the accessibility layer sees),
+# text <needle> (ASSERT that some control says it).
+#
+# `text` AND `says` ARRIVED ON 2026-09-17, with the stdin row's TextHint, because
+# `memo` PRINTS and a lane that only prints is a lane somebody has to read. The
+# Linux driver has counted its `text` assertions since roadmap item 28; this one
+# had nothing of the kind, which is the same weaker question that side used to ask.
+#
+# TWO MEASUREMENTS PAID FOR THEM, and the first one was a wrong turn worth writing
+# down. A TextHint looked like a string no message could reach: `Wnd::Kids` reported
+# EditInput's text as EMPTY while the hint was plainly drawn in the screenshot
+# beside it. That sent this file to EM_GETCUEBANNER, which DOES NOT ANSWER ACROSS A
+# PROCESS BOUNDARY -- measured rather than assumed, with a buffer allocated in the
+# editor by VirtualAllocEx and poisoned with 0x5A first: SendMessage returned FALSE,
+# set no error, and left every poison byte untouched. Then to UI Automation, which
+# did answer, and would have shipped a dependency and a paragraph of theory for a
+# problem that was not there.
+#
+# THE PROBLEM THAT WAS THERE: `GetWindowTextLengthW` does not cross a process
+# boundary for a control either. `Kids` calls it, gets 0, and skips the read -- so
+# its text column is empty for exactly the controls a lane wants to assert on.
+# Measured on EditInput the same day: GetWindowTextLengthW says 0 and an explicit
+# WM_GETTEXTLENGTH says 45, which is the length of the hint. That is the trap at the
+# bottom of win.ps1 met one API earlier, and nothing in this directory reads the
+# column -- every caller already sends WM_GETTEXT for itself, and so does `text`.
+#
+# SO THE HINT IS ORDINARY WINDOW TEXT, ON BOTH PLATFORMS, and that is a fact about
+# THIS binary rather than about Windows. The LCL answers lcTextHint YES on win32
+# only for ComCtl IE6 and newer (win32object.inc:599-605); phosphoride ships no
+# comctl32 v6 manifest, so the answer is NO and the LCL emulates the hint by writing
+# it into the widget's real text (customedit.inc:707-721) -- the same path gtk2 takes
+# for a different reason. IF SOMEBODY ADDS A MANIFEST, this case goes red here and
+# stays green on Linux, and the reason will not be obvious: EM_SETCUEBANNER would
+# then hold the hint where no cross-process message gives it back, and `text` would
+# need UI Automation after all. That is the paragraph above, kept for that day.
 #
 # A CASE IS WRITTEN TWICE, NOT ONCE. This header said "the same commands so a
 # case can be written once" until 2026-09-17, and it was wrong twice over.
@@ -147,6 +181,41 @@ function Memo() {
     if ($best) { Write-Output $best } else { Write-Output '(the pane is empty)' }
 }
 
+# EVERY VISIBLE CONTROL AND WHAT IT SAYS, for writing a case and for the report.
+#
+# VISIBLE, because only the active output tab's controls are, and the other seven
+# tabs' are not -- the same discriminator `memo` uses, and for the same reason: the
+# component names do not cross the process boundary but visibility does.
+function Says() {
+    $rows = @()
+    foreach ($row in [Wnd]::Kids($form)) {
+        $f = $row -split "`t"
+        if ($f[3] -ne '1') { continue }
+        $t = [LaneWin]::Text([IntPtr][long]$f[0])
+        if ($t) { $rows += ("{0}`t{1}" -f $f[1], ($t -replace "`r`n", ' | ')) }
+    }
+    return $rows
+}
+
+$script:Failures = 0
+
+# `text <needle>` -- the assertion, named for the Linux driver's verb because it
+# asks the same question: does some control in this window SAY this to the person
+# in front of it. WM_GETTEXT is sent explicitly to each one; see the header for
+# why the text `Kids` already carries cannot be used for it.
+function Text($needle) {
+    foreach ($row in [Wnd]::Kids($form)) {
+        $f = $row -split "`t"
+        if ($f[3] -ne '1') { continue }
+        if ([LaneWin]::Text([IntPtr][long]$f[0]).Contains($needle)) {
+            Write-Output "TEXT OK   $needle"
+            return
+        }
+    }
+    Write-Output "TEXT FAIL no control says: $needle"
+    $script:Failures++
+}
+
 Focus
 foreach ($line in Get-Content -LiteralPath $Steps) {
     $line = $line.Trim()
@@ -181,6 +250,12 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         'shot'     { Grab $rest }
         'raise'    { Focus }
         'memo'     { Write-Output "--- output pane ---"; Memo; Write-Output "--- end ---" }
+        'says'     { Write-Output "--- what this window says ---"
+                     Says | ForEach-Object { Write-Output "  $_" }
+                     Write-Output "--- end ---" }
+        # <space> as in `key`, because every line is trimmed: `text a  b` would
+        # otherwise lose the run of spaces a transcript actually contains.
+        'text'     { Text ($rest -replace '<space>', ' ') }
         'at'       { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $false }
         'dblclick' { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $true }
         default    { Write-Error "unknown command: $verb"; }
@@ -211,3 +286,14 @@ if ($KeepOpen) {
     }
     Write-Output "closed"
 }
+
+# The verdict LAST and in the exit code, so a run can be scripted rather than
+# watched -- and after the teardown above, because a case that fails its
+# assertions must still not leave a phosphoride holding bin\phosphoride.exe open
+# for the next build.
+if ($script:Failures -gt 0) {
+    Write-Output "TEXT ASSERTIONS FAILED: $($script:Failures)"
+    exit 1
+}
+Write-Output "text assertions: all passed"
+exit 0
