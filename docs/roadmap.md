@@ -28,7 +28,7 @@ a day rather than a season. **NOTHING ON THE FIRST LIST IS OPEN.** This paragrap
 things on the morning of 2026-09-17 and both closed that day:
 
 - ~~**Item 2a**, the contract test against the real binary, which has not moved at all.~~
-  **Done.** `tests/phosphorcontract.lpr`, 130 checks against the real binary. It was the
+  **Done.** `tests/phosphorcontract.lpr`, 130 checks on Windows and 131 on Linux. It was the
   last item on this list to close and the one that had never moved; what it found in its
   first run is item 30.
 - ~~**Two clauses of item 1**: `xvfb-run -a bash scripts/build.sh` has still never been
@@ -212,8 +212,16 @@ new name. That only works if something runs it on every push.
 ## 2a. A contract test against the real phosphor binary
 
 **DONE 2026-09-17.** `tests/phosphorcontract.lpr` and `tests/uhostprobe.pas`, six committed
-fixtures under `tests/fixtures/contract/`, **130 checks against the real binary**, wired into
-both build scripts and into CI. The oldest open item on this list, and the last to close.
+fixtures under `tests/fixtures/contract/`, **130 checks on Windows and 131 on Linux against
+the real binary**, wired into both build scripts and into CI. The oldest open item on this
+list, and the last to close.
+
+**THE TWO COUNTS DIFFER ON PURPOSE.** `phosphor run DIVZERO.BAS` against a file named
+`divzero.bas` asks whether the echoed path is case-folded -- a question that only EXISTS
+where the filesystem is case-insensitive. On Linux the file is simply absent, so the same
+property is asserted through the refusal instead: one check there becomes two. Skipping it
+would have left the case-folding half untested on the one platform where it can fail, and
+`CompareFilenames` exists in this repository for exactly this difference.
 
 **WHAT IT FOUND ON ITS FIRST RUN IS WORTH MORE THAN THE TEST.** The Why below says it would
 catch a reworded message. It did better: it caught **this repository being wrong about the

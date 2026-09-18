@@ -50,7 +50,10 @@ Nothing is done on a claim. An increment is complete when all five hold:
    never seen Phosphor. Keep it that way.
 
    `bin/phosphorcontract` runs the **real `phosphor` binary** and asserts the
-   shapes this editor parses -- 130 checks today. Everything in the other program
+   shapes this editor parses -- 130 checks on Windows and 131 on Linux today, and
+   the difference is deliberate: whether an echoed path is case-folded is a
+   question that only exists on a case-insensitive filesystem, so the same
+   property is asserted through a refusal on the other one. Everything in the other program
    tests `uphosphormsg.pas` against strings THIS repository wrote down; this one
    is the only thing that notices when the host rewords a message, renumbers an
    exit code or moves a diagnostic to stdout, each of which silently breaks
