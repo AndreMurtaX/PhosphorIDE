@@ -252,8 +252,19 @@ tab() {
         return
     fi
     ASSERTIONS=$((ASSERTIONS + 1))
-    echo "TAB OK    $1 at $xy"
     printf 'click %s\n' "$xy" | "$HERE/xdrive" "$WIN" nofocus >/dev/null
+    sleep 0.4
+    # CLICKED IS NOT SELECTED. A click that lands a few pixels off changes nothing
+    # and says nothing, which is the whole defect this verb was written for --
+    # and SHOWING cannot tell afterwards, because GTK 2 leaves it set on the page
+    # that left. SELECTED flips. Asking is one more call and it is the difference
+    # between a verb and a hope.
+    if python3 "$HERE/readtext.py" --selected "$1" >/dev/null 2>&1; then
+        echo "TAB OK    $1 at $xy"
+    else
+        echo "TAB FAIL clicked $1 at $xy and it did not become the selected tab"
+        FAILURES=$((FAILURES + 1))
+    fi
 }
 
 menu() {

@@ -169,6 +169,7 @@ def main():
     grep = None
     invoke = None
     where = None
+    selected = None
     # `--any` drops back to the old behaviour: assert the string is somewhere in
     # the widget tree, showing or not. Kept because one legitimate use exists --
     # checking that a pane HOLDS something before the click that reveals it --
@@ -180,6 +181,12 @@ def main():
             sys.stderr.write('readtext: --invoke needs something to act on\n')
             return 2
         invoke = args[1]
+        args = args[2:]
+    elif args and args[0] == '--selected':
+        if len(args) < 2:
+            sys.stderr.write('readtext: --selected needs a tab name\n')
+            return 2
+        selected = args[1]
         args = args[2:]
     elif args and args[0] == '--where':
         if len(args) < 2:
@@ -226,6 +233,34 @@ def main():
                 '          Pass --any to assert on the widget tree instead.\n')
             return 1
         sys.stderr.write('readtext: %r is in no control this program shows\n' % grep)
+        return 1
+
+    if selected is not None:
+        # IS THIS TAB THE ONE ON SCREEN? SHOWING cannot answer it: GTK 2 leaves
+        # SHOWING set on the notebook page that LEAVES, so a pane visited once
+        # stays assertable for the rest of the run. Measured 2026-09-18 -- after
+        # switching Outline -> REPL, both panes' contents reported SHOWING.
+        # SELECTED is the state that flips, and a page tab carries it.
+        tabs = [n for n, _ in nodes if role_of(n) == 'page tab']
+        hits = [n for n in tabs if label_of(n) == selected] or \
+               [n for n in tabs if label_of(n).startswith(selected)]
+        if not hits:
+            sys.stderr.write('readtext: no page tab is named %r\n' % selected)
+            return 1
+        if len(hits) > 1:
+            sys.stderr.write('readtext: %r matches %d tabs: %s\n'
+                             % (selected, len(hits),
+                                ', '.join(repr(label_of(n)) for n in hits)))
+            return 1
+        node = hits[0]
+        try:
+            ok = node.get_state_set().contains(Atspi.StateType.SELECTED)
+        except Exception:
+            ok = False
+        if ok:
+            print('selected %r' % label_of(node))
+            return 0
+        sys.stderr.write('readtext: %r is not the selected tab\n' % label_of(node))
         return 1
 
     if where is not None:
