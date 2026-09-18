@@ -231,7 +231,13 @@ begin
       Sleep(5);
     end;
 
-    Result.ExitCode := P.ExitStatus;
+    { ExitCode, NOT ExitStatus, and this cost a red Linux run on 2026-09-17 with
+      Windows green. On Unix ExitStatus is the raw wait status, so a program that
+      exited 1 reads back as 256 and one that exited 2 reads back as 512; on
+      Windows the two are the same, which is exactly why the defect could not be
+      seen here. uphosphorrun.pas:752-756 already said so, in the unit this one
+      is modelled on. }
+    Result.ExitCode := P.ExitCode;
     Result.Ok := True;
     Result.Ms := ClockMs(Started, ClockTicks());
   finally

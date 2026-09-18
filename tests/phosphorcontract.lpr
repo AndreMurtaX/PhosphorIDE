@@ -372,13 +372,29 @@ begin
 
   Group('the echoed path is the spelling the CALLER gave');
 
-  { THE SHARPEST OF THE EIGHT SPELLINGS MEASURED. The file on disk is
-    divzero.bas, Windows opened it case-insensitively, and the echo is still
-    what was typed -- which is precisely why uphosphormsg says the editor must
-    attribute an error to the file it PASSED rather than to the echo. }
+  { THE SHARPEST OF THE EIGHT SPELLINGS MEASURED -- AND IT IS A DIFFERENT
+    QUESTION ON EACH PLATFORM, which is why it is asked twice rather than
+    skipped once.
+
+    On Windows the file on disk is divzero.bas, the OS opens DIVZERO.BAS anyway,
+    and the echo is STILL what was typed -- precisely why uphosphormsg says the
+    editor must attribute an error to the file it PASSED rather than to the echo.
+
+    On Linux there is no such file, so the host refuses. The property under test
+    is the same and still holds: the name comes back exactly as typed, in the
+    refusal instead of in a source error. Asserting the Windows shape there was a
+    red run on 2026-09-17 -- a fixture that assumed one filesystem's rules, in a
+    repository whose own CompareFilenames rule exists because the two differ. }
   R := Go('DIVZERO.BAS', ['run', 'DIVZERO.BAS']);
+  {$IFDEF WINDOWS}
   ShapeEq('path echo (case)', 'the echo is not case-folded to the real name',
     'DIVZERO.BAS', ParsedPathOf(FirstLine(R.StdErr)));
+  {$ELSE}
+  ShapeEqInt('path echo (case)', 'a case-different name is simply not there',
+    2, R.ExitCode);
+  ShapeEq('path echo (case)', 'and the refusal still echoes it verbatim',
+    'phosphor: file not found: DIVZERO.BAS', FirstLine(R.StdErr));
+  {$ENDIF}
 
   Abs := IncludeTrailingPathDelimiter(WorkDir) + 'divzero.bas';
   R := Go(Abs, ['run', Abs]);
