@@ -72,6 +72,17 @@
 # top-level window holding Application.Title and Windows hands that one back, so
 # GetWindowRect describes something invisible. win.ps1 enumerates the process's
 # VISIBLE top-level windows instead.
+#
+# AND "VISIBLE, TITLED, FIRST ONE FOUND" IS NOT THE FORM EITHER -- that was this
+# trap's overcorrection and it cost a day on 2026-09-18. A TOOLTIP is a visible
+# top-level window with a title, and it is in front of the form by definition, so
+# the search returned a 311x23 HintWindow and called it the editor: every child
+# enumeration came back empty, every assertion went red, `memo` printed nothing,
+# and one run in five passed because the previous run's click leaves the mouse
+# parked where the hint appears. Both halves of the old rule are necessary and
+# neither is sufficient -- the hidden window fails `visible`, the tooltip passes
+# both. win.ps1 now takes the LARGEST titled window whose caption NAMES THE
+# PROGRAM, which is the question the Linux side has always asked.
 
 [CmdletBinding()]
 param(
