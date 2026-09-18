@@ -1706,7 +1706,19 @@ begin
   if (AKind <> rsStdErr) or (not ACompleteLine) then
     Exit;
 
-  if not ParsePhosphorMessage(AText, Msg) then
+  { FRunPath IS WHAT MAKES A REFUSAL TELLABLE FROM A LOCATION, and it costs one
+    argument because this side already holds it -- it is handed to AddProblem on
+    the next line. Without it the parser is a heuristic on text, and measured
+    2026-09-17 a refusal whose echoed path carries `:12: ` came back as a
+    jumpable source error. That was not a row waiting to be clicked: with exactly
+    one Problems row this window calls ListProblemsDblClick ITSELF, so the
+    forgery scrolled the user's own file to a line it had nothing to do with and
+    painted the band. Roadmap item 30.
+
+    For a pack run FRunPath is the `.bas` while the host echoes the `.pbc`, so
+    every pack refusal is a mismatch and lands as pmkHostError -- which is right,
+    because the pack door has no located site to report. }
+  if not ParsePhosphorMessage(AText, Msg, FRunPath) then
     Exit;
   if Msg.Kind = pmkPlain then
     Exit;

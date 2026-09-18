@@ -245,7 +245,7 @@ The first three are item 30. The last two are corrected where they were written.
 **AND ONE THING IT GOT WRONG WAS MINE.** The first run was red on `pmkPackedError`, because
 this program asserted that a pathless diagnostic is not jumpable. It is:
 `HasSourceLocation` is `(Kind in [pmkSourceError, pmkPackedError]) and (Line > 0)`
-(`uphosphormsg.pas:223-226`), because the editor supplies the path itself -- it knows which
+(`uphosphormsg.pas:427-430`), because the editor supplies the path itself -- it knows which
 file it packed. Asserting False would have pinned a defect that does not exist.
 
 **A MESSAGE THIS REPOSITORY COPIED IS HARD; A MESSAGE IT OBSERVES IS SOFT.** Three strings
@@ -548,7 +548,7 @@ says so -- not a request the other end will refuse. That is the entire reason
 - The greyed-out state is driven by `Capabilities`, not by a constant.
 - Stop terminates: `disconnect` with `terminate: true`, the child is gone, the marker is
   cleared, the editor is in `dsIdle`.
-- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3247`) still
+- **The honest path survives the happy one.** `ActDebugWhy` (`src/umainform.pas:3259`) still
   shows a correct sentence against a host with no debug subcommand.
 - Inserting a line above a breakpoint while stopped re-sends the set, and the host stops on
   the statement the user chose rather than the one below it.
@@ -2330,6 +2330,68 @@ after.
 
 ## 30. Three prefixes the diagnostic parser does not know
 
+**DONE 2026-09-17.** And the design that closed it is not the one this item
+proposed, which is the whole value of having attacked it first.
+
+**THE PROPOSAL WAS A TABLE OF REFUSAL OPENINGS, AND IT WAS A TRAP.** The Done-when
+below asks for refusals to be recognised "by their shape BEFORE the separator
+search runs", with a list of the openings the host emits -- `file not found: `,
+`cannot write to ` and the rest. Those openings would be matched at **exactly the
+position where a source diagnostic puts the PATH**, so every entry doubles as a
+filename prefix that can no longer be jumped to. Measured against the real binary:
+
+```
+phosphor: unhandled x.bas:2: division by zero
+phosphor: --weird.bas:2: unexpected token in expression
+```
+
+Both are ordinary errors in files a person may legally name, and a table
+containing `unhandled ` or `--` takes the jump away from both -- and from every
+file in a folder called `unhandled cases`, for every error in every one of them.
+It would also have needed nine entries to cover the sixteen refusal sites that
+lead with English, and could never have reached the three that lead with the
+echoed path. **A table that needs nine entries to still be incomplete is the
+wrong shape.**
+
+**WHAT WAS BUILT INSTEAD IS THE PATH THE CALLER PASSED.** There is exactly one
+call to `ParsePhosphorMessage` in the editor, and `FRunPath` is already in scope
+one line above it. Every located site formats `phosphor: %s:%d: %s` with `%s`
+echoed verbatim from the command line -- `../Phosphor/host/console/phosphor.lpr:855`,
+`:999`, `:2859`, `:3233`, and there are exactly four. So the question stops being
+a guess: **the line is a location when it opens with that path and a separator
+follows at that offset; everything else under the prefix is a refusal, whatever it
+says.** That closes every forgery, including the three no table could reach, and
+loses no jump.
+
+**AND THE BLIND SCAN GOT THREE REPAIRS, each fixing a measured defect:**
+
+- **The drive-letter guard became the shape it always meant.** It started
+  unconditionally at index 3, which also skipped the colon after any
+  ONE-character name: `phosphor: a:4: division by zero` came back as a refusal
+  with no jump at all, and `phosphor: 7:2: cannot open "z:9: q" for input: no such
+  file` -- which the real binary emits for a file named `7` -- locked onto the
+  `:9: ` **inside the message**. A drive letter is a letter, a colon and a slash.
+- **The space after the second colon**, which the old comment claimed and the code
+  never checked. It is what lets the scan walk past a colon inside a path.
+- **Digits, not `Val`.** Val accepted `$10`, `&17`, `%101`, `+4` and a leading
+  blank, and **wrapped** past nine digits rather than refusing: `4294967299` came
+  back as line 3, which the caller's clamp cannot help because 3 needs no
+  clamping.
+
+**ONE JUMP IS DELIBERATELY LOST**, and it is stated rather than discovered:
+`phosphor: x.bas:2:unexpected token`, with no space after the second colon, is now
+a refusal. The host cannot emit it, and the test says so.
+
+**WHAT IT RESTS ON, written where whoever breaks it will stand.** No Phosphor
+diagnostic names a file other than the one on the command line, because the
+language has no include and no import. The day that changes, a real location
+becomes a refusal and the jump disappears with **no symptom at all** -- the same
+shape as the breakpoints that silently did not move. The four located sites are
+cited by `file:line` so that `check-citations.py` at least notices them moving.
+
+**Counts:** 980 unit checks (130 new, pure strings, no host) and 163 against the
+real binary, both platforms.
+
 **What.** `ParsePhosphorMessage` recognises one prefix, `phosphor: `, and the REPL's
 `error: `. Measured against the real binary on 2026-09-17 by item 2a, that is not enough:
 
@@ -2382,6 +2444,45 @@ CP1252. That is a real counter-example to this repository's "the host emits UTF-
 and it will render as mojibake in the Output pane, but the defect is **Phosphor's**: this
 editor is right to pass bytes through untouched. It belongs in
 `docs/phosphor-debugger-debts.md`'s successor, not here.
+
+---
+
+## The list is closed
+
+**2026-09-17.** Thirty-one items, and the last of them is done.
+
+It did not end tidily, and that is the honest thing to record: item 2a, the oldest
+on the list, closed by finding five things this repository had been wrong about for
+a year; three of those became item 30; and item 30 closed by proving its own
+proposed design would have made the editor worse. **Every one of the last three
+items was opened by the one before it finding something real.** That is the
+machinery working, not scope escaping.
+
+**What stopping means here.** Not that nothing is left -- three things are
+measured and unclaimed, and they are written down rather than listed as items,
+because an item is something somebody has decided to do:
+
+- `uphosphorhost.RunAndCapture` measures its 5000 ms deadline with `Now`, which
+  this repository's own invariant forbids without an exception for deadlines. It
+  is a start-up path; `tests/uhostprobe.pas` uses the monotonic clock and says so.
+- **A hot breakpoint loses between 1 and 13 stops in ten thousand.** Measured, not
+  diagnosed -- and which side it is on is not known, which is what makes it worth
+  an item the day somebody starts.
+- The compiled chunk of a breakpoint condition is not cached: 2,3 ms per hit on a
+  606-line program. The technique is proven and written down in
+  `../Phosphor/docs/debugging.md`; building it is host-side work.
+
+Three more belong to the sibling repository and not to this list: the host emits a
+**non-UTF-8 byte** on the `cannot write to` path (CP850 from the RTL's localised
+message, against an invariant that says the host emits UTF-8), `--sandbox` with a
+root that does not exist is silently accepted and then fails every file operation
+mid-run, and the comment at `phosphor.lpr:247` says there are "two"
+`phosphor: %s:%d: %s` sites where there are four.
+
+**The bar did not move to get here.** The last increment, like every one before
+it, is green on Windows and on Linux, in both build modes, with zero warnings and
+zero notes, every generated unit current and every citation still pointing at what
+it claimed.
 
 ---
 

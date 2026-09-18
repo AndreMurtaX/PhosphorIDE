@@ -59,6 +59,7 @@
 ../Phosphor/host/console/phosphor.lpr:1774-1775	8ff5d10d11b896eb	for i := 0 to vm.DbgGlobalCount() - 1 do
 ../Phosphor/host/console/phosphor.lpr:1868-1874	dc4d4b8da725be2f	`=` INSIDE AN EXPRESSION IS A COMPARISON (opEQ), never a store, so the only
 ../Phosphor/host/console/phosphor.lpr:1884-1891	d4423ae5f38a76fb	are not a purity judgement about the library: they are what the COMPILER'S
+../Phosphor/host/console/phosphor.lpr:247-247	2a5fb376e88c36fb	interpolates that same text raw (see the two `phosphor: %s:%d: %s` sites), so
 ../Phosphor/host/console/phosphor.lpr:3746-3746	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
 ../Phosphor/host/console/phosphor.lpr:787-806	f649f43eb84c64e7	svc.HandleMessage := @GGuiSvc.PumpOne;
 ../Phosphor/scripts/build.ps1:57-59	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
@@ -92,7 +93,7 @@ src/core/uphosphorlang.pas:1349-1349	0d980b5b6e9e7c87	later one costs and the un
 src/core/uphosphorlang.pas:21-22	f82c3abd25a9bbef	A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
 src/core/uphosphorlang.pas:30-31	21cb6e7136468331	{ Which host a built-in needs. Ordered by how universally available it is, so
 src/core/uphosphorlang.pas:73-74	bdd8c8e109f697f1	{ The raw lists, for a completion box or a documentation lookup. Sorted, lower
-src/core/uphosphormsg.pas:223-226	2b71d9eb975e0125	function HasSourceLocation(const AMsg: TPhosphorMessage): Boolean;
+src/core/uphosphormsg.pas:427-430	2b71d9eb975e0125	function HasSourceLocation(const AMsg: TPhosphorMessage): Boolean;
 src/core/uphosphorrun.pas:259-259	27b2dab379728398	AKind: TRunStream);
 src/core/uphosphorrun.pas:509-520	8a56c7366029e5d1	begin
 src/core/uphosphorrun.pas:527-535	d3d70e8b222b6937	function TPhosphorRunner.Start(const AExe: String; const AArgs: array of String;
@@ -115,7 +116,7 @@ src/umainform.pas:1319-1323	0434f65ab1b32416	Cond) then
 src/umainform.pas:1345-1345	4bc3eeedbfa28f8f	roadmap item 26's own sentence -- "says plainly when one cannot be evaluated
 src/umainform.pas:266-270	f5a0315f248cc1a4	procedure ActionList1Update(AAction: TBasicAction; var Handled: Boolean);
 src/umainform.pas:270-270	6671e28942d75669	procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-src/umainform.pas:3247-3247	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
+src/umainform.pas:3259-3259	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
 src/umainform.pas:438-450	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
 src/umainform.pas:503-503	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
 src/umainform.pas:6-10	6e5a2b104154c318	The one rule this unit exists to keep: NOTHING HERE WAITS. Every call into the

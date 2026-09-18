@@ -74,25 +74,28 @@ program phosphorcontract;
   captured line, what `ParsePhosphorMessage` makes of it. That last one is what
   actually protects jump-to-error, and it is wording-independent by construction.
 
-  ------------------------------------------------ THREE GAPS PINNED AS TRUTH
+  ------------------------------------------- THREE GAPS FOUND HERE, THEN CLOSED
 
-  Measured 2026-09-17, and all three are the editor's, not the host's. They are
-  asserted AS THEY ARE rather than as `uphosphormsg.pas` wishes they were, so
-  that whichever side is fixed, the other cannot drift quietly. Roadmap item 30
-  is where they are written up; this program becomes its regression test.
+  This program's first run, on 2026-09-17, found three defects in the editor
+  rather than in the host. They were pinned AS THEY WERE for one commit, opened
+  as roadmap item 30, and closed the same day -- so the assertions below are now
+  the regression test for the fix rather than a record of the defect.
 
-  1. `usage:` lines carry NO `phosphor: ` prefix, so they come back pmkPlain.
-     The unit's header lists `usage:` among the shapes that reach pmkHostError.
-     It cannot: ParsePhosphorMessage returns early on any line lacking the
-     prefix.
-  2. `phosphor debug: ` is a SECOND prefix the parser does not know, so every
-     `--port` refusal reaches the Output pane as ordinary program text -- on
-     exactly the path where the editor most wants to surface a refusal.
-  3. A refusal whose echoed path contains `:12: ` FORGES a source location:
-     `phosphor: file not found: a:12: b.bas` parses as pmkSourceError, path
-     `file not found: a`, line 12, jumpable. Unreachable by accident on Windows,
-     where a path cannot contain a colon; reachable by accident on Linux, where a
-     filename may legally contain one.
+  1. A usage refusal carries NO `phosphor: ` prefix, so it came back pmkPlain and
+     reached the Output pane as ordinary program output while its exit code said
+     nothing had run.
+  2. `phosphor debug: ` is a SECOND prefix, carrying every `--port` refusal -- on
+     exactly the path where the editor most needs to say why a session did not
+     start.
+  3. A refusal whose echoed path contains `:12: ` FORGED a source location, and
+     with exactly one Problems row the main form auto-jumps, so it scrolled the
+     user's own file to a line it had nothing to do with.
+
+  THE THIRD IS WHY `ParsesAs` TAKES AN EXPECTED PATH. Passing the argument this
+  program just handed the host is what the editor does, so testing without it
+  would be testing a configuration nobody runs. One assertion deliberately goes
+  the other way -- `forged location, blind` -- because the heuristic's residue is
+  real and is better visible than believed away.
 
   --------------------------------------------------- AND WHAT IS NOT ASSERTED
 
@@ -317,12 +320,17 @@ end;
   the assertion that actually protects jump-to-error: it does not care what the
   message says, only where the editor thinks the error is. }
 procedure ParsesAs(const AShape, ALine: String; AKind: TPhosphorMsgKind;
-  const APath: String; ALineNo: Integer; AJumpable: Boolean);
+  const APath: String; ALineNo: Integer; AJumpable: Boolean;
+  const AExpect: String = '');
 var
   M: TPhosphorMessage;
   Parsed: Boolean;
 begin
-  Parsed := ParsePhosphorMessage(ALine, M);
+  { AEXPECT IS WHAT THE EDITOR WOULD HAVE PASSED -- the argument this program
+    just handed the host. Supplying it here is not a convenience: it is the only
+    thing that tells a location from a refusal, and running these assertions
+    without it would be testing a configuration the editor does not use. }
+  Parsed := ParsePhosphorMessage(ALine, M, AExpect);
   ShapeEqInt(AShape, 'ParsePhosphorMessage kind', Ord(AKind), Ord(M.Kind));
   ShapeEq(AShape, 'ParsePhosphorMessage path', APath, M.Path);
   ShapeEqInt(AShape, 'ParsePhosphorMessage line', ALineNo, M.Line);
@@ -352,7 +360,7 @@ begin
   Wording('pmkSourceError (compile)', 'the diagnostic line',
     'phosphor: syntax.bas:2: unexpected token in expression', FirstLine(R.StdErr));
   ParsesAs('pmkSourceError (compile)', FirstLine(R.StdErr),
-    pmkSourceError, 'syntax.bas', 2, True);
+    pmkSourceError, 'syntax.bas', 2, True, 'syntax.bas');
 
   R := Go('divzero.bas', ['run', 'divzero.bas']);
   ShapeEqInt('pmkSourceError (runtime)', 'exit code', 1, R.ExitCode);
@@ -361,7 +369,7 @@ begin
   Wording('pmkSourceError (runtime)', 'the diagnostic line',
     'phosphor: divzero.bas:4: division by zero', FirstLine(R.StdErr));
   ParsesAs('pmkSourceError (runtime)', FirstLine(R.StdErr),
-    pmkSourceError, 'divzero.bas', 4, True);
+    pmkSourceError, 'divzero.bas', 4, True, 'divzero.bas');
 
   { A COMPILE ERROR AND A RUNTIME ERROR ARE TEXTUALLY INDISTINGUISHABLE, which is
     what uphosphormsg's "(compile or runtime)" comment claims and what lets one
@@ -419,7 +427,7 @@ begin
     'the header''s first worked example',
     'phosphor: nofunc.bas:2: no function nosuchfunc$:%', FirstLine(R.StdErr));
   ParsesAs('colon in message (retyped into uphosphormsg.pas)', FirstLine(R.StdErr),
-    pmkSourceError, 'nofunc.bas', 2, True);
+    pmkSourceError, 'nofunc.bas', 2, True, 'nofunc.bas');
 
   R := Go('openfail.bas', ['run', 'openfail.bas']);
   ShapeEq('colon in message (retyped into uphosphormsg.pas)',
@@ -427,7 +435,7 @@ begin
     'phosphor: openfail.bas:2: cannot open "cafe.txt" for input: no such file',
     FirstLine(R.StdErr));
   ParsesAs('colon in message (retyped into uphosphormsg.pas)', FirstLine(R.StdErr),
-    pmkSourceError, 'openfail.bas', 2, True);
+    pmkSourceError, 'openfail.bas', 2, True, 'openfail.bas');
 
   { BOTH COLONS AT ONCE: a drive letter BEFORE the separator and a message colon
     AFTER it, in one line. This breaks a first-colon split and a last-colon split
@@ -436,7 +444,35 @@ begin
   Abs := IncludeTrailingPathDelimiter(WorkDir) + 'openfail.bas';
   R := Go(Abs, ['run', Abs]);
   ParsesAs('colon before AND after the separator', FirstLine(R.StdErr),
-    pmkSourceError, Abs, 2, True);
+    pmkSourceError, Abs, 2, True, Abs);
+
+  Group('the jumps a table of refusal openings would have taken away');
+
+  { A REAL RUNTIME ERROR IN A FILE WHOSE NAME OPENS WITH ENGLISH PROSE. The
+    rejected design for item 30 was a table of refusal openings, matched at
+    exactly the position the path occupies -- so `unhandled `, `cannot write to `
+    and `--` would each have doubled as a filename prefix that can no longer be
+    jumped to. This fixture is that design's counter-example, and it is a real
+    line from the real binary rather than a constructed string. }
+  R := Go('unhandled x.bas', ['run', 'unhandled x.bas']);
+  ShapeEqInt('a prose filename still jumps', 'exit code', 1, R.ExitCode);
+  ParsesAs('a prose filename still jumps', FirstLine(R.StdErr),
+    pmkSourceError, 'unhandled x.bas', 4, True, 'unhandled x.bas');
+
+  Group('a one-character, all-digits path');
+
+  { THE LINE THAT EXPOSED THE OLD SCAN START. It began unconditionally at index 3
+    to skip a Windows drive letter, which also skipped the colon after any
+    ONE-character name -- so this locked onto the `:9: ` INSIDE the message and
+    reported line 9 of nothing. A drive letter is a letter, a colon and a slash;
+    nothing less, and this fixture is why that is written down. }
+  R := Go('7', ['run', '7']);
+  ShapeEqInt('a digit-named file', 'exit code', 1, R.ExitCode);
+  ParsesAs('a digit-named file', FirstLine(R.StdErr),
+    pmkSourceError, '7', 2, True, '7');
+  { And blind it is right too now, which it was not before. }
+  ParsesAs('a digit-named file, blind', FirstLine(R.StdErr),
+    pmkSourceError, '7', 2, True);
 end;
 
 procedure TestStreams;
@@ -477,7 +513,7 @@ begin
     (R.StdErr <> '') and (R.StdErr[Length(R.StdErr)] = #10),
     Describe(R.StdErr));
   ParsesAs('the stream split', FirstLine(R.StdErr),
-    pmkSourceError, 'out_then_fail.bas', 4, True);
+    pmkSourceError, 'out_then_fail.bas', 4, True, 'out_then_fail.bas');
 end;
 
 procedure TestRefusals;
@@ -495,42 +531,58 @@ begin
     'the example retyped into uphosphormsg.pas',
     'phosphor: file not found: nope.bas', FirstLine(R.StdErr));
   ParsesAs('pmkHostError (file not found)', FirstLine(R.StdErr),
-    pmkHostError, '', 0, False);
+    pmkHostError, '', 0, False, 'nope.bas');
 
-  { GAP 1, PINNED AS CURRENT TRUTH. uphosphormsg.pas's header lists `usage:`
-    among the shapes that become pmkHostError. It cannot: the real line has no
-    `phosphor: ` prefix, and ParsePhosphorMessage returns early without one. The
-    assertion below is what today does, not what the header wishes. Roadmap item
-    30. }
+  { GAP 1, CLOSED BY ITEM 30. A usage refusal carries NO `phosphor: ` prefix, so
+    it used to return pmkPlain and reach the Output pane as ordinary program
+    output -- while its exit code said nothing had run. The parser now knows
+    `usage: phosphor `, with the host's own name in it, because a bare `usage: `
+    would claim a line any BASIC program can write to stderr on Linux. }
   R := Go('(no fixture -- an argument shape)', ['compile']);
-  ShapeEqInt('usage: (gap 1)', 'exit code', 2, R.ExitCode);
-  ShapeTrue('usage: (gap 1)', 'the line has NO `phosphor: ` prefix',
+  ShapeEqInt('usage: (was gap 1)', 'exit code', 2, R.ExitCode);
+  ShapeTrue('usage: (was gap 1)', 'the line still has NO `phosphor: ` prefix',
     Pos(PhosphorDiagPrefix, FirstLine(R.StdErr)) <> 1, FirstLine(R.StdErr));
-  Wording('usage: (gap 1)', 'the usage line',
+  Wording('usage: (was gap 1)', 'the usage line',
     'usage: phosphor compile [--check] <in.bas> <out.pbc>', FirstLine(R.StdErr));
-  ParsesAs('usage: (gap 1)', FirstLine(R.StdErr), pmkPlain, '', 0, False);
+  ParsesAs('usage: (was gap 1)', FirstLine(R.StdErr), pmkHostError, '', 0, False);
 
-  { GAP 2, PINNED AS CURRENT TRUTH. `phosphor debug: ` is a second prefix the
-    parser does not know, so the debugger's own refusals reach the Output pane as
-    ordinary program text -- on exactly the path where the editor most wants to
-    surface one. Roadmap item 30. }
+  { The second usage site, which the first pass did not cover. }
+  R := Go('(no fixture -- an argument shape)', ['pack']);
+  ShapeEqInt('usage: pack', 'exit code', 2, R.ExitCode);
+  ParsesAs('usage: pack', FirstLine(R.StdErr), pmkHostError, '', 0, False);
+
+  { GAP 2, CLOSED BY ITEM 30. `phosphor debug: ` is a SECOND prefix, and every
+    --port refusal carries it -- on exactly the path where the editor most needs
+    to say why a session did not start. It used to come back pmkPlain. }
   R := Go('ok.bas', ['debug', '--port', '99999', 'ok.bas']);
-  ShapeEqInt('phosphor debug: (gap 2)', 'exit code', 2, R.ExitCode);
-  ShapeTrue('phosphor debug: (gap 2)', 'the prefix is `phosphor debug: `',
-    Pos('phosphor debug: ', FirstLine(R.StdErr)) = 1, FirstLine(R.StdErr));
-  Wording('phosphor debug: (gap 2)', 'the port refusal',
+  ShapeEqInt('phosphor debug: (was gap 2)', 'exit code', 2, R.ExitCode);
+  ShapeTrue('phosphor debug: (was gap 2)', 'the prefix is `phosphor debug: `',
+    Pos(PhosphorDebugPrefix, FirstLine(R.StdErr)) = 1, FirstLine(R.StdErr));
+  Wording('phosphor debug: (was gap 2)', 'the port refusal',
     'phosphor debug: --port wants 1..65535, got 99999', FirstLine(R.StdErr));
-  ParsesAs('phosphor debug: (gap 2)', FirstLine(R.StdErr), pmkPlain, '', 0, False);
+  ParsesAs('phosphor debug: (was gap 2)', FirstLine(R.StdErr),
+    pmkHostError, '', 0, False, 'ok.bas');
 
-  { GAP 3, PINNED AS CURRENT TRUTH: a refusal whose echoed path carries
-    `:<digits>: ` forges a source location, which is the exact failure the unit
-    exists to prevent. On Windows a real path cannot contain a colon, so this
-    needs a deliberately crafted argument; on Linux a filename may legally
-    contain one and this becomes reachable by accident. Roadmap item 30. }
+  { GAP 3, CLOSED BY ITEM 30, and it is the one that mattered most. A refusal
+    whose echoed path carries `:<digits>: ` used to forge a source location --
+    jumpable, at line 12 of a file called `file not found: a`. With exactly one
+    Problems row the main form calls ListProblemsDblClick ITSELF, so that was not
+    a row waiting to be clicked: it scrolled the user's own file to a line it had
+    nothing to do with.
+
+    THE PATH THIS PROGRAM PASSED IS WHAT CLOSES IT. The refusal does not open
+    with that path, so it is not one of the located sites, so it is a refusal --
+    whatever its text happens to contain. }
   R := Go('a:12: b.bas (a crafted name)', ['run', 'a:12: b.bas']);
-  ShapeEqInt('forged location (gap 3)', 'exit code is still a refusal',
+  ShapeEqInt('forged location (was gap 3)', 'exit code is still a refusal',
     2, R.ExitCode);
-  ParsesAs('forged location (gap 3)', FirstLine(R.StdErr),
+  ParsesAs('forged location (was gap 3)', FirstLine(R.StdErr),
+    pmkHostError, '', 0, False, 'a:12: b.bas');
+
+  { AND BLIND IT IS STILL WRONG, asserted so the residue is visible rather than
+    believed away: with no expected path nothing in the text distinguishes a path
+    from the English in front of one. }
+  ParsesAs('forged location, blind', FirstLine(R.StdErr),
     pmkSourceError, 'file not found: a', 12, True);
 end;
 
@@ -596,7 +648,7 @@ begin
   { THE HEADLINE: no path -- and STILL JUMPABLE, which is the half this program
     got wrong on its first run and the host got right. HasSourceLocation is
     `Kind in [pmkSourceError, pmkPackedError]) and (Line > 0)`
-    (`uphosphormsg.pas:223-226`): a packed diagnostic carries a line and no path,
+    (`uphosphormsg.pas:427-430`): a packed diagnostic carries a line and no path,
     and the editor supplies the path itself, because it knows which file it
     packed. Asserting False here would have pinned a bug that does not exist. }
   ParsesAs('pmkPackedError', FirstLine(R.StdErr), pmkPackedError, '', 4, True);
@@ -697,8 +749,9 @@ function MakeWorkDir: Boolean;
 var
   Src, Name: String;
   Files: TStringList;
-  I: Integer;
+  I, Copied: Integer;
 begin
+  Copied := 0;
   Randomize;
   WorkDir := IncludeTrailingPathDelimiter(GetTempDir(False)) +
     'phosphoride-contract-' + IntToStr(Random(1000000));
@@ -723,20 +776,28 @@ begin
     Exit(False);
   end;
 
-  Files := FindAllFiles(Src, '*.bas', False);
+  { EVERY FILE, NOT ONLY `*.bas`. Two fixtures deliberately carry no extension:
+    `7` is a one-character, all-digits name, and its diagnostic is the line that
+    exposed a scan that skipped the colon after any single-character path. A
+    filter on `.bas` would have silently left them behind, and the checks that
+    use them would have failed as if the host had changed. }
+  Files := FindAllFiles(Src, '*', False);
   try
     for I := 0 to Files.Count - 1 do
     begin
       Name := ExtractFileName(Files[I]);
+      if (Name = 'README.md') or (Name = '.gitattributes') then
+        Continue;
       if not CopyFile(Files[I], IncludeTrailingPathDelimiter(WorkDir) + Name) then
       begin
         WriteLn('FAIL  could not copy fixture ', Name);
         Exit(False);
       end;
+      Inc(Copied);
     end;
-    Result := Files.Count > 0;
+    Result := Copied > 0;
     if not Result then
-      WriteLn('FAIL  no .bas fixtures found in ', Src);
+      WriteLn('FAIL  no fixtures found in ', Src);
   finally
     Files.Free;
   end;

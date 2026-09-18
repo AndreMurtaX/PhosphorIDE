@@ -1,0 +1,2 @@
+rem one character, all digits, and a colon in the message
+open "z:9: q" for input as #1

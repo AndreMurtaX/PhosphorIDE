@@ -87,6 +87,27 @@ uses
 
 { ------------------------------------------------------- diagnostic parsing - }
 
+{ One captured line, one expected classification.
+
+  AEXPECT is the path the caller would have handed the host, or '' for "the
+  caller did not know" -- and the difference between those two answers is the
+  whole of roadmap item 30, so every case below is written with it in view. }
+procedure ParseCase(const ALine, AExpect: String; AKind: TPhosphorMsgKind;
+  const APath: String; ALineNo: Integer);
+var
+  M: TPhosphorMessage;
+  Tag: String;
+begin
+  ParsePhosphorMessage(ALine, M, AExpect);
+  if AExpect = '' then
+    Tag := '[blind] '
+  else
+    Tag := '[expect ' + AExpect + '] ';
+  CheckEqInt(Tag + ALine + ' -- kind', Ord(AKind), Ord(M.Kind));
+  CheckEq(Tag + ALine + ' -- path', APath, M.Path);
+  CheckEqInt(Tag + ALine + ' -- line', ALineNo, M.Line);
+end;
+
 procedure TestMessages;
 var
   M: TPhosphorMessage;
@@ -171,6 +192,172 @@ begin
   Check('  and never a jump target', not HasSourceLocation(M));
   ParsePhosphorMessage('phosphor: trace on at line 3', M);
   Check('and so is any other new shape', not HasSourceLocation(M));
+
+  { ---------------------------------------------------------------- item 30 -- }
+
+  Group('uphosphormsg: a refusal that forges a location');
+
+  { THE MOTIVATING LINE. `phosphor run "a:12: b.bas"` really does print this --
+    measured 2026-09-17 against the real binary -- and blind, the parser reads it
+    as line 12 of a file called `file not found: a`. That is not a row waiting to
+    be clicked: with exactly one Problems row the main form calls
+    ListProblemsDblClick ITSELF, so the forgery scrolls the user's own file to a
+    line it has nothing to do with. }
+  ParseCase('phosphor: file not found: a:12: b.bas', 'a:12: b.bas',
+    pmkHostError, '', 0);
+
+  { AND BLIND IT IS STILL WRONG, pinned rather than papered over. Nothing in the
+    text distinguishes a path from the English in front of one, so this is the
+    residue of the heuristic and the reason every caller should pass a path. }
+  ParseCase('phosphor: file not found: a:12: b.bas', '',
+    pmkSourceError, 'file not found: a', 12);
+
+  { THE FAMILY, and none of it could be reached by a table of refusal openings:
+    three of these lead with the echoed PATH rather than with English. }
+  ParseCase('phosphor: cannot read /home/andre/notes:12: draft.bas: Permission denied',
+    '/home/andre/notes:12: draft.bas', pmkHostError, '', 0);
+  ParseCase('phosphor: cannot write to a:12: b.pbc: Access is denied',
+    'a:12: b.bas', pmkHostError, '', 0);
+  ParseCase('phosphor: compile: unexpected argument: a:12: b.bas',
+    'ok.bas', pmkHostError, '', 0);
+  ParseCase('phosphor: pack: unexpected argument: a:12: b.pbc',
+    'ok.bas', pmkHostError, '', 0);
+  ParseCase('phosphor: cannot establish the sandbox root a:12: b -- refusing to run unconfined',
+    'ok.bas', pmkHostError, '', 0);
+  ParseCase('phosphor: /home/andre/notes:12: draft.pbc is bytecode.',
+    '/home/andre/notes:12: draft.bas', pmkHostError, '', 0);
+  ParseCase('phosphor: aaa:12: b.pbc: unexpected end of bytecode',
+    'aaa.bas', pmkHostError, '', 0);
+
+  Group('uphosphormsg: the jumps a refusal table would have taken away');
+
+  { EVERY ONE OF THESE IS A REAL RUNTIME OR COMPILE ERROR IN A REAL FILE, and
+    every one was measured out of the real binary on 2026-09-17. They are the
+    regression guard against anyone re-proposing a table of refusal openings:
+    `unhandled `, `cannot write to `, `--` and the rest are all legal filename
+    prefixes, and a table matching them at the position the path occupies takes
+    the jump away from ordinary programs. The directory form is the worst --
+    one folder called `unhandled cases` would cost the jump for every file in
+    it, for every error in every one of them. }
+  ParseCase('phosphor: unhandled x.bas:2: division by zero', 'unhandled x.bas',
+    pmkSourceError, 'unhandled x.bas', 2);
+  ParseCase('phosphor: --weird.bas:2: unexpected token in expression', '--weird.bas',
+    pmkSourceError, '--weird.bas', 2);
+  ParseCase('phosphor: unhandled cases/p.bas:2: division by zero',
+    'unhandled cases/p.bas', pmkSourceError, 'unhandled cases/p.bas', 2);
+  ParseCase('phosphor: C:/Dev/work/cannot write to me.bas:2: unexpected token in expression',
+    'C:/Dev/work/cannot write to me.bas',
+    pmkSourceError, 'C:/Dev/work/cannot write to me.bas', 2);
+
+  Group('uphosphormsg: what the blind scan gets right now that it did not');
+
+  { A ONE-CHARACTER PATH. The scan used to start unconditionally at index 3,
+    which skipped the colon after any single-character name, so these came back
+    as refusals with no jump at all. A drive letter is a letter, a colon and a
+    SLASH; nothing less. }
+  ParseCase('phosphor: a:4: division by zero', '', pmkSourceError, 'a', 4);
+  ParseCase('phosphor: 7:4: division by zero', '', pmkSourceError, '7', 4);
+
+  { The line the real binary emitted for a file named `7`. It used to lock onto
+    the `:9: ` inside the message and report line 9. }
+  ParseCase('phosphor: 7:2: cannot open "z:9: q" for input: no such file', '',
+    pmkSourceError, '7', 2);
+
+  { A COLON INSIDE THE PATH, not followed by a space. Requiring the space is
+    what lets the scan walk past it to the real separator. }
+  ParseCase('phosphor: /tmp/a:12:b.bas:3: division by zero', '',
+    pmkSourceError, '/tmp/a:12:b.bas', 3);
+  ParseCase('phosphor: /home/andre/notes:12: draft/x.bas:3: division by zero',
+    '/home/andre/notes:12: draft/x.bas',
+    pmkSourceError, '/home/andre/notes:12: draft/x.bas', 3);
+
+  { A drive letter still gets its skip, and the message colon after it is still
+    not a candidate. }
+  ParseCase('phosphor: C:\work\x.bas:5: division by zero', '',
+    pmkSourceError, 'C:\work\x.bas', 5);
+
+  { THE ONE DELIBERATE LOSS. No space after the second colon, so it is no longer
+    a separator. The host cannot emit this -- every located site formats
+    `%s:%d: %s` -- and pinning it here is cheaper than leaving it to be found. }
+  ParseCase('phosphor: x.bas:2:unexpected token', '', pmkHostError, '', 0);
+
+  { A LINE NUMBER IS AT MOST NINE DIGITS, because Val WRAPS rather than refusing:
+    4294967299 came back as 3 and 99999999999 as 1215752191, and a wrapped line
+    is worse than a rejected one because it is small, plausible, and the caller's
+    clamp cannot help. }
+  ParseCase('phosphor: x.bas:4294967299: division by zero', '', pmkHostError, '', 0);
+  ParseCase('phosphor: x.bas:99999999999: division by zero', '', pmkHostError, '', 0);
+  ParseCase('phosphor: x.bas:2147483648: division by zero', '', pmkHostError, '', 0);
+
+  { AND A LINE NUMBER IS DIGITS, not whatever Val will swallow. Every one of
+    these used to reach the packed branch and produce a line: 16, 15, 5, 4, 4. }
+  ParseCase('phosphor: $10: division by zero', '', pmkHostError, '', 0);
+  ParseCase('phosphor: &17: division by zero', '', pmkHostError, '', 0);
+  ParseCase('phosphor: %101: division by zero', '', pmkHostError, '', 0);
+  ParseCase('phosphor: +4: division by zero', '', pmkHostError, '', 0);
+  ParseCase('phosphor:  4: division by zero', '', pmkHostError, '', 0);
+
+  { A file really named `$10` still works, because the separator is found by
+    shape and not by what Val accepts. }
+  ParseCase('phosphor: $10:4: division by zero', '', pmkSourceError, '$10', 4);
+
+  { THE SPACE THAT SEPARATES THE TWO NUMERIC SHAPES, asserted as a pair so that
+    neither can drift alone. A source line never has a space after the path's
+    colon; a packed line always has one after the line's. }
+  ParseCase('phosphor: 12:34: division by zero', '', pmkSourceError, '12', 34);
+  ParseCase('phosphor: 12: 34: division by zero', '', pmkPackedError, '', 12);
+
+  Group('uphosphormsg: the two prefixes it did not know');
+
+  { GAP 1 CLOSED. A usage refusal carries no `phosphor: ` at all, so it used to
+    come back as ordinary program output. }
+  ParseCase('usage: phosphor compile [--check] <in.bas> <out.pbc>', '',
+    pmkHostError, '', 0);
+  ParseCase('usage: phosphor pack [--no-console] <in.pbc> <out.exe>', '',
+    pmkHostError, '', 0);
+
+  { AND THE LINE THAT STOPS `usage: ` FROM BEING BARE. On Linux a BASIC program
+    can reach this very pipe through savetext$("/dev/stderr", ...), and its own
+    usage banner is not a host refusal. Requiring the host's name costs four
+    characters. }
+  ParseCase('usage: myreport.bas <infile> [--wide]', '', pmkPlain, '', 0);
+
+  { The text of a usage refusal is the WHOLE line: stripping the prefix would
+    leave a Problems row reading like a command to run. }
+  ParsePhosphorMessage('usage: phosphor pack [--no-console] <in.pbc> <out.exe>', M);
+  CheckEq('a usage refusal keeps its whole line as its text',
+    'usage: phosphor pack [--no-console] <in.pbc> <out.exe>', M.Text);
+
+  { GAP 2 CLOSED. `phosphor debug: ` is a second prefix, and every --port refusal
+    carries it -- on exactly the path where the editor most needs to say why a
+    session did not start. }
+  ParseCase('phosphor debug: --port wants 1..65535, got 99999', '',
+    pmkHostError, '', 0);
+  ParseCase('phosphor debug: --port needs a port number', '', pmkHostError, '', 0);
+  ParseCase('phosphor debug: which file?', '', pmkHostError, '', 0);
+
+  { AND IT NEVER CARRIES A LOCATION BLIND. No site under that prefix is located
+    today, so guessing one could only forge one -- this exact line used to be
+    safe by ACCIDENT, as pmkPlain, and would otherwise have become a jump. }
+  ParseCase('phosphor debug: file not found: a:12: b.bas', '', pmkHostError, '', 0);
+  ParseCase('phosphor debug: file not found: a:12: b.bas', 'a:12: b.bas',
+    pmkHostError, '', 0);
+
+  { But the chain runs under it, so the day the debug door grows a located
+    diagnostic, an editor that passes its path jumps to it rather than silently
+    not jumping. }
+  ParseCase('phosphor debug: x.bas:3: a future located diagnostic', '',
+    pmkHostError, '', 0);
+  ParseCase('phosphor debug: x.bas:3: a future located diagnostic', 'x.bas',
+    pmkSourceError, 'x.bas', 3);
+
+  { The terminal debugger's session lines are not diagnostics and the editor
+    never sees them -- it only ever spawns `debug --port`. }
+  ParseCase('-- step at ok.bas:3  (depth 0)', '', pmkPlain, '', 0);
+
+  { BRANCH ORDER, pinned: the REPL prefix is tested first and nothing may claim a
+    line that opens `error: `. }
+  ParseCase('error: usage: phosphor compile <in.bas>', '', pmkReplError, '', 0);
 
   Group('uphosphormsg: exit codes');
   CheckEq('0', 'finished', PhosphorExitCodeText(0));
