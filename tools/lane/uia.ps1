@@ -88,48 +88,83 @@ $null = [System.Windows.Automation.AutomationElement]::RootElement
 # implementation detail the provider chose to expose and is three times the rows
 # for nothing a person would assert on. Depth is capped because a provider that
 # returns itself as its own child is a hang, not an error.
-function UiaRows($h, $maxDepth = 14) {
-    $rows = New-Object System.Collections.Generic.List[object]
-    $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$h)
-    if (-not $root) { return $rows }
-    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
-
-    function Visit($el, $d) {
-        if ($d -gt $maxDepth) { return }
-        try {
-            $c = $el.Current
-            $v = ''
-            $pat = $null
-            if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pat)) {
-                $v = $pat.Current.Value
-            }
-            $rows.Add([pscustomobject]@{
-                Depth = $d
-                Type  = ($c.ControlType.ProgrammaticName -replace 'ControlType\.', '')
-                Class = $c.ClassName
-                Name  = ($c.Name -replace "`r`n", ' | ')
-                Value = ($v -replace "`r`n", ' | ')
-                Off   = $c.IsOffscreen
-                El    = $el
-            })
-        } catch {
-            # An element that went away between the walk and the read is not a
-            # failure of the walk. It is reported so a dump nobody can explain
-            # does not look like a complete one.
-            $rows.Add([pscustomobject]@{
-                Depth = $d; Type = '(gone)'; Class = ''; Name = "$_"; Value = ''; Off = $true; El = $null
-            })
-            return
+function UiaWalk($el, $d, $rows, $maxDepth) {
+    if ($d -gt $maxDepth) { return }
+    try {
+        $c = $el.Current
+        $v = ''
+        $pat = $null
+        if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pat)) {
+            $v = $pat.Current.Value
         }
-        $kid = $walker.GetFirstChild($el)
-        while ($kid) {
-            Visit $kid ($d + 1)
-            $kid = $walker.GetNextSibling($kid)
-        }
+        $rows.Add([pscustomobject]@{
+            Depth = $d
+            Type  = ($c.ControlType.ProgrammaticName -replace 'ControlType\.', '')
+            Class = $c.ClassName
+            Name  = ($c.Name -replace "`r`n", ' | ')
+            Value = ($v -replace "`r`n", ' | ')
+            Off   = $c.IsOffscreen
+            El    = $el
+        })
+    } catch {
+        # An element that went away between the walk and the read is not a
+        # failure of the walk. It is reported so a dump nobody can explain
+        # does not look like a complete one.
+        $rows.Add([pscustomobject]@{
+            Depth = $d; Type = '(gone)'; Class = ''; Name = "$_"; Value = ''; Off = $true; El = $null
+        })
+        return
     }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $kid = $walker.GetFirstChild($el)
+    while ($kid) {
+        UiaWalk $kid ($d + 1) $rows $maxDepth
+        $kid = $walker.GetNextSibling($kid)
+    }
+}
 
-    Visit $root 0
+function UiaRowsOfElement($el, $maxDepth = 14) {
+    $rows = New-Object System.Collections.Generic.List[object]
+    if ($el) { UiaWalk $el 0 $rows $maxDepth }
     return $rows
+}
+
+function UiaRows($h, $maxDepth = 14) {
+    return UiaRowsOfElement ([System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$h)) $maxDepth
+}
+
+# EVERY top-level window this PROCESS owns, not just the form.
+#
+# WHY THE FORM'S SUBTREE IS NOT ENOUGH, and what it costs. A completion popup, a
+# signature hint and a modal dialog are each their OWN top-level window -- owned
+# by the form, not a descendant of it -- so a walk that starts at the form's
+# handle cannot see any of them. That is not a UIA limitation; it is the same
+# fact `popshot` records on the Linux side, where a GTK popup is an
+# override-redirect window in the root's tree rather than a child of the editor.
+#
+# It matters because of what those windows ARE here: the completion list is the
+# entire subject of steps-complete.txt and steps-accent.txt, and the signature
+# hint is the entire subject of steps-signature.txt. steps-signature-linux.txt
+# says `unassertable ... steps-signature.txt checks it on Windows` -- and that
+# sentence has been false since it was written, because the Windows case asserted
+# nothing at all. This is what makes it true.
+#
+# FILTERED BY PROCESS ID, so the desktop's other windows are not searched: this
+# is a question about the editor, and a needle that matched somebody's browser
+# tab would be the worst kind of green.
+function UiaOwnedRows($processId) {
+    $out = New-Object System.Collections.Generic.List[object]
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $top = $walker.GetFirstChild([System.Windows.Automation.AutomationElement]::RootElement)
+    while ($top) {
+        $mine = $false
+        try { $mine = ($top.Current.ProcessId -eq $processId) } catch { $mine = $false }
+        if ($mine) {
+            foreach ($r in UiaRowsOfElement $top) { $out.Add($r) }
+        }
+        try { $top = $walker.GetNextSibling($top) } catch { break }
+    }
+    return $out
 }
 
 # EVERY element that says anything, for writing a case and for the report.
@@ -137,13 +172,17 @@ function UiaRows($h, $maxDepth = 14) {
 # `uiasays all` keeps the silent ones too, which is how you find out whether a
 # pane is absent from the tree or merely nameless -- two very different answers
 # that look identical once they are filtered out.
-function UiaSays($h, $all = $false) {
-    foreach ($r in UiaRows $h) {
+function UiaSaysRows($rows, $all = $false) {
+    foreach ($r in $rows) {
         if (-not $all -and -not $r.Name -and -not $r.Value) { continue }
         $mark = if ($r.Off) { 'off' } else { '   ' }
         '{0} {1}{2} [{3}] {4}{5}' -f $mark, (' ' * $r.Depth), $r.Type, $r.Class, $r.Name,
             $(if ($r.Value) { " = $($r.Value)" } else { '' })
     }
+}
+
+function UiaSays($h, $all = $false) {
+    return UiaSaysRows (UiaRows $h) $all
 }
 
 # Does anything ON SCREEN say this?
@@ -154,14 +193,62 @@ function UiaSays($h, $all = $false) {
 # ignored the flag would assert that the Watches pane says something while the
 # Problems pane is the one in front of the person.
 function UiaFind($h, $needle) {
-    foreach ($r in UiaRows $h) {
+    return UiaMatch (UiaRows $h) $needle $false
+}
+
+# EXACT, for the readings that are numbers.
+#
+# `uia 4: 18` would be green with the caret on line 14, because the panel would
+# then say `14: 18` and Contains is Contains. That is not a hypothetical: the
+# Linux side spent an afternoon on assertions that matched `1: 1` -- the .lfm's
+# default, present before anything ran -- and on a `text 8: 1` that is a
+# substring of `18: 1`. A caret reading is asserted whole or it is not asserted.
+function UiaFindExact($h, $needle) {
+    return UiaMatch (UiaRows $h) $needle $true
+}
+
+function UiaMatch($rows, $needle, $exact) {
+    foreach ($r in $rows) {
         if ($r.Off) { continue }
-        if (($r.Name -and $r.Name.Contains($needle)) -or
-            ($r.Value -and $r.Value.Contains($needle))) {
-            return $r
+        if ($exact) {
+            if (($r.Name -eq $needle) -or ($r.Value -eq $needle)) { return $r }
+        } else {
+            if (($r.Name -and $r.Name.Contains($needle)) -or
+                ($r.Value -and $r.Value.Contains($needle))) { return $r }
         }
     }
     return $null
+}
+
+function UiaFindOwned($processId, $needle, $exact = $false) {
+    return UiaMatch (UiaOwnedRows $processId) $needle $exact
+}
+
+# The element to CLICK, found by name rather than by a coordinate that was right
+# once.
+#
+# MEASURED 2026-09-18 AND THIS IS NOT A TIDY-UP. `at 161 561` is how
+# steps-stack.txt, steps-stack-jump.txt and steps-stack-running.txt select the
+# Call Stack tab, and in two of those three runs it selected FIND IN FILES: the
+# dump at `31-jumped-to-main` shows `Replace in the listed lines`, `*.bas`,
+# `Search` and `Match case`, which is the search pane photographed under the name
+# of the call stack. The double-click that was supposed to jump to `(main)` then
+# landed in that pane, the caret never moved, and the case passed -- because it
+# asserted nothing. The tab strip moves because the captions do: while stopped
+# they read `Call Stack (5)` and `Variables (3)`.
+#
+# `Type:name` NARROWS IT, and a call-stack row is why. The frames are DataItems
+# named `0`..`4`, and each carries a Text child per column -- so `0` alone is two
+# elements, the row and its first cell, and the verb would refuse both rather
+# than click the row. `DataItem:0` is the row.
+function UiaLocate($rows, $name) {
+    $type = ''
+    if ($name -match '^([A-Za-z]+):(.*)$') { $type = $Matches[1]; $name = $Matches[2] }
+    $vis = @($rows | Where-Object { -not $_.Off -and $_.Name })
+    if ($type) { $vis = @($vis | Where-Object { $_.Type -eq $type }) }
+    $hits = @($vis | Where-Object { $_.Name -eq $name })
+    if ($hits.Count -eq 0) { $hits = @($vis | Where-Object { $_.Name.StartsWith($name) }) }
+    return $hits
 }
 
 # `uiatab <name>` -- select an output tab BY ITS NAME, and then check that it is
@@ -264,4 +351,28 @@ function UiaMenu($h, $top, $item) {
     $iv2.Invoke()
     Start-Sleep -Milliseconds 600
     return "MENU OK   $top > $item"
+}
+
+# A LIST ROW'S CELLS, joined -- so a value in a column can be asserted whole.
+#
+# The panes that matter here are report views: the call stack is #/Function/Line/
+# File and the variables pane is Name/Value/Kind/Scope, and the proxy gives each
+# row a Text child per column. Asserting on a cell ALONE is how a needle like `3`
+# matches the frame index, the value of `n` and half the line numbers in the
+# window at once; asserting the row whole -- `n|3|int|local` -- says exactly one
+# thing and says it about one row.
+function UiaRowCells($rows, $key) {
+    # @( ), for the reason spelled out above UiaClickEl in lane-windows.ps1: a
+    # one-element array does not survive a `return` as an array, and the
+    # PSCustomObject it becomes has no usable Count.
+    $hits = @(UiaLocate $rows $key)
+    if ($hits.Count -ne 1) { return $null }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $cells = @()
+    $kid = $walker.GetFirstChild($hits[0].El)
+    while ($kid) {
+        $cells += $kid.Current.Name
+        $kid = $walker.GetNextSibling($kid)
+    }
+    return ($cells -join '|')
 }

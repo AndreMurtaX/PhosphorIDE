@@ -12,9 +12,17 @@ key {F5}
 wait 500
 key +{F9}
 wait 5000
-at 161 561
+uiatab Call Stack
 wait 600
-dblclick 100 667
+uiadbl DataItem:4
 wait 900
 shot 31-jumped-to-main
+
+# THE ROW ASKED FOR BY NAME. This was `dblclick 100 667` under a tab click that
+# had selected Find in Files, so it landed in the search pane: the caret never
+# left line 4 and the case passed, because it asserted nothing.
+#
+# Line 11 is `total = down(3)`, the outermost call.
+uiaeq 11: 1
+uiarow DataItem:4 4|(main)|11|deep.bas
 memo

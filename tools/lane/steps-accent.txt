@@ -24,6 +24,11 @@ wait 500
 key ^<space>
 wait 1200
 shot 120-ascii-line
+
+# THE ASCII CONTROL. 17 characters, and the caret at the end of them is column
+# 18 -- which is what the accented line has to agree with.
+uiaeq 4: 18
+uiaany Completion
 key {ESC}
 wait 400
 key {DOWN}{END}
@@ -31,6 +36,16 @@ wait 500
 key ^<space>
 wait 1200
 shot 121-accented-line
+
+# AND THE POINT OF THE CASE. Line 5 is the same statement with a cedilla and a
+# tilde in it: 17 characters, 19 bytes. The panel says 18, so it is reporting
+# SynEdit's CaretX and not LogicalCaretXY.X -- the byte index would read 20.
+uiaeq 5: 18
+uiaany Completion
 key {ENTER}
 wait 700
 shot 122-accepted
+
+uiaeq 5: 20
+uiaanynot Completion
+unassertable the popup is a window of its own and UIA describes it by its caption only, so `uiaany Completion` says the list is UP and nothing here reads the names IN it; whether it was filtered to the word under the caret is what the two shots show

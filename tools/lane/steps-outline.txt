@@ -10,22 +10,41 @@ key ^+o
 wait 900
 shot 130-ten-definitions
 
+# TEN DEFINITIONS, INCLUDING THE TWO ON LINE 23. A walk that took only the
+# first statement of a line would list one of them, and every suffix form is
+# here because the type character is part of the name.
+uia 7: first()
+uia 11: second(a, b)
+uia 19: fourth$()
+uia 23: fifth%()
+uia 23: sixth%()
+uia 29: eighth?(n)
+uia 33: ninth@()
+uia 37: tenth(a)
+
 # A SINGLE CLICK MOVES THE CARET AND LEAVES THE KEYBOARD IN THE LIST. Row 6 is
 # `22: sixth%()`, the second of the two definitions on line 22, so the column in
 # the status bar is the proof that the jump used the NAME's column and not 1.
-at 100 657
+uiaclick ListItem:23: sixth%()
 wait 700
 shot 131-a-click-moves-the-caret
+
+# The SECOND definition on line 23, so the column is what distinguishes it.
+uiaeq 23: 60
 
 # And the arrow key still belongs to the list, which is how an outline is read.
 key {DOWN}
 wait 700
 shot 132-arrowing-walks-the-file
 
+uiaeq 25: 10
+
 # A double-click is "I have arrived": the caret AND the focus.
-dblclick 100 582
+uiadbl ListItem:7: first()
 wait 800
 shot 133-a-double-click-hands-over-the-keyboard
+
+uiaeq 7: 10
 
 # F12 on a call. Line 42 is `println second(2, 3)`; nine rights from the start
 # of it puts the caret inside `second`, which is defined on line 11 after a `:`.
@@ -42,10 +61,15 @@ key {F12}
 wait 900
 shot 134-f12-jumped-to-the-definition
 
+uiaeq 11: 18
+uia second is defined on line 11
+
 # And the caret is now ON that definition's name, which is its own answer.
 key {F12}
 wait 900
 shot 135-f12-on-the-definition-itself
+
+uia this is the definition of second
 
 # F12 on `println`, which is a STATEMENT and not a registered built-in. There is
 # no document to offer for it and no definition to jump to, and saying which of
@@ -63,6 +87,9 @@ key {F12}
 wait 1000
 shot 136-f12-on-a-statement-keyword
 
+uiaeq 41: 3
+uia println is a keyword here, not a function
+
 # F12 on a real built-in OFFERS the reference rather than opening a browser
 # unasked: a keypress that launches one is a keypress people stop pressing.
 key ^g
@@ -77,6 +104,8 @@ wait 300
 key {F12}
 wait 1200
 shot 138-f12-on-a-builtin-offers-the-reference
+
+uia abs is a core built-in
 key {ESC}
 wait 700
 shot 139-and-the-offer-can-be-declined
@@ -96,6 +125,9 @@ key {F12}
 wait 900
 shot 137-f12-finds-nothing-and-says-so
 
+uiaeq 11: 1
+uia no definition for x in this file
+
 # A JUMP INTO ANOTHER FILE REBUILDS THE PANE, and this is the case that shows
 # it: search for a word that lives in deep.bas, double-click the row, then reach
 # the Outline tab BY CLICKING ITS HEADER rather than by pressing Ctrl+Shift+O --
@@ -109,11 +141,16 @@ key ^a
 type bottom
 key {ENTER}
 wait 1600
-dblclick 200 643
+uiadbl ListItem:deep.bas:4: println "bottom"
 wait 1000
-at 222 561
+uiatab Outline
 wait 700
 shot 140-the-pane-follows-the-file
+
+# THE PANE FOLLOWED THE FILE. deep.bas has one definition and outline.bas has
+# ten, so this is not a pane that simply kept what it had.
+uia 2: down(n)
+uianot 7: first()
 
 # AND A PARAMETER IS NOT A FUNCTION. deep.bas is `function down(n) local r`, so
 # inside it the words `n` and `r` are variables -- and if a `function r()`
@@ -133,3 +170,15 @@ wait 300
 key {F12}
 wait 900
 shot 141-a-parameter-is-not-a-function
+
+# AND THIS STEP IS ABOUT deep.bas, WHICH IT NEVER WAS UNTIL TODAY. The prose
+# above has always said so -- smart Home landing on the `r` of `r = down(n - 1)`
+# -- but the double-click that opens deep.bas was a coordinate that missed its
+# row, so every run of this case reached here still in outline.bas and F12
+# answered about the word `function` on ITS line 7. The shot was named for the
+# case that was written and the case that ran was a different one.
+#
+# Measured 2026-09-18, with the jump landing: smart Home puts the caret on the
+# first non-blank, column 3, and F12 on a parameter says whose it is.
+uiaeq 7: 3
+uia r is a name inside down, not a function

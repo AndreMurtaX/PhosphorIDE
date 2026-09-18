@@ -10,17 +10,39 @@ fixture lane345.bas
 key ^+f
 wait 700
 shot 110-pane-opened
+
+# The pane is up: its buttons are its own and nothing else in this window has
+# them.
+uia Search
+uia Match case
 type bottom
 key {ENTER}
 wait 1500
 shot 111-one-row
 
+uia 2 matches in 13 files
+uia deep.bas:4: println "bottom"
+
 # THE JUMP, which is the half that is not the search. deep.bas is not open --
 # lane345.bas is -- so this exercises GotoSource's open-it branch, and the
 # status bar's line:column is the proof that "4" in the row meant line 4.
-dblclick 200 643
-wait 1200
+#
+# THE ROW BY WHAT IT SAYS, AND IT HAD NEVER BEEN HIT. This was `dblclick 200 643`
+# and it missed: measured 2026-09-18, at the shot below the editor still had only
+# lane345.bas open and the caret was still on 1: 1. The case took a photograph of
+# a window where nothing had happened, called it `114-jumped-to-deep`, and
+# asserted nothing -- so the clause this case exists for had never once run.
+uiadbl ListItem:deep.bas:4: println "bottom"
+# OPENING A FILE IS SLOWER THAN SELECTING A ROW: a tab is created, the
+# highlighter runs over the buffer and the outline is rebuilt before the caret
+# report reaches the status bar. 1200 ms was enough only when a dump happened to
+# follow it.
+wait 2500
 shot 114-jumped-to-deep
+
+# deep.bas was NOT open when this run started -- the fixture is lane345.bas.
+uia deep.bas - PhosphorIDE
+uiaeq 4: 1
 
 # A word in every fixture, to see more than one file at once.
 key ^+f
@@ -30,6 +52,8 @@ type println
 key {ENTER}
 wait 1500
 shot 112-many-rows
+
+uia 41 matches in 13 files
 
 # And a word in none of them: an answer has to arrive where the question was
 # asked, so "0 matches" is a row and not only a status-bar panel.
@@ -41,49 +65,106 @@ key {ENTER}
 wait 1500
 shot 113-no-matches
 
+# A SEARCH THAT FOUND NOTHING SAYS SO IN THE LIST, not just in the status bar:
+# an empty pane and a pane that has not been used look the same.
+uia 0 matches in 13 files
+uia -- 0 matches in 13 files
+
 # NO GARBAGE ROWS, and this is the case that proves it rather than asserting it:
 # `LooksBinary` is a symbol in ufindinfiles.pas AND a string inside the compiled
 # bin\phosphoridetest.exe and the .ppu files beside it. Emptying the mask puts
 # all of them in front of the sniff, and only the text ones may come back.
+# A CLICK THEN A WAIT, EVERY TIME. These three are the search scope -- directory,
+# mask, term -- and typing into a field whose click has not landed yet types into
+# whatever had the keyboard. The scope then stays where it was, both searches
+# below run over the 13 files of this directory instead of over a checkout, and
+# the failure arrives as a count nobody can place.
 at 216 616
+wait 400
 key ^a
 type C:\Dev\PhosphorIDE
+wait 300
 at 558 617
+wait 400
 key ^a
 key {DEL}
+wait 300
 at 216 588
+wait 400
 key ^a
 type LooksBinary
 key {ENTER}
 wait 4000
 shot 117-no-binary-rows
 
+# NO COUNT IS ASSERTED HERE, and neither is any particular row past the first.
+# Both omissions were paid for on 2026-09-18.
+#
+# `10 matches in 345 files` was true when it was written and false forty minutes
+# later: the forty minutes added files to this checkout. A count over a directory
+# somebody is working in is a fact about the morning.
+#
+# THE ROW MOVED FOR A WORSE REASON. A row that is scrolled out of a list view is
+# IsOffscreen to UIA and does not count as something the window says -- correctly
+# -- so asserting a named row asserts the ORDER of the results as well. And this
+# case searches its own directory for a word this case contains, so a comment
+# written here adds a row and pushes the rest down. The first version of this
+# note demonstrated that by naming the search term twice and moving the very row
+# it was asserting off the bottom of the pane.
+#
+# What is left is the claim the case is actually about: the walk found source
+# files, and NOT ONE ROW came out of a binary -- and there are binaries beside
+# these sources, because bin\ holds three.
+#
+# A POSITIVE FIRST, because three negatives on their own are green in an empty
+# pane. Its needle is a file and a line and NOT the search term: naming the term
+# here would add a row to this very search and move everything under it.
+uia ufindinfiles.pas:179:
+uianot .exe:
+uianot .ppu:
+uianot .o:
+
 # A THOUSAND FILES, FINISHED. The sibling checkout is 1004 files outside its
 # dot-directories, which is the size the roadmap names, and this one runs to the
 # end rather than being stopped: the count in the status bar is the evidence
 # that the walk covered them and the editor was usable throughout.
 at 216 616
+wait 400
 key ^a
 type C:\Dev\Phosphor
+wait 300
 at 216 588
+wait 400
 key ^a
 type BREAKPOINT
 key {ENTER}
 wait 8000
 shot 118-a-thousand-files
 
+uia matches in 1006 files
+
 # STOPPING A REAL WALK. C:\Dev with no mask is both checkouts -- about 57,000
 # files on this machine -- far more than anyone will wait for, which is what
 # Stop is for.
 at 216 616
+wait 400
 key ^a
 type C:\Dev
+wait 300
 at 216 588
+wait 400
 key ^a
 type println
 at 531 588
 wait 900
 shot 115-running
+
+uia searching...
 at 620 588
 wait 900
 shot 116-stopped
+
+# STOPPED, and the count is not asserted: how many files a walk gets through
+# before somebody presses Stop is a fact about this machine on this morning.
+uia stopped after
+uianot searching...

@@ -32,10 +32,21 @@ key +{DOWN}
 wait 500
 shot 430-five-lines-selected
 
+uiaeq 12: 1
+
 # SEND. No REPL is running yet, so this starts one and waits for its prompt.
 key ^+{ENTER}
 wait 6000
 shot 431-the-definition-reached-the-prompt
+
+# FIVE LINES, AS FIVE LINES. The first after `phosphor> ` and the next three
+# after the continuation, exactly as typing them would -- one line per prompt,
+# which is what the queue is for. No REPL was running when this was sent.
+uia phosphor> function twice(n) local r
+uia ...>   r = n * 2
+uia ...>   println "inside twice"
+uia ...>   return r
+uia ...> endfunction
 
 # AND IT IS CALLABLE. Ctrl+Shift+R puts the caret in the prompt's box.
 key ^+r
@@ -45,9 +56,15 @@ key {ENTER}
 wait 2500
 shot 432-and-twice-is-callable
 
+# AND IT IS A FUNCTION IN THAT SESSION, not text that arrived in a pane.
+uia phosphor> println twice(21)
+uia inside twice
+
 # One more, to show the transcript keeps reading like a session.
 type println twice(4)
 key {ENTER}
 wait 2000
 shot 433-the-transcript-reads-like-typing
+
+uia phosphor> println twice(4)
 memo

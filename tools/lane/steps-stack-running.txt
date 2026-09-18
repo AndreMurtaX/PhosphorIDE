@@ -1,7 +1,7 @@
 # The other half of the pane's contract: it describes a program standing still,
 # so it must be EMPTY while one runs. blocked.bas stops on line 3 and then sits
 # in `line input` forever, which is the longest a program is ever "running".
-fixture deep.bas
+fixture blocked.bas
 
 key ^g
 wait 700
@@ -12,10 +12,24 @@ key {F5}
 wait 500
 key +{F9}
 wait 5000
-at 161 561
+uiatab Call Stack
 wait 600
 shot 11-stack-while-stopped
+
+# STOPPED: one frame, and the caption says so.
+uia Call Stack (1)
+uiaeq 3: 1
 key {F6}
 wait 3500
 shot 12-stack-while-running
+
+# AND RUNNING: blocked.bas is sitting in `line input` and will sit there until
+# the editor is killed, which is the longest a program is ever "running". The
+# pane describes a program standing still, so it has nothing to describe.
+#
+# `uiaeq`, because `Call Stack` is a SUBSTRING of `Call Stack (1)` and a
+# contains-match here would be green either way.
+uiaeq Call Stack
+uianot Call Stack (1)
+uianot Variables (2)
 memo

@@ -14,9 +14,17 @@ wait 400
 key ^<space>
 wait 1200
 shot 81-popup-open
+
+uiaeq 15: 5
+uiaany Completion
 key {ENTER}
 wait 600
 shot 82-accepted
+
+# ACCEPTED: four characters typed, six columns used, so something was inserted
+# and the popup is down.
+uiaeq 15: 6
+uiaanynot Completion
 
 # ...and the case a lower-case table must not flatten.
 key {ENTER}
@@ -29,6 +37,9 @@ key {ENTER}
 wait 600
 shot 83-case-preserved
 
+uiaeq 16: 6
+unassertable what was inserted is IN THE BUFFER, and SynEdit is a custom control with no text an instrument here can read -- so `PRIN` coming back as `PRINT` rather than `print` is the shot, and the column only says that five characters arrived
+
 # Inside a string there is nothing to offer, and the status bar says so rather
 # than the shortcut appearing to be broken.
 key {ENTER}
@@ -38,3 +49,9 @@ wait 400
 key ^<space>
 wait 1000
 shot 84-silent-in-a-string
+
+# THE CASE THIS EXISTS FOR: the shortcut was pressed, nothing was offered, and
+# the editor SAID SO rather than appearing to be broken.
+uiaeq 17: 9
+uiaanynot Completion
+uia no completion inside a string or a comment

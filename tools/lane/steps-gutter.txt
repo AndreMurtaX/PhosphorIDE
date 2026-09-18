@@ -22,7 +22,19 @@ wait 500
 key {F5}
 wait 600
 shot 51-before-any-session
+
+# BEFORE ANY SESSION. Both marks are solid and no host has answered -- the
+# negative below is what makes the positive after the stop mean something.
+uiaeq 10: 1
+uianot debug lane345.bas
 key +{F9}
 wait 5000
 shot 52-stopped-line-3-hollow
+
+# THE SESSION IS LIVE AND STOPPED. One frame, one variable in scope -- which is
+# the host's answer arriving, and the answer is what turns line 3's mark hollow.
+uia debug lane345.bas
+uia Call Stack (1)
+uia Variables (1)
+unassertable the hollow ring and the solid dot are a TSynEditMark drawn into the gutter; no instrument on this platform reads one back, so what is checked here is that the host answered at all -- which is the only thing the drawing depends on
 memo

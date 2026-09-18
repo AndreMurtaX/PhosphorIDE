@@ -23,16 +23,24 @@ key {ENTER}
 wait 800
 shot 410-the-pair-is-painted
 
+uiaeq 7: 1
+
 # AND THE JUMP. Ctrl+Shift+M moves the caret to the partner and the status bar
 # says which line it went to.
 key ^+m
 wait 900
 shot 411-jumped-to-the-end-function
 
+uiaeq 13: 1
+uia function: line 13
+
 # It is symmetric: from the terminator back to the opener.
 key ^+m
 wait 900
 shot 412-and-back-again
+
+uiaeq 7: 1
+uia function: line 7
 
 # A PAIR THAT OPENS AND CLOSES ON ONE LINE still has a partner. Folding drops
 # these because they hide nothing; matching keeps them.
@@ -45,6 +53,9 @@ key ^+m
 wait 900
 shot 413-a-pair-on-one-line
 
+uiaeq 16: 26
+uia for: line 16
+
 # --- AND THE THREE ANSWERS THAT ARE NOT A JUMP ---------------------------
 # `next` as a variable, with nothing open above it.
 key ^g
@@ -55,6 +66,8 @@ wait 600
 key ^+m
 wait 900
 shot 414-a-next-that-closes-nothing
+
+uia this closes a for, and none is open
 
 # `function` in an expression: not at a statement position, so not a block word.
 key ^g
@@ -69,6 +82,8 @@ key ^+m
 wait 900
 shot 415-function-in-an-expression
 
+uia no block keyword under the caret
+
 # A line that is a comment: not a block word either, and the same sentence.
 key ^g
 wait 600
@@ -79,6 +94,8 @@ key ^+m
 wait 900
 shot 416-a-comment-is-not-a-block-word
 
+uia no block keyword under the caret
+
 # AN OPENER NOTHING CLOSES.
 key ^g
 wait 600
@@ -88,3 +105,6 @@ wait 600
 key ^+m
 wait 900
 shot 417-a-while-that-is-never-closed
+
+uia this while is never closed
+unassertable the boxes around the partner are SynEdit's own TSynEditMarkupWordGroup, painted into the text -- not this repository's code and not readable here. The JUMP and the four sentences, which ARE ours, are asserted above

@@ -1,7 +1,13 @@
 # The call stack pane, three calls deep in deep.bas.
 #
-# Tab strip and row geometry were measured from a screenshot rather than
-# guessed: the output tabs sit at y 561, the list rows start at 603 and step 16.
+# NOTHING HERE IS A COORDINATE ANY MORE, and the sentence this replaces is why.
+# It said the tab strip and the row geometry had been measured from a screenshot
+# rather than guessed -- tabs at y 561, rows from 603 in steps of 16 -- and all
+# of that was true on the day it was written. It stopped being true the first
+# time a program stopped: the captions become `Call Stack (5)` and
+# `Variables (3)`, the strip re-lays itself around them, and `at 161 561` then
+# lands on Find in Files. Measured on 2026-09-18 in two of the three cases that
+# used it. A measured coordinate is still a coordinate.
 fixture deep.bas
 
 key ^g
@@ -15,19 +21,43 @@ key +{F9}
 wait 5000
 
 # the stack itself: down x4 and (main)
-at 161 561
+uiatab Call Stack
 wait 600
 shot 01-call-stack
 
+# BY NAME ABOVE, NOT BY COORDINATE. `at 161 561` selected FIND IN FILES in two
+# of the three cases that used it -- measured 2026-09-18, and the dump at
+# steps-stack-jump's `31-jumped-to-main` is the search pane photographed under
+# the name of the call stack. The strip moves because the captions do: while a
+# program is stopped they read `Call Stack (5)` and `Variables (3)`.
+#
+# THREE CALLS DEEP PLUS THE OUTERMOST FRAME, and every one carries a LINE --
+# which is Phosphor fce3db1 seen from outside for the first time. Frame 0 is the
+# stop, 1..3 are the recursive calls at line 7, and 4 is (main) at 11.
+uia Call Stack (5)
+uiarow DataItem:0 0|down|4|deep.bas
+uiarow DataItem:3 3|down|7|deep.bas
+uiarow DataItem:4 4|(main)|11|deep.bas
+uiaeq 4: 1
+
 # frame 3 -- the outermost `down`, called with n = 3
-at 100 651
+uiaclick DataItem:3
 wait 1200
 shot 02-frame-3-selected
 
 # ...and the variables pane follows the selection
-at 250 561
+uiatab Variables
 wait 600
 shot 03-variables-of-frame-3
+
+# AND THE VARIABLES PANE FOLLOWED THE SELECTION. Frame 3 is the outermost
+# `down`, entered with n = 3 -- frame 0 would say 0. That one cell is the whole
+# reason `variables` is requested BY FRAME INDEX rather than re-read.
+# AND THE CAPTION NAMES THE FRAME, which is more than "three variables": the
+# pane says WHOSE three they are. `Variables (3) in down #3` cannot be produced
+# by a pane that simply kept what the stop gave it.
+uia Variables (3) in down #3
+uiarow DataItem:n n|3|int|local
 
 # put the caret somewhere else, then jump back through the innermost frame
 key ^g
@@ -35,15 +65,25 @@ wait 700
 type 12
 key {ENTER}
 wait 600
-at 161 561
+uiatab Call Stack
 wait 500
-dblclick 100 603
+uiadbl DataItem:0
 wait 800
 shot 04-after-double-click
+
+# Back to line 4 through the innermost frame, from line 12.
+uiaeq 4: 1
 memo
 
 # and both panes empty when the program is no longer standing still
 key {F6}
 wait 3000
 shot 05-after-continue
+
+# AND BOTH PANES EMPTY WHEN THE PROGRAM IS NO LONGER STANDING STILL. The count
+# in the caption is gone -- and the same caption was asserted WITH its count
+# four shots ago, in this run, which is what keeps this negative from being a
+# sentence about a window that never said anything.
+uianot Call Stack (5)
+uianot Variables (3)
 memo

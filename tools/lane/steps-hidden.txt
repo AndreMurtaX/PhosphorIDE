@@ -24,6 +24,8 @@ key {F5}
 wait 600
 shot 210-a-breakpoint-on-line-8
 
+uiaeq 8: 1
+
 # Collapse the function. The mark on line 8 cannot be drawn -- its row is gone --
 # so the header carries the BADGE: a smaller disc with a triangle under it,
 # "not here, below".
@@ -31,11 +33,17 @@ at 60 187
 wait 900
 shot 211-collapsed-and-the-header-says-so
 
+uiaeq 6: 1
+
 # THE CLICK. It opens the block and toggles NOTHING, and the status bar says
 # which of the two happened. Before this item it set a second breakpoint here.
 at 23 187
 wait 900
 shot 212-the-click-opened-it-instead-of-adding-one
+
+# THE SENTENCE ROADMAP ITEM 20 IS ABOUT. Before it, this click set a second
+# breakpoint on a line the user did not choose and said nothing at all.
+uia opened: this fold was hiding a breakpoint
 
 # One breakpoint, on line 8, exactly where it was put. The gutter shows one
 # solid dot and no badge, because nothing is hidden any more.
@@ -45,6 +53,8 @@ type 1
 key {ENTER}
 wait 500
 shot 213-still-one-breakpoint-on-line-8
+
+uiaeq 1: 1
 
 # AND A COLLAPSED HEADER THAT HIDES NOTHING TOGGLES LIKE ANY OTHER LINE. The
 # `while` on line 13 holds no breakpoint -- the only one is on 8, outside it --
@@ -56,3 +66,9 @@ shot 214-the-while-collapsed-and-no-badge
 at 23 292
 wait 900
 shot 215-a-fold-hiding-nothing-still-toggles
+
+# AND THE CONTROL CASE SAYS NOTHING, because nothing was hidden: this is an
+# ordinary toggle. The negative is only worth reading because the same string
+# was asserted PRESENT three shots ago, in the same run, in the same window.
+uianot opened: this fold was hiding a breakpoint
+unassertable the dot landing on 13 and the badge on the header are gutter marks; the six shots are their evidence

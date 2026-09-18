@@ -11,6 +11,12 @@ fixture lane345.bas
 key ^+r
 wait 2500
 shot 150-the-prompt-arrived
+
+# `phosphor> ` CARRIES NO NEWLINE, so it reaches the pane only when FlushPrompt
+# gives up on one -- two idle drains. Nothing in this repository had driven a
+# child that prompts before this case.
+uia phosphor>
+uia Variables and functions persist across lines.
 memo
 
 # 42, which is the whole of what a REPL is for.
@@ -18,6 +24,8 @@ type println 6*7
 key {ENTER}
 wait 1200
 shot 151-six-times-seven
+
+uia phosphor> println 6*7
 memo
 
 # AND THE PERSISTENCE THAT JUSTIFIES THE PANE. Run hands the host a FILE and
@@ -29,6 +37,9 @@ type println x
 key {ENTER}
 wait 1200
 shot 152-a-variable-survives-the-line
+
+# x was set on its own line and read on the next one.
+uia phosphor> println x
 memo
 
 # A multi-line block waits for its terminator, and says so with `     ...> `.
@@ -39,10 +50,15 @@ type println i
 key {ENTER}
 wait 900
 shot 153-the-continuation-prompt
+
+# THE BLOCK IS OPEN and the prompt says so with five spaces and `...>`.
+uia ...> println i
 type next
 key {ENTER}
 wait 1200
 shot 154-the-block-ran
+
+uia ...> next
 memo
 
 # An error is `error: <msg>` on stderr with no path and no line. It belongs in
@@ -51,6 +67,9 @@ type nosuchthing(
 key {ENTER}
 wait 1200
 shot 155-an-error-in-the-transcript
+
+# An error is a LINE OF THE TRANSCRIPT, not a dialog: the session continues.
+uia error: unexpected token in expression
 memo
 
 # Up walks what was typed, and the first Up stashes the half-typed line.
@@ -58,9 +77,15 @@ type half typed
 key {UP}
 wait 400
 shot 156-up-recalls-the-last-line
+
+# Up put the last line back in the box, over the half-typed draft.
+uia nosuchthing(
 key {DOWN}
 wait 400
 shot 157-down-gives-the-draft-back
+
+# ...and Down gave the draft back rather than clearing it.
+uia half typed
 
 # END closes stdin: the host writes a newline and exits 0. The transcript says
 # which of the two endings it was, and the driver's own `phosphor children`
@@ -68,9 +93,13 @@ shot 157-down-gives-the-draft-back
 # behind" -- it must say none.
 key ^a
 key {DEL}
-at 950 712
+uiaclick End
 wait 2500
 shot 158-ended-by-closing-its-input
+
+# END CLOSES THE CHILD'S STDIN. The host sees end of input and exits 0, which
+# is a clean end rather than a kill.
+uia > the REPL ended, exit code 0
 memo
 
 # TWO CHILDREN AT ONCE, which nothing in this repository had ever executed. A
@@ -85,6 +114,10 @@ wait 1000
 key {F9}
 wait 3000
 shot 161-a-run-beside-a-live-repl
+
+# A RUN AND A PROMPT AT THE SAME TIME, in two panes and two children.
+uia > run lane345.bas
+uia > finished (0)
 memo
 # Ctrl+Shift+R AGAIN rather than a click on the tab header: with a session
 # already live the action shows the pane and puts the caret back in the box
@@ -97,6 +130,9 @@ type println z
 key {ENTER}
 wait 1200
 shot 162-the-prompt-kept-its-variables
+
+# z was set before the run and is still there after it.
+uia phosphor> println z
 memo
 
 # AND THE OTHER WAY OUT: a second session, left running, and the window closed
@@ -108,8 +144,12 @@ type println 2+2
 key {ENTER}
 wait 1200
 shot 159-a-second-session
+
+uia phosphor> println 2+2
 key %{F4}
 wait 1200
 shot 160-closing-asks-about-it
+
+unassertable the confirmation is a modal whose proxy describes its title bar and nothing else -- no message text, no buttons -- so what it ASKS is the shot; that it appeared at all is the dialog in the tree, and that the answer took is the editor closing
 key {ENTER}
 wait 2000

@@ -18,10 +18,21 @@ raise
 wait 800
 shot 450-nothing-marked-yet
 
+# NOTHING HAS RUN. The negative is here so the three positives below cannot be
+# satisfied by a window that was already saying them.
+uiaeq 1: 1
+uianot the program failed
+
 # RUN. F9 hands the file to the host, which refuses it and names line 4.
 key {F9}
 wait 4000
 shot 451-line-4-is-marked
+
+# THE HOST BLAMED LINE 4, AND THE EDITOR WENT THERE. The caret reading is the
+# jump: it was 1: 1 one shot ago and nothing here moved it but the diagnostic.
+uiaeq 4: 1
+uia blame.bas:4: unexpected token in expression
+uia > the program failed (1)
 
 # THE MARK SURVIVES SCROLLING. To the end of the file and back.
 key ^{END}
@@ -30,12 +41,17 @@ key ^{HOME}
 wait 600
 shot 452-still-marked-after-scrolling
 
+uiaeq 1: 1
+uia blame.bas:4: unexpected token in expression
+
 # A SECOND RUN CLEARS IT AND SAYS IT AGAIN. The file has not changed, so the
 # host blames the same line -- what this shows is that the mark is a memory of
 # THIS run and not an accumulation.
 key {F9}
 wait 4000
 shot 453-a-second-run-marks-it-again
+
+uiaeq 4: 1
 
 # AND EDITING THE MARKED LINE CLEARS IT, because a claim about text that has
 # changed is a claim about text that no longer exists. Nothing after this saves.
@@ -48,4 +64,9 @@ key {END}
 type 1
 wait 900
 shot 454-edited-so-the-mark-is-gone
+
+uiaeq 4: 13
+uia modified
+uia *blame.bas
+unassertable the tint itself is SynEdit markup painted into the text and nothing on this platform reads a markup back; what is checked here is everything AROUND it -- the message, the jump to line 4, the second run, and the edit that makes the claim stale
 memo

@@ -1,13 +1,26 @@
 ﻿# The lane on Windows, driven from a step script -- the counterpart of
-# lane-linux.sh, with which it shares SIX verbs of eight.
+# lane-linux.sh.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 `
-#              -Fixture tools\lane\deep.bas -Steps tools\lane\steps-stack.txt
+#              -Steps tools\lane\steps-stack.txt
 #
-# Commands, one per line: key <chord>, type <text>, wait <ms>, shot <name>,
-# at <dx> <dy> (click, relative to the window's top-left), memo (print the Output
-# pane's text), dblclick <dx> <dy>, says (dump what the accessibility layer sees),
-# text <needle> (ASSERT that some control says it).
+# A case names its own fixture, so -Fixture is only for pointing one somewhere
+# else deliberately.
+#
+# Commands, one per line.
+#
+#   DRIVING   key <chord>, type <text>, wait <ms>, raise, shot <name>,
+#             at <dx> <dy> and dblclick <dx> <dy> (clicks relative to the
+#             window's top-left), click <needle> (a control, by its text),
+#             uiaclick / uiadbl <Type:name>, uiatab <name>, uiamenu <top> > <item>
+#   ASKING    text <needle>          some control answers WM_GETTEXT with it
+#             uia <needle>           something on screen says it
+#             uianot <needle>        ...and nothing does
+#             uiaeq <needle>         exactly, not contained -- caret readings
+#             uiaany / uiaanynot     the same, across every window we own
+#             uiarow <Type:name> <a|b|c>   a list row, cells and all
+#             unassertable <why>     this cannot be checked here, and here is why
+#   DUMPING   memo, says, uiasays [all], uiasaysany [all]
 #
 # `text` AND `says` ARRIVED ON 2026-09-17, with the stdin row's TextHint, because
 # `memo` PRINTS and a lane that only prints is a lane somebody has to read. The
@@ -45,11 +58,14 @@
 # A CASE IS WRITTEN TWICE, NOT ONCE. This header said "the same commands so a
 # case can be written once" until 2026-09-17, and it was wrong twice over.
 #
-# The VERBS only mostly match. Shared: `key`, `type`, `wait`, `raise`, `shot`,
-# `at`. Here and not there: `dblclick`, `memo`. There and not here: `at2` (which
-# is what `dblclick` is called on that side), `bot` and `bot2` (a click measured
-# UP from the bottom edge, because mutter gives the window a different height on
-# different runs), `outtab`, `rootshot` and `popshot`.
+# The VERBS only mostly match, and the gap widened on 2026-09-18 rather than
+# closing: the UIA family above has no counterpart on the Linux side, where
+# AT-SPI answers the same questions through readtext.py and a different set of
+# names. Shared: `key`, `type`, `wait`, `raise`, `shot`, `at`, `text`,
+# `unassertable`. There and not here: `at2` (which is what `dblclick` is called
+# on that side), `bot` and `bot2` (a click measured UP from the bottom edge,
+# because mutter gives the window a different height on different runs),
+# `outtab`, `rootshot`, `popshot`, `menu`, `tab`, `dump`.
 #
 # And the KEY NAMES do not match at all: `key` here is SendKeys -- `^g`,
 # `{ENTER}`, `{F5}`, `+{F9}` -- and on Linux it is an X keysym -- `ctrl+g`,
@@ -352,6 +368,13 @@ $script:Failures = 0
 # `text assertions: all passed` and exited 0, because a failure counter that is
 # never incremented is zero -- so re-running them proved the program starts and
 # does not crash while keys are sent at it, and nothing else.
+#
+# THE SAME DAY, THE REASON TURNED OUT NOT TO BE LAZINESS. `text` sends WM_GETTEXT,
+# which against this whole window returns four strings, none of them what those
+# cases are about -- see the header of uia.ps1. The assertions were not missing;
+# they were unwritable. Every case now asks something through UI Automation, and
+# the three that still cannot -- a fold marker, a gutter mark, a toolbar icon --
+# say so with `unassertable` and name where those ARE checked.
 $script:Assertions = 0
 
 # `text <needle>` -- the assertion, named for the Linux driver's verb because it
@@ -405,6 +428,116 @@ function UiaNot($needle) {
     $script:Failures++
 }
 
+# `uiaeq <needle>` -- whole, not contained. See UiaFindExact.
+function UiaEq($needle) {
+    $script:Assertions++
+    $hit = UiaFindExact $form $needle
+    if ($hit) {
+        Write-Output "UIA OK    = $needle  <- $($hit.Type) $($hit.Class)"
+        return
+    }
+    Write-Output "UIA FAIL  nothing on screen is exactly: $needle"
+    $script:Failures++
+}
+
+# `uiaany <needle>` / `uiaanynot <needle>` -- the same questions asked of every
+# window the editor owns, which is where a completion popup, a signature hint and
+# a modal dialog live.
+function UiaAny($needle) {
+    $script:Assertions++
+    $hit = UiaFindOwned $script:EditorPid $needle
+    if ($hit) {
+        Write-Output "UIA OK    (anywhere) $needle  <- $($hit.Type) $($hit.Class)"
+        return
+    }
+    Write-Output "UIA FAIL  no window of ours says: $needle"
+    $script:Failures++
+}
+
+function UiaAnyNot($needle) {
+    $script:Assertions++
+    $hit = UiaFindOwned $script:EditorPid $needle
+    if (-not $hit) {
+        Write-Output "UIA OK    (absent anywhere) $needle"
+        return
+    }
+    Write-Output "UIA FAIL  a window of ours still says: $needle  <- $($hit.Type) $($hit.Class)"
+    $script:Failures++
+}
+
+# `uiaclick <name>` / `uiadbl <name>` -- click the element that says this.
+#
+# TWO MATCHES IS AN ERROR, NOT A CHOICE, the same rule ClickCtl and the Linux
+# `--where` carry: taking the first of several is how a locator drifts onto the
+# wrong control while still reporting success.
+function UiaClickEl($name, $double) {
+    $script:Assertions++
+    # @( ) AROUND THE CALL, AND IT IS NOT DECORATION. PowerShell unwraps a
+    # one-element array on its way out of a function, so `UiaLocate` returning
+    # the single row you asked for hands back a PSCustomObject -- and
+    # `.Count` on a PSCustomObject in 5.1 is EMPTY, not 1. `$hits.Count -ne 1`
+    # is then `$null -ne 1`, true, and the guard refuses exactly the case it
+    # exists to accept, printing `UIA FAIL   elements named: ...` with a blank
+    # where the number goes. Measured 2026-09-18, and reproduced in four lines
+    # with no editor running, which is the only reason it took minutes.
+    $hits = @(UiaLocate (UiaOwnedRows $script:EditorPid) $name)
+    if ($hits.Count -ne 1) {
+        Write-Output "UIA FAIL  $($hits.Count) elements named: $name"
+        $script:Failures++
+        return
+    }
+    $r = $hits[0].El.Current.BoundingRectangle
+    if ($r.Width -le 0 -or $r.Height -le 0) {
+        Write-Output "UIA FAIL  element has no area: $name"
+        $script:Failures++
+        return
+    }
+    $x = [int]($r.X + $r.Width / 2)
+    $y = [int]($r.Y + $r.Height / 2)
+    [LaneWin]::SetCursorPos($x, $y) | Out-Null
+    Start-Sleep -Milliseconds 150
+    [LaneWin]::mouse_event(0x02, 0, 0, 0, [IntPtr]::Zero)
+    [LaneWin]::mouse_event(0x04, 0, 0, 0, [IntPtr]::Zero)
+    if ($double) {
+        Start-Sleep -Milliseconds 80
+        [LaneWin]::mouse_event(0x02, 0, 0, 0, [IntPtr]::Zero)
+        [LaneWin]::mouse_event(0x04, 0, 0, 0, [IntPtr]::Zero)
+    }
+    Start-Sleep -Milliseconds 400
+    Write-Output "UIA OK    clicked $($hits[0].Name) at $x,$y"
+}
+
+# `unassertable <why>` -- THIS PART OF THIS CASE CANNOT BE CHECKED HERE, said out
+# loud. The Linux driver has had this since 2026-09-17 and the reason is the
+# same: a case that photographs something no instrument can read is evidence
+# exactly once, on the day a person looks at the picture, and the honest thing is
+# to say so rather than to let `0 assertions` read as `nothing to assert`.
+#
+# It counts as an assertion so the case is not silent, and it can never fail --
+# which is only defensible because it names what is missing.
+# `uiarow <Type>:<name> <cell|cell|cell>` -- a list row, whole.
+function UiaRow($rest) {
+    $script:Assertions++
+    $key, $expect = $rest -split '\s+', 2
+    $got = UiaRowCells (UiaRows $form) $key
+    if ($null -eq $got) {
+        Write-Output "UIA FAIL  no single row named: $key"
+        $script:Failures++
+        return
+    }
+    if ($got -eq $expect) {
+        Write-Output "UIA OK    row $key = $got"
+        return
+    }
+    Write-Output "UIA FAIL  row $key is '$got', expected '$expect'"
+    $script:Failures++
+}
+
+function Unassertable($why) {
+    $script:Assertions++
+    Write-Output "UNASSERTABLE  $why"
+}
+
 Focus
 foreach ($line in Get-Content -LiteralPath $Steps) {
     $line = $line.Trim()
@@ -447,6 +580,13 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         'text'     { Text ($rest -replace '<space>', ' ') }
         'uia'      { Uia ($rest -replace '<space>', ' ') }
         'uianot'   { UiaNot ($rest -replace '<space>', ' ') }
+        'uiaeq'    { UiaEq ($rest -replace '<space>', ' ') }
+        'uiaany'   { UiaAny ($rest -replace '<space>', ' ') }
+        'uiaanynot' { UiaAnyNot ($rest -replace '<space>', ' ') }
+        'uiarow'   { UiaRow ($rest -replace '<space>', ' ') }
+        'uiaclick' { UiaClickEl ($rest -replace '<space>', ' ') $false }
+        'uiadbl'   { UiaClickEl ($rest -replace '<space>', ' ') $true }
+        'unassertable' { Unassertable $rest }
         'uiatab'   { $script:Assertions++
                      $r = UiaTab $form $rest
                      Write-Output $r
@@ -459,6 +599,11 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         'uiasays'  { Write-Output "--- what UI Automation sees ---"
                      UiaSays $form ($rest -eq 'all') | ForEach-Object { Write-Output "  $_" }
                      Write-Output "--- end ---" }
+        # Every window the editor owns, popups and dialogs included.
+        'uiasaysany' { Write-Output "--- what every window of ours says ---"
+                       UiaSaysRows (UiaOwnedRows $script:EditorPid) ($rest -eq 'all') |
+                           ForEach-Object { Write-Output "  $_" }
+                       Write-Output "--- end ---" }
         'at'       { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $false }
         'click'    { ClickCtl $rest }
         'dblclick' { $c = $rest -split '\s+'; ClickAt ([int]$c[0]) ([int]$c[1]) $true }

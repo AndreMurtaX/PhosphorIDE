@@ -71,4 +71,4 @@ shot 115-nothing-known
 #
 # The Windows twin READS the hint -- WM_GETTEXT crosses to a THintWindow there --
 # so the feature is checked, on the platform that can check it.
-unassertable the signature hint is a THintWindow and gail does not describe it; steps-signature.txt checks it on Windows
+unassertable the signature hint is a THintWindow and gail does not describe it. The Windows twin was cited here as the place it IS checked, and on 2026-09-18 that was measured: UIA does describe the window -- `mid$([string], number) | mid$([string], number, number)`, both arities -- but the hint itself appeared in one run of twelve, so steps-signature.txt declares it too and neither side gates on it

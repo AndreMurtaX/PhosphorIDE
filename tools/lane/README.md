@@ -13,13 +13,22 @@ item 2a is the contract test that would turn part of it into a gate.
 
 ## A case is written twice, not once
 
-The two drivers share **six verbs of eight**, and do not share key names at all.
+The two drivers share a core of verbs and do not share key names at all.
 
 | | |
 | --- | --- |
-| both | `key`, `type`, `wait`, `raise`, `shot`, `at`, `text` |
-| Windows only | `dblclick`, `memo`, `says` |
-| Linux only | `at2` (what `dblclick` is called there), `bot` and `bot2` (a click measured UP from the bottom edge, because mutter gives the window a different height on different runs), `outtab`, `rootshot`, `popshot`, `say`, `menu` |
+| both | `key`, `type`, `wait`, `raise`, `shot`, `at`, `text`, `unassertable` |
+| Windows only | `fixture`, `dblclick`, `click`, `memo`, `says`, and the UIA family: `uia`, `uianot`, `uiaeq`, `uiaany`, `uiaanynot`, `uiarow`, `uiatab`, `uiaclick`, `uiadbl`, `uiamenu`, `uiasays`, `uiasaysany` |
+| Linux only | `at2` (what `dblclick` is called there), `bot` and `bot2` (a click measured UP from the bottom edge, because mutter gives the window a different height on different runs), `outtab`, `rootshot`, `popshot`, `say`, `menu`, `tab`, `dump` |
+
+**`fixture <file.bas>` is the first line of every Windows case**, and until
+2026-09-18 not one of them carried it: which program a case needs lived in a
+table nobody wrote down. `steps-gutter.txt` goes to line 3 and toggles a
+breakpoint, which against `lane345.bas` is the blank line the whole case is about
+and against `deep.bas` is an ordinary statement -- the same steps, the same
+screenshots, the opposite proof, and no error anywhere. Rebuilding the mapping by
+reading nineteen files found one that had already been wrong in the other
+direction: `steps-stack-running.txt` describes `blocked.bas` in its own prose.
 
 `text <needle>` is the one verb that means the same thing on both sides and gets there
 by different roads: it ASSERTS that some control in the window says the needle, counts
@@ -28,6 +37,46 @@ Windows sends `WM_GETTEXT` to every visible child. It arrived here on 2026-09-17
 the stdin row's hint -- before that this side only had `memo`, which PRINTS, and a lane
 that only prints is a lane somebody has to read. `says` and `say` are the matching dump
 verbs, for writing a case rather than for asserting in one.
+
+**AND ON WINDOWS `text` REACHES FOUR STRINGS.** Measured 2026-09-18 against the
+whole editor with a file open: the stdin box's hint, the Send button, the status
+bar's FIRST panel and the toolbar's caption. That is the entire surface, and it
+is why eighteen of the nineteen cases on this side asserted nothing -- not
+laziness, and not a gap somebody could have closed by writing more `text` lines.
+WM_GETTEXT asks a window for its own caption; a SysListView32 keeps its rows in
+items and a SysTreeView32 in nodes, so Problems, Find in Files, Outline, Call
+Stack, Variables and Watches answer it with nothing, and SynEdit has no caption
+at all.
+
+`tools/lane/uia.ps1` is the answer and it is the Windows twin of `readtext.py`:
+**UI Automation**, which describes the same window as a tree of elements. It
+reads the eight pane tabs by name, all four status-bar panels, the menu bar, and
+list rows WITH THEIR COLUMNS -- `uiarow DataItem:0 0|down|4|deep.bas` is one
+call-stack frame asserted whole. Three things cost a try each and are written
+down in that file's header: the managed UIA client does not load the Win32 proxy
+providers, so without one line every element is a bare `Pane` and the instrument
+is a slower WM_GETTEXT; the documented `RegisterClientSideProviderAssembly`
+throws where the table form does not; and neither works until
+`AutomationElement.RootElement` has been read, which throws the same exception,
+so the first failure sends you hunting for a type that is present.
+
+`uiaany` asks the same question of **every window the process owns**, because a
+completion popup, a signature hint and a modal dialog are each a top-level window
+owned by the form rather than a child of it -- the same fact `popshot` records on
+the other side. That is what made `steps-signature.txt` assertable: the hint
+comes back as `mid$([string], number) | mid$([string], number, number)`, both
+arities, which `steps-signature-linux.txt` has claimed "checks it on Windows"
+since before it was true.
+
+`uiaeq` is exact and the caret readings use it. `uia 4: 18` is contained in
+`14: 18`; the Linux side has already spent an afternoon on assertions that
+matched `1: 1`, which is the .lfm's own default and on screen before anything
+runs.
+
+`unassertable <why>` exists on both sides now. Three things in this window are
+painted rather than published -- a fold marker, a gutter mark and a toolbar icon
+-- and the cases about them say so and name where those ARE checked, instead of
+letting a zero read as "nothing to assert".
 
 `key` is **SendKeys** on Windows (`^g`, `{ENTER}`, `{F5}`, `+{F9}`) and an **X
 keysym** on Linux (`ctrl+g`, `Return`, `F5`, `shift+F9`).
@@ -77,7 +126,7 @@ generic driver existed, with the steps baked into the PowerShell.
 | `steps-accent.txt` + `acentos.bas` | the byte column: the same statement with and without accents, and the popup filtered on both |
 | `steps-find.txt`, `steps-find-linux.txt` | find in files: the pane, a jump into a file that was not open, a walk of ~1000 files finished, a walk nobody would wait for stopped, and no rows from the binaries beside the sources |
 | `steps-stdin.txt`, `steps-stdin-linux.txt` + `stdin.bas` | the stdin row, and the hint that says what it is: the prompt arriving as an unterminated tail, the hint readable before anything is typed, the box clicked the way a person has to click it, and the child receiving `Andre` rather than the 45 characters of the hint. Written because the clause this proves had been GREEN since the morning -- see roadmap item 1 -- while the author of the editor was killing an INPUT program rather than answering it |
-| `steps-toolbar.txt` | nothing driven: the toolbar, to look at |
+| `steps-toolbar.txt` | nothing driven: the toolbar, to look at -- and the one case that is `unassertable` from end to end, because the LCL builds the bar as a single window with no children, so UIA reports a caption and stops. The icons are checked by `gen-icons.py --check` against `icons-preview.png` at both resolutions, and their widths by `--selftest` |
 | `lane-linux.sh` + `xdrive.lpr` + `shot.py` | the Linux half |
 | `lane-windows.ps1` | the Windows driver: takes a fixture and a step script, the same VERBS as the Linux one — but not the same key names, see below |
 | `lane-windows-*.ps1` + `win.ps1` + `gettext.ps1` | the earlier, single-purpose Windows drivers, with their steps baked into the PowerShell: they are the Windows half of the four cases that have no `-linux` twin |

@@ -32,6 +32,8 @@ raise
 wait 900
 shot 180-two-thousand-lines-and-an-unfinished-word
 
+uiaeq 1: 1
+
 # The caret to column 8, which is the end of `functio` and NOT the end of the
 # line: `{END}` would put it after `measured()`, where an `n` makes
 # `functio measured()n` and opens nothing at all.
@@ -46,11 +48,19 @@ type n
 wait 800
 shot 181-the-definition-completed-and-the-marker-with-it
 
+# `functio` + `n` = column 9, so the character went in at the end of the word
+# and not at the end of the line -- which is the difference between opening a
+# block and typing `functio measured()n`.
+uiaeq 1: 9
+uia modified
+
 # Seven more characters, none of which changes a block: the editor must stay
 # exactly as responsive.
 type ame
 wait 600
 shot 182-and-typing-continues-normally
+
+uiaeq 1: 12
 
 # And back out, which cascades in its turn -- the close reverts every line below
 # it to the outer depth. Writing one function near the top of a long file is TWO
@@ -61,3 +71,6 @@ key {BACKSPACE}
 key {BACKSPACE}
 wait 800
 shot 183-and-back-with-the-marker-gone
+
+uiaeq 1: 8
+unassertable the fold marker arriving and leaving is the gutter again, and the NUMBER this item is about comes from `phosphoride --measure-typing`, in-process, for the reasons the header gives. What this case proves is that 2000 lines of cascading rescan still take the keystrokes in order and land them where they were aimed

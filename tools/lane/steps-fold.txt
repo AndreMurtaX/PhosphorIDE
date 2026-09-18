@@ -26,5 +26,18 @@ shot 172-and-back
 at 60 217
 wait 800
 shot 173-an-inner-block-collapsed
+
+# WHAT THIS CASE CAN AND CANNOT CHECK. A fold marker is painted in the gutter
+# and a collapsed block is rows that are not drawn; neither is a control, so
+# neither is readable here -- exactly as on gtk2, where the twin of this case
+# ends the same way and for the same reason.
+#
+# What IS readable is that the file still parses after four collapses and four
+# expansions: the outline pane is built by the same TLineWalk the fold gutter
+# uses (uphosphorfold), so a walk that came out of this wrong would show it.
+uiatab Outline
+wait 700
+uia 6: outer(n)
+unassertable the markers and the collapsed rows are gutter painting; the five shots are their evidence, and the assertion above checks the walk they are both built from
 at 60 217
 wait 600

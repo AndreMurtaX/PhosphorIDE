@@ -16,12 +16,47 @@ wait 300
 type s = mid$(
 wait 900
 shot 101-first-argument
+
+# THE HINT IS READABLE HERE AND IT IS NOT ASSERTED. Both halves of that are
+# measurements from 2026-09-18 and both matter.
+#
+# It is a window of its own -- a THintWindow, owned by the form rather than a
+# child of it -- so the instrument for it is `uiaany`, which walks every window
+# the process owns, and not `uia`, which walks the form. Asked that way it came
+# back in full, once:
+#
+#     Pane [HintWindow] mid$([string], number) | mid$([string], number, number)
+#
+# Both arities, first argument marked. That is exactly what this case exists for
+# -- Reg.Add overwrites by SIGNATURE and not by name, so a `mid$` showing one
+# line would be a table that had lost half of itself -- and it is what
+# steps-signature-linux.txt claims "steps-signature.txt checks on Windows".
+#
+# AND IN THE OTHER ELEVEN RUNS THE HINT DID NOT APPEAR AT ALL: not in the UIA
+# tree, not in a photograph of the window, not on the screen. `abs(` as well as
+# `mid$(`; the first call typed in a session and the second; with a click into
+# the text first and without; with the `(` in the same burst as the name and as
+# its own keystroke 700 ms later. The editor exits RefreshSignatureHint
+# (umainform.pas:4326) before it activates anything, and which of its three
+# early returns fires is not decided: the status bar updates from the same
+# handler on the same keystroke, so ActiveDoc is fine and EditorStatusChange is
+# running.
+#
+# An assertion on a thing that appears one run in twelve is a gate that goes red
+# for reasons nobody can name. So this case asserts the caret -- which is what
+# proves the keys landed where they were aimed, including the dead-key trap in
+# the header above -- and says the rest out loud.
+uiaeq 15: 10
 type "z",
 wait 900
 shot 102-second-argument
+
+uiaeq 15: 14
 type 2, 3
 wait 900
 shot 103-third-argument
+
+uiaeq 15: 18
 # BRACED, because `key` is a chord and a bare ) is SendKeys syntax. The first
 # version wrote `key )` and the parenthesis was never typed, so the hint stayed
 # up and looked like a dismissal bug.
@@ -29,9 +64,19 @@ key {)}
 wait 900
 shot 104-closed-and-gone
 
+# CLOSING THE CALL IS THE DISMISSAL. Nothing was pressed to put the hint away.
+uiaeq 15: 19
+
 # A name whose arities are assembled at run time claims nothing.
 key {ENTER}
 wait 300
 type t = callfunc(
 wait 900
 shot 105-nothing-known
+
+# AND A NAME WHOSE ARITIES ARE ASSEMBLED IN A LOOP CLAIMS NOTHING. `callfunc`
+# registers one slot per arity, so the literal in the Phosphor source says `$`
+# and the truth is nine things; the generator drops them rather than show one.
+uiaeq 16: 14
+unassertable the signature hint appeared in ONE of twelve runs driven on 2026-09-18 and is readable through `uiaany` when it does -- `mid$([string], number) | mid$([string], number, number)`, both arities, first argument marked. Why it does not appear the other eleven times is open: umainform.pas:4326 returns early, and the status bar updating on the same keystroke rules out ActiveDoc and the handler itself
+unassertable which ARGUMENT is marked as it is typed is rendering inside the hint -- UIA hands back the line, not the emphasis -- so the three shots are what show the mark moving

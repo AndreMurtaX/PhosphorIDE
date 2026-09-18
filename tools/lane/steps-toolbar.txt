@@ -4,3 +4,16 @@ fixture lane345.bas
 
 wait 800
 shot 41-toolbar
+
+# NOTHING IS DRIVEN HERE AND NOTHING CAN BE ASSERTED, which is worth saying out
+# loud rather than leaving as a zero.
+#
+# The LCL builds the toolbar as ONE window with a caption and no children, so
+# UIA describes `ToolBar1` and stops: not the nine buttons, not their captions,
+# not the image list behind them. The two things this case is really about are
+# checked elsewhere and better -- the icons by `gen-icons.py --check` against
+# `icons-preview.png`, at both resolutions, and their WIDTHS by `--selftest`,
+# which is the gate that notices a set that has quietly become one resolution
+# twice. The accelerator trap of 2026-09-16 -- `S&top` answering Alt+T -- is a
+# property of the .lfm and is read there.
+unassertable the toolbar is one window to UIA: a caption, no children, no button captions and no images. The icons are checked by gen-icons.py --check against icons-preview.png and their widths by --selftest; this case is a photograph for a person
