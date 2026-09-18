@@ -64,7 +64,7 @@ shot 134-f12-jumped-to-the-definition
 # its GotoSource call, so the message survives that jump's RefreshStatus.
 # It has to be asserted here, before the next keypress: any caret move runs
 # EditorStatusChange -> RefreshStatus, which blanks panel 3 when nothing is
-# running (umainform.pas:4577-4580).
+# running (umainform.pas:4593-4596).
 text second is defined on line 11
 
 # The caret is now ON that definition's name, which is its own answer.

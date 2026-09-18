@@ -31,7 +31,7 @@ wait 600
 # emcCodeFoldExpand and with no caret placement at all
 # (synguttercodefolding.pp:1058-1072), so after four of them the status bar still
 # reads the position the file opened at. RefreshStatus writes that panel as
-# Format('%d: %d') -- umainform.pas:4557 -- and OpenPath calls it once the file is
+# Format('%d: %d') -- umainform.pas:4572 -- and OpenPath calls it once the file is
 # in (umainform.pas:1085), so `1: 1` is the untouched caret and not an empty
 # panel.
 # DROPPED by the 2026-09-18 critique: text 1: 1

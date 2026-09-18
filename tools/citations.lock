@@ -87,6 +87,7 @@ src/core/udebugsession.pas:206-212	084455e698e19466	implementation
 src/core/udebugsession.pas:211-211	f75c659650787893	const
 src/core/udebugsession.pas:22-24	d050ad8b85ea937c	would be a second way in. BeginListen returns the port; the caller starts
 src/core/udebugsession.pas:52-59	a1d3a3566a01dd8b	dsUnavailable, // this host cannot debug; nothing else is reachable
+src/core/ufindinfiles.pas:179-179	c6fd3e52ab3afe59	function LooksBinary(const ABuffer: String): Boolean;
 src/core/uphosphorcomplete.pas:137-140	03e0d64b647f9e8e	THE BRACKETS MARK WHERE THE CARET IS, and are the only thing AArgIndex is for.
 src/core/uphosphorcomplete.pas:138-140	5b8a73e7a539cada	A signature with fewer arguments than that index is rendered unmarked, because
 src/core/uphosphorhost.pas:118-118	5a76766549442798	P := TProcessUTF8.Create(nil);
@@ -138,12 +139,13 @@ src/umainform.pas:3137-3137	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
 src/umainform.pas:3140-3140	ecbbf700fea0e12f	StatusBar1.Panels[3].Text :=
 src/umainform.pas:3314-3314	1591d7da5d68d7f2	procedure TFrmMain.ActDebugWhyExecute(Sender: TObject);
 src/umainform.pas:424-424	524379aa7ecdc4c6	FSigHint: THintWindow;
+src/umainform.pas:4326-4326	db3b17fc873c1059	procedure TFrmMain.RefreshSignatureHint;
 src/umainform.pas:438-450	a2936ae7ccbb3a83	cadence, not a fact, and reading one as "a session is live" meant that
-src/umainform.pas:4467-4467	be91e9295a09973c	line. Nothing is refused and the caret does not move -- the block opens, the
-src/umainform.pas:4470-4475	53251615674ed61c	Hidden := Doc.HiddenBreakpointCount(ALine);
-src/umainform.pas:4557-4557	f5ff5490b9c83e5e	StatusBar1.Panels[0].Text := Format('%d: %d', [Doc.CaretLine, Doc.CaretCol]);
-src/umainform.pas:4577-4580	cf7d16eff8262e99	if FRunner.Running then
-src/umainform.pas:4579-4581	6d34575bcc090f71	StatusBar1.Panels[3].Text := FRunLabel + ' ...'
+src/umainform.pas:4482-4482	be91e9295a09973c	line. Nothing is refused and the caret does not move -- the block opens, the
+src/umainform.pas:4485-4490	53251615674ed61c	Hidden := Doc.HiddenBreakpointCount(ALine);
+src/umainform.pas:4572-4572	f5ff5490b9c83e5e	StatusBar1.Panels[0].Text := Format('%d: %d', [Doc.CaretLine, Doc.CaretCol]);
+src/umainform.pas:4593-4596	36d9f9e543341d59	if FRunner.Running then
+src/umainform.pas:4594-4596	6d34575bcc090f71	StatusBar1.Panels[3].Text := FRunLabel + ' ...'
 src/umainform.pas:503-503	a1ecc4841306ddcf	procedure AddReplText(AKind: TRunStream; const AText: String;
 src/umainform.pas:555-556	a00bc809040cdbe5	procedure GotoSource(const APath: String; ALine: Integer;
 src/umainform.pas:6-10	6e5a2b104154c318	The one rule this unit exists to keep: NOTHING HERE WAITS. Every call into the

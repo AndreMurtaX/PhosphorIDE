@@ -58,7 +58,7 @@ key Right
 wait 400
 
 # COLUMN 8, WHICH IS THE WHOLE SETUP OF THIS CASE. The status bar's first panel
-# is `Format('%d: %d', [Doc.CaretLine, Doc.CaretCol])` (umainform.pas:4557),
+# is `Format('%d: %d', [Doc.CaretLine, Doc.CaretCol])` (umainform.pas:4572),
 # rewritten on every scCaretX/scCaretY (EditorStatusChange), and it is always
 # showing. If the seven Rights landed anywhere else -- a key the queue dropped,
 # a smart Home that moved off column 1 -- the `n` below goes into the middle of

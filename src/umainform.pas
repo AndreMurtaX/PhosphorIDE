@@ -4327,7 +4327,23 @@ procedure TFrmMain.RefreshSignatureHint;
 var
   Doc: TEditorDoc;
   { Not Name and Text: TComponent publishes both, and a local that shadows a
-    published property of the enclosing class is a duplicate identifier here. }
+    published property of the enclosing class is a duplicate identifier here.
+
+    AND THE RENAME LEFT ONE BEHIND, which cost the window its title for a year.
+    `Text := '';` sat where `Body := '';` is now -- no local of that name, so it
+    resolved to TControl.Text (controls.pp:1579), which on a form IS the Caption.
+    EditorStatusChange calls RefreshStatus, which writes
+    `file.bas - PhosphorIDE`, and then calls this, which blanked it: the title
+    was EMPTY for exactly as long as a signature hint was up, and stayed empty
+    until the caret left the call -- so leaving the caret inside `mid$(` and
+    walking away left a window with no title at all.
+
+    Measured 2026-09-18 by sampling GetWindowTextW from another process 1280
+    times while the editor's author typed: three blanks, each one starting when
+    the hint appeared and ending when he typed the closing parenthesis. It had
+    never been seen because a hint is up only while you are typing INSIDE a call,
+    and nobody reads the title bar then. RefreshStatus owns the caption; nothing
+    else in this unit may assign to it. }
   CallName, Body: String;
   Arg, I: Integer;
   Sigs: TPhosphorWordList;
@@ -4363,7 +4379,6 @@ begin
   end;
 
   Body := '';
-  Text := '';
   for I := 0 to High(Sigs) do
   begin
     if I > 0 then

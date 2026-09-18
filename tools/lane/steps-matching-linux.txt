@@ -33,7 +33,7 @@ shot 421-jumped-to-the-end-function
 text function: line 13
 
 # AND THE CARET REALLY MOVED. Panel 0 is `%d: %d` over CaretLine/CaretCol
-# (umainform.pas:4557); `end` starts at byte 1 of line 13. The message above is
+# (umainform.pas:4572); `end` starts at byte 1 of line 13. The message above is
 # written AFTER the assignment, so it would still read `line 13` if the caret had
 # not gone anywhere -- this is the half that says it did.
 text 13: 1
