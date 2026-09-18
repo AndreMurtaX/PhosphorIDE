@@ -88,11 +88,6 @@ jobs:
           test -f getting-started.md || { echo "the archive is missing the guide"; exit 1; }
 
       # THE DEPENDENCY QUESTION, and it is the one a clean machine exists to
-      # answer. The release notes tell a Linux user they need the gtk2 runtime;
-      # this prints what the binary actually asks the loader for, and fails if
-      # anything is unresolved -- so the claim in the notes is measured rather
-      # than believed.
-      # THE DEPENDENCY QUESTION, and it is the one a clean machine exists to
       # answer. Measured 2026-09-18 on a stock Ubuntu 24.04 runner: this binary
       # does NOT load -- libgtk-x11-2.0.so.0 and libgdk-x11-2.0.so.0 are both
       # `not found`. GTK 2 has not been part of a default Ubuntu install for

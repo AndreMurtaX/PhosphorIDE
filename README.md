@@ -3,11 +3,14 @@
 [![build](https://github.com/AndreMurtaX/PhosphorIDE/actions/workflows/build.yml/badge.svg)](https://github.com/AndreMurtaX/PhosphorIDE/actions/workflows/build.yml)
 
 **[Download a build](https://github.com/AndreMurtaX/PhosphorIDE/releases/latest)** --
-a single binary for Windows or Linux, no installer. You also need a `phosphor`
-binary, from [the sibling repository](https://github.com/AndreMurtaX/Phosphor); the
-editor finds one in Preferences, `$PHOSPHOR_HOST`, beside itself, `../Phosphor/bin/`
-or on `PATH`, and says which. Without one it still edits, highlights, folds,
-outlines, completes and searches -- it cannot run, compile or debug, and says so.
+a single binary for Windows or Linux, no installer. **On Linux, `sudo apt install
+libgtk2.0-0` first**: this is a GTK 2 program and GTK 2 has not been in a default
+desktop install for years, so without it the binary does not load and nothing says
+why. You also need a `phosphor` binary, from
+[the sibling repository](https://github.com/AndreMurtaX/Phosphor); the editor finds
+one in Preferences, `$PHOSPHOR_HOST`, beside itself, `../Phosphor/bin/` or on `PATH`,
+and says which. Without one it still edits, highlights, folds, outlines, completes and
+searches -- it cannot run, compile or debug, and says so.
 
 An editor for [Phosphor BASIC](https://github.com/AndreMurtaX/Phosphor), written in
 Free Pascal against Lazarus/LCL and SynEdit. Desktop only -- Windows and Linux, the

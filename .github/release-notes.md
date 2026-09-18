@@ -41,8 +41,29 @@ editor has never sent.
 searches. It cannot run, check syntax, compile, pack or debug, and the menu items for
 those say so rather than failing quietly.
 
-On Linux the binary needs the gtk2 runtime (`libgtk2.0-0`), which most desktops
-already have.
+**On Linux you almost certainly have to install one package first.** The binary is
+built against **GTK 2**, which has not been part of a default desktop install for
+years — measured on a stock Ubuntu 24.04 on 2026-09-18, it does not load at all:
+
+```
+libgdk-x11-2.0.so.0 => not found
+libgtk-x11-2.0.so.0 => not found
+```
+
+Nothing appears when you double-click it, and nothing says why. One command fixes it:
+
+```
+sudo apt install libgtk2.0-0
+```
+
+(or your distribution's equivalent — the package may carry a `t64` suffix, which apt
+resolves for you). The `smoke` workflow runs exactly that command on a clean runner and
+then starts the editor, so this instruction is tested rather than remembered.
+
+Building against GTK 3 or Qt5 instead would remove the step. It is not done, and it is
+not a line of configuration: the LCL widgetset is chosen at build time and every visual
+assertion in this project — the gutter marks at two resolutions, the toolbar's light and
+dark readability, thirty-odd driven lane cases — was measured under GTK 2.
 
 ## What works
 
