@@ -92,24 +92,61 @@ jobs:
       # this prints what the binary actually asks the loader for, and fails if
       # anything is unresolved -- so the claim in the notes is measured rather
       # than believed.
+      # THE DEPENDENCY QUESTION, and it is the one a clean machine exists to
+      # answer. Measured 2026-09-18 on a stock Ubuntu 24.04 runner: this binary
+      # does NOT load -- libgtk-x11-2.0.so.0 and libgdk-x11-2.0.so.0 are both
+      # `not found`. GTK 2 has not been part of a default Ubuntu install for
+      # years, so the release notes' "most desktops already have it" was false
+      # for anybody on a current distribution: they would have downloaded the
+      # editor, double-clicked, and seen nothing happen.
+      #
+      # This step REPORTS rather than fails, because the next one is what turns
+      # the documented instruction into a test.
       - name: What does it need from this machine (Linux)
         if: runner.os == 'Linux'
         run: |
           chmod +x app/phosphoride
-          echo "--- ldd ---"
+          echo "--- ldd, before anything is installed ---"
           ldd app/phosphoride || true
           missing="$(ldd app/phosphoride 2>/dev/null | grep 'not found' || true)"
+          echo ""
           if [ -n "$missing" ]; then
-            echo ""
-            echo "UNRESOLVED LIBRARIES on a stock $(. /etc/os-release && echo $PRETTY_NAME):"
+            echo "UNRESOLVED on a stock $(. /etc/os-release && echo $PRETTY_NAME):"
+            echo "$missing"
+          else
+            echo "every shared library already resolves on a stock runner"
+          fi
+
+      # THE INSTRUCTION IN THE RELEASE NOTES, RUN AS WRITTEN. If a user has to do
+      # this, the job has to do it too -- and it has to discover the package name
+      # rather than assert one, because Ubuntu 24.04's 64-bit time_t transition
+      # renamed a great many runtime packages with a `t64` suffix. Whichever name
+      # resolves here is the one the notes must carry.
+      - name: Install what a user would be told to install (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          if sudo apt-get install -y libgtk2.0-0 2>/dev/null; then
+            echo "PACKAGE=libgtk2.0-0" >> "$GITHUB_ENV"
+          elif sudo apt-get install -y libgtk2.0-0t64; then
+            echo "PACKAGE=libgtk2.0-0t64" >> "$GITHUB_ENV"
+          else
+            echo "neither libgtk2.0-0 nor libgtk2.0-0t64 could be installed"
+            exit 1
+          fi
+          sudo apt-get install -y xvfb
+
+      - name: And now nothing is unresolved (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          echo "installed: $PACKAGE"
+          missing="$(ldd app/phosphoride 2>/dev/null | grep 'not found' || true)"
+          if [ -n "$missing" ]; then
+            echo "STILL UNRESOLVED after the documented install:"
             echo "$missing"
             exit 1
           fi
-          echo "every shared library resolves on a stock runner"
-
-      - name: Install a display, and only that (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+          echo "every shared library resolves after installing $PACKAGE"
 
       # --selftest CONSTRUCTS EVERY FORM. If the download runs at all, this is
       # what says it runs correctly -- and it needs no phosphor binary, which is
