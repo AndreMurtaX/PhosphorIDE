@@ -1,4 +1,4 @@
-# The lane on Windows, driven from a step script -- the counterpart of
+﻿# The lane on Windows, driven from a step script -- the counterpart of
 # lane-linux.sh, with which it shares SIX verbs of eight.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\lane\lane-windows.ps1 `
@@ -91,6 +91,7 @@ using System;
 using System.Text;
 using System.Runtime.InteropServices;
 public class LaneWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, IntPtr e);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)]
@@ -130,6 +131,43 @@ function Rect() {
 }
 
 function Focus() { [Wnd]::SetForegroundWindow($form) | Out-Null; Start-Sleep -Milliseconds 350 }
+
+# SENDKEYS HAS NO TARGET WINDOW. It types into whatever holds the focus at the
+# instant it fires, so every `key` and `type` below is an unaddressed letter --
+# and on 2026-09-18 a whole case's worth of them was delivered into a chat window
+# that happened to be in front, silently, while the screenshots photographed an
+# editor that had received nothing.
+#
+# TRIES TO FIX IT FIRST, then refuses. A desktop can steal focus for a moment --
+# a notification, a window finishing its paint -- and killing a run over that
+# would make the driver useless. Three attempts at a third of a second, and if
+# the editor still is not in front, the case goes RED and says which window took
+# it. Anything is better than typing the test's own words into it.
+function RequireFocus($what) {
+    for ($i = 0; $i -lt 3; $i++) {
+        if ([LaneWin]::GetForegroundWindow() -eq $form) { return $true }
+        [Wnd]::SetForegroundWindow($form) | Out-Null
+        Start-Sleep -Milliseconds 350
+    }
+    if ([LaneWin]::GetForegroundWindow() -eq $form) { return $true }
+    $fg = [LaneWin]::GetForegroundWindow()
+    $title = [LaneWin]::Text($fg)
+    # WRITE-HOST, NOT WRITE-OUTPUT, and the difference is the whole function.
+    # PowerShell makes a function's uncaptured output part of its RETURN VALUE,
+    # so five Write-Output lines here came back to `if (RequireFocus ...)` as a
+    # non-empty array -- which is true. The guard counted its own failure, printed
+    # nothing, and let the keys through: a refusal that refused nothing. Measured
+    # 2026-09-18 by pointing the comparison at a handle nothing can ever be and
+    # watching the case type anyway.
+    Write-Host "FOCUS FAIL  refusing to send '$what' -- the editor is not in front"
+    Write-Host "            the foreground window is $fg '$title'"
+    Write-Host "            SendKeys would have typed this into it. A Windows lane"
+    Write-Host "            run owns the desktop for its duration; nothing else may"
+    Write-Host "            use this machine while it is going."
+    $script:Failures++
+    $script:Assertions++
+    return $false
+}
 
 function Grab($name) {
     $r = Rect
@@ -231,7 +269,7 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
     switch ($verb) {
         # <space> is spelled out because every line is trimmed, and SendKeys has
         # no {SPACE} of its own -- so "key ^ " would arrive as "key ^".
-        'key'      { [System.Windows.Forms.SendKeys]::SendWait(($rest -replace '<space>', ' ')); Start-Sleep -Milliseconds 120 }
+        'key'      { if (RequireFocus $rest) { [System.Windows.Forms.SendKeys]::SendWait(($rest -replace '<space>', ' ')); Start-Sleep -Milliseconds 120 } }
         # TYPE IS LITERAL TEXT AND KEY IS A CHORD, so this escapes what SendKeys
         # would otherwise read as syntax: + ^ % ~ ( ) { } [ ] each go in braces.
         # Paid for on 2026-09-16 -- "type s = mid$(" opened a modifier group and
@@ -251,7 +289,7 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
         'type'     {
             $lit = -join ($rest.ToCharArray() | ForEach-Object {
                 if ('+^%~(){}[]'.Contains($_)) { '{' + $_ + '}' } else { $_ } })
-            [System.Windows.Forms.SendKeys]::SendWait($lit); Start-Sleep -Milliseconds 120
+            if (RequireFocus $rest) { [System.Windows.Forms.SendKeys]::SendWait($lit); Start-Sleep -Milliseconds 120 }
         }
         'wait'     { Start-Sleep -Milliseconds ([int]$rest) }
         'shot'     { Grab $rest }
