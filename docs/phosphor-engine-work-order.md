@@ -467,7 +467,7 @@ back.
 All of it in `host/console/phosphor.lpr`, beside the existing subcommand dispatch
 (`RunCommandLine` at `:1317`, with `compile` at `:1384` and `pack` at `:1418` as the
 template). The engine must not learn what JSON is -- and note that the boundary check is a
-uses-clause scan for platform and GUI units only (`scripts/build.ps1:57-59`), so it would
+uses-clause scan for platform and GUI units only (`scripts/build.ps1:67-69`), so it would
 *not* catch `uses fpjson` in the engine. What keeps the protocol in the host is the
 architecture rule, not a gate. Keep it there anyway.
 

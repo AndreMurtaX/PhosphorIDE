@@ -444,7 +444,7 @@ the bar.
   turn -- operator, literal, keyword, and then each of the three built-in tiers, because
   `PhosphorBuiltinTier` loops -- and a word in none of them, which is most words a person
   types, paid for all six. (This said FIVE until 2026-09-17, in three places written the
-  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1349` said six. A
+  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1350` said six. A
   count is derived or it is cited.) One table and one binary search took the same measurement from
   **13,28 us per line to 2,28**, and the worst single keystroke at 5000 lines from
   86,46 ms to 19,74. `ScanFoldLine` costs 0,47 us in both runs; only its SHARE moved,

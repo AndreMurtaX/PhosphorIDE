@@ -418,7 +418,7 @@ begin
     also requires top level and excludes the reserved words -- the reserved-word
     half is checked by the caller, the top-level half cannot be known from one
     line. A label written inside a block is a no-op in Phosphor anyway
-    (engine/PhosphorCompiler.pas:2406-2426), so painting one is arguably a
+    (engine/PhosphorCompiler.pas:2407-2427), so painting one is arguably a
     service: it looks like a label and is not one. }
   Result := False;
   if not FFirstOnLine then

@@ -55,7 +55,7 @@ unit uphosphorfold;
      `:` at bracket depth 0, after `then`, after `else`.
   2a. AND A STATEMENT POSITION HAS A LEVEL. An integer is a LABEL where a
      statement may begin at PROGRAM level -- a line's start, or after a `:`
-     (`engine/PhosphorCompiler.pas:2939-2948`) -- and a label leaves the
+     (`engine/PhosphorCompiler.pas:3004-3013`) -- and a label leaves the
      position open, so `x = 1 : 20 function h()` runs. After `then` or `else`
      the position is a statement's but not the program's, an integer there is an
      expression rather than a label, and `if x > 0 then 20 function f()` is
@@ -674,7 +674,7 @@ begin
       AND THERE IS ONLY ONE OF THEM. `10 20 function f()` is refused with
       `expected end of line`, because the compiler records a label at the top of
       its statement loop and then parses a STATEMENT, not a second label
-      (engine/PhosphorCompiler.pas:2939-2948). A named label may still follow --
+      (engine/PhosphorCompiler.pas:3004-3013). A named label may still follow --
       `10 head: function f()` compiles, and so does `head: 10 function f()`. }
     AWalk.NextStatement := AWalk.AtStatement and AWalk.AtProgramLevel and
                            AWalk.NextLabelOk;

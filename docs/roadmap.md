@@ -2261,7 +2261,7 @@ Six is what the code did. `usynphosphor` asked operator, literal and keyword, an
 `PhosphorBuiltinTier` LOOPED over all three built-in tiers -- `uphosphorlang.pas` at
 `9c95592^`, lines 839-851 -- so a word in none of them, which is most words a person
 types, paid six `Find` calls and not five. The **What** section below says six twice, and
-`uphosphorlang.pas:1349` says six: the three places that said five were all written after
+`uphosphorlang.pas:1350` says six: the three places that said five were all written after
 the measurement, from memory, on the same day, and the correct copies were the older ones.
 The subject line of `9c95592` still says five and cannot be changed; this is the correction
 a reader will find.

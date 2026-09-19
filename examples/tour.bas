@@ -60,7 +60,7 @@ println ""
 total% = 0
 while total% < 10
   total% += 3                ' += also appends, when the left side is a string
-endwhile
+end while
 println "total% = " + str$(total%)
 
 ' --- arrays and dictionaries are 1-based -------------------------------------

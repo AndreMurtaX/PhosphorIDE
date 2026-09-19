@@ -99,13 +99,13 @@ const
     rather than a mystery. }
   PhosphorLangSource = 'Phosphor engine/libs + host/packages + host/gui/libs';
   PhosphorKeywordCount = 53;
-  PhosphorBuiltinCoreCount = 538;
+  PhosphorBuiltinCoreCount = 540;
   PhosphorBuiltinPackageCount = 181;
   PhosphorBuiltinGuiCount = 426;
   { Names carrying at least one signature, and the total number of signatures
     across them. Both asserted by the generator. }
-  PhosphorSignatureNameCount = 1136;
-  PhosphorSignatureCount = 1226;
+  PhosphorSignatureNameCount = 1138;
+  PhosphorSignatureCount = 1228;
 
 implementation
 
@@ -114,7 +114,7 @@ uses
 
 
 const
-  ClassWords: array[0..1203] of String = (
+  ClassWords: array[0..1205] of String = (
     'abs', 'acos', 'acosh', 'alarmspath$', 'alcase$', 'alphacolor',
     'altseparator$', 'and', 'app_processmessages', 'app_quit', 'app_run',
     'append', 'arr_free', 'arr_get', 'arr_set@', 'arraysize', 'arraytype',
@@ -379,21 +379,21 @@ const
     'strings_strictdelimiter', 'strings_strings', 'strings_strings$',
     'strings_text', 'strings_text$', 'strings_trailinglinebreak',
     'strings_valuefromindex', 'strings_valuefromindex$', 'strings_values',
-    'strings_values$', 'strings_writebom', 'strline$', 'strtodate',
-    'strtodatetime', 'strtotime', 'stuffstring$', 'swap', 'swapcase$',
-    'tabcontrol@', 'tabcontrol_add@', 'tabcontrol_clear@', 'tabcontrol_count',
-    'tabcontrol_onchange@', 'tabcontrol_tab$', 'tabcontrol_tabindex',
-    'tabcontrol_tabindex@', 'tabsheet@', 'tabsheet_caption$',
-    'tabsheet_caption@', 'tan', 'tanh', 'tempfilename$', 'temppath$', 'then',
-    'time', 'time$', 'timer@', 'timer_enabled', 'timer_enabled@',
-    'timer_interval', 'timer_interval@', 'timer_ontimer@', 'timer_start@',
-    'timer_stop@', 'timetostr$', 'to', 'today', 'togglebox@',
-    'togglebox_caption$', 'togglebox_caption@', 'togglebox_checked',
-    'togglebox_checked@', 'togglebox_onchange@', 'tomorrow', 'toolbar@',
-    'trace', 'trackbar@', 'trackbar_max', 'trackbar_max@', 'trackbar_min',
-    'trackbar_min@', 'trackbar_onchange@', 'trackbar_position',
-    'trackbar_position@', 'trayicon@', 'trayicon_hide@', 'trayicon_hint$',
-    'trayicon_hint@', 'trayicon_onclick@', 'trayicon_show@',
+    'strings_values$', 'strings_writebom', 'strline$', 'strsetchar$',
+    'strsetline$', 'strtodate', 'strtodatetime', 'strtotime', 'stuffstring$',
+    'swap', 'swapcase$', 'tabcontrol@', 'tabcontrol_add@',
+    'tabcontrol_clear@', 'tabcontrol_count', 'tabcontrol_onchange@',
+    'tabcontrol_tab$', 'tabcontrol_tabindex', 'tabcontrol_tabindex@',
+    'tabsheet@', 'tabsheet_caption$', 'tabsheet_caption@', 'tan', 'tanh',
+    'tempfilename$', 'temppath$', 'then', 'time', 'time$', 'timer@',
+    'timer_enabled', 'timer_enabled@', 'timer_interval', 'timer_interval@',
+    'timer_ontimer@', 'timer_start@', 'timer_stop@', 'timetostr$', 'to',
+    'today', 'togglebox@', 'togglebox_caption$', 'togglebox_caption@',
+    'togglebox_checked', 'togglebox_checked@', 'togglebox_onchange@',
+    'tomorrow', 'toolbar@', 'trace', 'trackbar@', 'trackbar_max',
+    'trackbar_max@', 'trackbar_min', 'trackbar_min@', 'trackbar_onchange@',
+    'trackbar_position', 'trackbar_position@', 'trayicon@', 'trayicon_hide@',
+    'trayicon_hint$', 'trayicon_hint@', 'trayicon_onclick@', 'trayicon_show@',
     'trayicon_visible', 'treenode@', 'treenode_caption$', 'treenode_caption@',
     'treenode_childcount', 'treeview@', 'treeview_nodecount', 'trim$', 'true',
     'ubound', 'ucase$', 'underline$', 'until', 'unzip_count', 'unzip_entry$',
@@ -407,7 +407,7 @@ const
     'zip_extractall', 'zip_list$', 'zip_open@', 'zip_quick', 'zip_read$'
   );
 
-  ClassKinds: array[0..1203] of Byte = (
+  ClassKinds: array[0..1205] of Byte = (
     4, 4, 4, 4, 4, 4, 4, 1, 6, 6, 6, 3, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 5, 4, 4,
     4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 5, 4, 3, 6, 6, 6, 6, 6, 6, 6,
     6, 6, 5, 5, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -451,12 +451,12 @@ const
     5, 5, 4, 4, 4, 6, 6, 6, 6, 6, 6, 3, 4, 4, 4, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6,
     6, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
     4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 6, 6, 6, 6,
-    6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 3, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 3, 4,
-    6, 6, 6, 6, 6, 6, 4, 6, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-    6, 6, 6, 6, 6, 4, 2, 4, 4, 5, 3, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 3, 4, 4, 4,
-    4, 4, 4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-    5, 5, 5, 5
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 3, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4,
+    3, 4, 6, 6, 6, 6, 6, 6, 4, 6, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 4, 2, 4, 4, 5, 3, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 3, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5
   );
 
   KeywordWords: array[0..52] of String = (
@@ -477,7 +477,7 @@ const
     'false', 'null', 'true'
   );
 
-  BuiltinCoreWords: array[0..537] of String = (
+  BuiltinCoreWords: array[0..539] of String = (
     'abs', 'acos', 'acosh', 'alarmspath$', 'alcase$', 'alphacolor',
     'altseparator$', 'arr_free', 'arr_get', 'arr_set@', 'arraysize',
     'arraytype', 'arraytypename$', 'asc', 'asin', 'asinh', 'atan', 'atan2',
@@ -592,12 +592,13 @@ const
     'strings_strings', 'strings_strings$', 'strings_text', 'strings_text$',
     'strings_trailinglinebreak', 'strings_valuefromindex',
     'strings_valuefromindex$', 'strings_values', 'strings_values$',
-    'strings_writebom', 'strline$', 'strtodate', 'strtodatetime', 'strtotime',
-    'stuffstring$', 'swapcase$', 'tan', 'tanh', 'tempfilename$', 'temppath$',
-    'time', 'time$', 'timetostr$', 'today', 'tomorrow', 'trim$', 'ubound',
-    'ucase$', 'val', 'valcode', 'weekof', 'weekofthemonth', 'weekoftheyear',
-    'weeksbetween', 'weeksinayear', 'weeksinyear', 'weekspan', 'word$',
-    'wordcount', 'yearof', 'yearsbetween', 'yearspan', 'yesterday'
+    'strings_writebom', 'strline$', 'strsetchar$', 'strsetline$', 'strtodate',
+    'strtodatetime', 'strtotime', 'stuffstring$', 'swapcase$', 'tan', 'tanh',
+    'tempfilename$', 'temppath$', 'time', 'time$', 'timetostr$', 'today',
+    'tomorrow', 'trim$', 'ubound', 'ucase$', 'val', 'valcode', 'weekof',
+    'weekofthemonth', 'weekoftheyear', 'weeksbetween', 'weeksinayear',
+    'weeksinyear', 'weekspan', 'word$', 'wordcount', 'yearof', 'yearsbetween',
+    'yearspan', 'yesterday'
   );
 
   BuiltinPackageWords: array[0..180] of String = (
@@ -772,7 +773,7 @@ const
     'updown_position', 'updown_position@'
   );
 
-  SignatureNames: array[0..1135] of String = (
+  SignatureNames: array[0..1137] of String = (
     'abs', 'acos', 'acosh', 'alarmspath$', 'alcase$', 'alphacolor',
     'altseparator$', 'app_processmessages', 'app_quit', 'app_run', 'arr_free',
     'arr_get', 'arr_set@', 'arraysize', 'arraytype', 'arraytypename$', 'asc',
@@ -1030,15 +1031,15 @@ const
     'strings_strictdelimiter', 'strings_strings', 'strings_strings$',
     'strings_text', 'strings_text$', 'strings_trailinglinebreak',
     'strings_valuefromindex', 'strings_valuefromindex$', 'strings_values',
-    'strings_values$', 'strings_writebom', 'strline$', 'strtodate',
-    'strtodatetime', 'strtotime', 'stuffstring$', 'swapcase$', 'tabcontrol@',
-    'tabcontrol_add@', 'tabcontrol_clear@', 'tabcontrol_count',
-    'tabcontrol_onchange@', 'tabcontrol_tab$', 'tabcontrol_tabindex',
-    'tabcontrol_tabindex@', 'tabsheet@', 'tabsheet_caption$',
-    'tabsheet_caption@', 'tan', 'tanh', 'tempfilename$', 'temppath$', 'time',
-    'time$', 'timer@', 'timer_enabled', 'timer_enabled@', 'timer_interval',
-    'timer_interval@', 'timer_ontimer@', 'timer_start@', 'timer_stop@',
-    'timetostr$', 'today', 'togglebox@', 'togglebox_caption$',
+    'strings_values$', 'strings_writebom', 'strline$', 'strsetchar$',
+    'strsetline$', 'strtodate', 'strtodatetime', 'strtotime', 'stuffstring$',
+    'swapcase$', 'tabcontrol@', 'tabcontrol_add@', 'tabcontrol_clear@',
+    'tabcontrol_count', 'tabcontrol_onchange@', 'tabcontrol_tab$',
+    'tabcontrol_tabindex', 'tabcontrol_tabindex@', 'tabsheet@',
+    'tabsheet_caption$', 'tabsheet_caption@', 'tan', 'tanh', 'tempfilename$',
+    'temppath$', 'time', 'time$', 'timer@', 'timer_enabled', 'timer_enabled@',
+    'timer_interval', 'timer_interval@', 'timer_ontimer@', 'timer_start@',
+    'timer_stop@', 'timetostr$', 'today', 'togglebox@', 'togglebox_caption$',
     'togglebox_caption@', 'togglebox_checked', 'togglebox_checked@',
     'togglebox_onchange@', 'tomorrow', 'toolbar@', 'trackbar@',
     'trackbar_max', 'trackbar_max@', 'trackbar_min', 'trackbar_min@',
@@ -1058,7 +1059,7 @@ const
     'zip_quick', 'zip_read$'
   );
 
-  SignatureCodes: array[0..1135] of String = (
+  SignatureCodes: array[0..1137] of String = (
     'n', 'n', 'n', '', '$', '$', '', '', '', '', '@', '@n|@nn|@nnn',
     '@n$|@n@|@nn|@nn$|@nn@|@nnn|@nnn$|@nnn@|@nnnn', '@', '@', '@', '$', 'n',
     'n', 'nn', 'n', 'nn', 'n', '$', '$', '$$', '$', '$', '', '$', '$', '$',
@@ -1142,14 +1143,14 @@ const
     '@$', '@n$', '@n', '@$', '@', '@$', '@$|@$$', '@@|@@$', '@nn', '@n', '@$',
     '@', '@$', '@', '@$', '@', '@$', '@', '@$', '@$|@$$', '@@|@@$', '@',
     '@|@n', '@|@n', '@n$', '@n', '@$', '@', '@|@n', '@n$', '@n', '@$$', '@$',
-    '@|@n', '$n', '$', '$', '$', '$nn$', '$', '@', '@$', '@', '@', '@$', '@n',
-    '@', '@n', '@$', '@', '@$', 'n', 'n', '', '', '', '', '', '@', '@n', '@',
-    '@n', '@$', '@', '@', 'n', '', '@', '@', '@$', '@', '@n', '@$', '', '@',
-    '@', '@', '@n', '@', '@n', '@$', '@', '@n', '', '@', '@', '@$', '@$', '@',
-    '@', '@$', '@', '@$', '@', '@', '@', '$', '@n', '$', '', '$', '$n', '$$',
-    '@', '@', '@n', '@', '@n', '@', '@n', '$', '', 'n', 'n', 'n', 'nn', 'n',
-    'n', 'nn', '$n$', '$$', 'n', 'nn', 'nn', '', '@$$', '@$$', '@', '$$', '@',
-    '$', '@$', '', '@$', '@$$', '@$', '@', '$', '$$', '@$'
+    '@|@n', '$n', '$n$', '$n$', '$', '$', '$', '$nn$', '$', '@', '@$', '@',
+    '@', '@$', '@n', '@', '@n', '@$', '@', '@$', 'n', 'n', '', '', '', '', '',
+    '@', '@n', '@', '@n', '@$', '@', '@', 'n', '', '@', '@', '@$', '@', '@n',
+    '@$', '', '@', '@', '@', '@n', '@', '@n', '@$', '@', '@n', '', '@', '@',
+    '@$', '@$', '@', '@', '@$', '@', '@$', '@', '@', '@', '$', '@n', '$', '',
+    '$', '$n', '$$', '@', '@', '@n', '@', '@n', '@', '@n', '$', '', 'n', 'n',
+    'n', 'nn', 'n', 'n', 'nn', '$n$', '$$', 'n', 'nn', 'nn', '', '@$$', '@$$',
+    '@', '$$', '@', '$', '@$', '', '@$', '@$$', '@$', '@', '$', '$$', '@$'
   );
 
 var

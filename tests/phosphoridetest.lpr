@@ -723,7 +723,7 @@ begin
   Check('lookup is case-insensitive here too',
         Length(PhosphorSignatures('MID$')) = 2);
   CheckEqInt('the table holds what the unit says it holds',
-             PhosphorSignatureNameCount, 1136);
+             PhosphorSignatureNameCount, 1138);
 
   { --- which call the caret is in ------------------------------------------ }
   Check('inside a call', CallAt('mid$(s, 1', 10, Nm, Arg));
@@ -1386,7 +1386,7 @@ begin
 
   { AN INTEGER IS A LABEL WHEREVER A STATEMENT MAY BEGIN AT PROGRAM LEVEL, and
     the compiler's own comment enumerates the four places
-    (engine/PhosphorCompiler.pas:2962-2972). All three below compile and run;
+    (engine/PhosphorCompiler.pas:3027-3037). All three below compile and run;
     the first version of this scanner asked the narrower question -- is this the
     first token of the line -- and lost two of them. }
   Funcs := ScanOutlineText('x = 1 : 20 function h()' + LE + 'endfunction' + LE);
@@ -2792,7 +2792,7 @@ end;
   not blue.
 
   So EVERY word in EVERY table is classified and checked against the table it came
-  from -- 1205 of them, read out of the unit's own lists rather than sampled or
+  from -- 1207 of them, read out of the unit's own lists rather than sampled or
   retyped. A check over a sample would pass the day the merge dropped the tail of
   one table.
 
@@ -2865,7 +2865,7 @@ begin
     output is the warning -- and this assertion is what turns a silent change of
     mind into a red test. }
   Words := PhosphorBuiltins(ptCore);
-  CheckEqInt('the core table is not empty', 538, Length(Words));
+  CheckEqInt('the core table is not empty', 540, Length(Words));
   Ok := AllAre(Words, pwkBuiltinCore, 'error');
   Check('every core built-in classifies as one, except the overlap' + Since, Ok);
   Check('`error` is in the core table', PhosphorClassify('error', Kind));
@@ -2918,8 +2918,8 @@ begin
   I := 0;
   for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
     Inc(I, Length(PhosphorBuiltins(Tier)));
-  CheckEqInt('and 1205 words were checked, not a sample',
-    1205, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
+  CheckEqInt('and 1207 words were checked, not a sample',
+    1207, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
     Length(PhosphorLiteralWords));
 end;
 

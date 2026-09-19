@@ -8,10 +8,10 @@
 ../Phosphor/engine/PhosphorBytecode.pas:284-284	3765159b833621cd	WU8(AStream, Ord(High(TOpcode))); // opcode-set guard
 ../Phosphor/engine/PhosphorBytecode.pas:36-36	a25c49bc8ef63d7a	PBC_VERSION = 1; // bump whenever the format or opcode meaning changes
 ../Phosphor/engine/PhosphorCompiler.pas:2049-2049	9be22927f99a41e0	FProg.Emit(opPrintFile, 0, 0, ln);
-../Phosphor/engine/PhosphorCompiler.pas:2359-2359	325755d8f0822b2b	if t.StrVal = 'function' then begin ParseFunction(); Exit; end;
-../Phosphor/engine/PhosphorCompiler.pas:2406-2426	fb377a78b68c3d70	FProg.Emit(opResume, 0, 0, t.Line);
-../Phosphor/engine/PhosphorCompiler.pas:2939-2948	ad12dad795bf07ef	if FLex.Cur().Kind = tkInt then
-../Phosphor/engine/PhosphorCompiler.pas:2962-2972	aee3b8252e5d3c27	// AND THIS LOOP RUNS THE TEST IN MORE PLACES THAN A LINE'S START, which
+../Phosphor/engine/PhosphorCompiler.pas:2360-2360	325755d8f0822b2b	if t.StrVal = 'function' then begin ParseFunction(); Exit; end;
+../Phosphor/engine/PhosphorCompiler.pas:2407-2427	fb377a78b68c3d70	FProg.Emit(opResume, 0, 0, t.Line);
+../Phosphor/engine/PhosphorCompiler.pas:3004-3013	ad12dad795bf07ef	if FLex.Cur().Kind = tkInt then
+../Phosphor/engine/PhosphorCompiler.pas:3027-3037	aee3b8252e5d3c27	// AND THIS LOOP RUNS THE TEST IN MORE PLACES THAN A LINE'S START, which
 ../Phosphor/engine/PhosphorCompiler.pas:421-448	376fa173c4e2a106	FVarNames[FVarCount] := AName;
 ../Phosphor/engine/PhosphorCompiler.pas:461-469	027fd2d5a79f3b98	Result.Idx := FLocalCount - 1;
 ../Phosphor/engine/PhosphorCompiler.pas:601-645	b66a166269998dd3	if FInFunction then begin Fail('nested functions are not supported', FLex.Cur().Line); Exit; end;
@@ -62,7 +62,7 @@
 ../Phosphor/host/console/phosphor.lpr:1911-1918	d4423ae5f38a76fb	are not a purity judgement about the library: they are what the COMPILER'S
 ../Phosphor/host/console/phosphor.lpr:3899-3899	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
 ../Phosphor/host/console/phosphor.lpr:818-838	5e9b8ddac1bf6d5b	{ Reads a whole file as raw bytes and strips a leading UTF-8 BOM if present, so
-../Phosphor/scripts/build.ps1:57-59	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
+../Phosphor/scripts/build.ps1:67-69	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
 ../Phosphor/scripts/check-seams.py:98-98	14b1846b246f3bde	# report-and-continue; there is nowhere for a host to pause to" -- which is
 ../Phosphor/tests/debug_protocol_test.py:143-143	7f9629fae2691404	caps.get('setVariable') is False, str(caps))
 src/core/udebugproto.pas:108-108	f7321e3307743907	Line: Integer;
@@ -92,7 +92,7 @@ src/core/uphosphorhost.pas:118-118	5a76766549442798	P := TProcessUTF8.Create(nil
 src/core/uphosphorhost.pas:196-196	3cad279a8445c86c	end;
 src/core/uphosphorhost.pas:8-24	fcaaac870a6f7c63	The search order below is not arbitrary. It goes from the most deliberate answer
 src/core/uphosphorhost.pas:98-98	df8e39f2d3d9499e	function RunAndCapture(const AExe: String; const AArgs: array of String;
-src/core/uphosphorlang.pas:1349-1349	0d980b5b6e9e7c87	later one costs and the unit brings up six fewer TStringLists. }
+src/core/uphosphorlang.pas:1350-1350	0d980b5b6e9e7c87	later one costs and the unit brings up six fewer TStringLists. }
 src/core/uphosphorlang.pas:21-22	f82c3abd25a9bbef	A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
 src/core/uphosphorlang.pas:30-31	21cb6e7136468331	{ Which host a built-in needs. Ordered by how universally available it is, so
 src/core/uphosphorlang.pas:73-74	bdd8c8e109f697f1	{ The raw lists, for a completion box or a documentation lookup. Sorted, lower

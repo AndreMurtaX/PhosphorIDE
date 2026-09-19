@@ -38,7 +38,7 @@ unit uphosphoroutline;
   scanner -- the one that takes the first word of a line:
 
     - `x = 1 : function f()` is legal. A definition begins a STATEMENT, not a
-      line (engine/PhosphorCompiler.pas:2359 dispatches it from ParseStatement),
+      line (engine/PhosphorCompiler.pas:2360 dispatches it from ParseStatement),
       and `:` is what separates two of them (:3009-3010).
     - `if x > 0 then function f()` and `... else function f()` are legal too, so
       `then` and `else` open a statement as surely as `:` does.
@@ -49,7 +49,7 @@ unit uphosphoroutline;
       `setup: 30 function pick$(a$)`: a label may begin wherever a statement may
       begin AT PROGRAM LEVEL, which the compiler's own comment enumerates as a
       line's start, after a `:`, after a numeric label and after a named one
-      (engine/PhosphorCompiler.pas:2962-2972). The first version of this unit
+      (engine/PhosphorCompiler.pas:3027-3037). The first version of this unit
       asked the narrower question -- is this the first token of the line -- and
       lost both of those definitions.
 
