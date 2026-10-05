@@ -524,7 +524,7 @@ order:
 1. **A blocking debug seam in the VM.** The existing `OnBreakpoint` cannot be
    reused: its contract says it "MUST NOT block: the engine treats it as a report,
    never a wait, so no confirm-answer is returned"
-   (`engine/PhosphorValue.pas:73-74`), and it returns `void`. What is needed is a
+   (`engine/PhosphorValue.pas#TPhosphorBreakpointProc`), and it returns `void`. What is needed is a
    separate seam, called at each source-line boundary, that CAN block and whose
    return value tells the VM what to do next -- run, step, stop.
 
@@ -537,16 +537,16 @@ order:
    twice per iteration and one Step Over would land back on the `for` every time.
 
    The engine already emits `opStmt` once per source statement, carrying the line
-   (`engine/PhosphorCompiler.pas:2049`), and its VM handler already records the
+   (`engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseStatement`), and its VM handler already records the
    triple a stepper needs -- pc, stack depth, frame depth
-   (`engine/PhosphorVM.pas:2256-2260`). The hook belongs inside that one case arm,
+   (`engine/PhosphorVM.pas#TPhosphorVM.ExecFrom`). The hook belongs inside that one case arm,
    and the rule is **stop at an `opStmt` whose line differs from the line the step
    began on, or whose frame depth is lower**.
 
    That also settles the cost question the right way round. Phosphor measured a test
    *per instruction* at 3-4% and deleted it as decoration
-   (`engine/PhosphorVM.pas:2020-2024`); tests added to existing case arms measured at
-   no cost at all (`:2045-2053`). One `opStmt` occurs per ~14 executed instructions in
+   (`engine/PhosphorVM.pas#TPhosphorVM.ExecFrom`); tests added to existing case arms measured at
+   no cost at all (`engine/PhosphorVM.pas#TPhosphorVM.ExecFrom`). One `opStmt` occurs per ~14 executed instructions in
    a tight loop, so a Boolean guard there is the cheap shape -- but it is still a
    number to put in a commit message, not a claim.
 
@@ -557,8 +557,8 @@ order:
 
    The harder half was missed when this document was first written: **the compiled
    program carries no variable names at all.** `TProgram` declares `VarCount` and
-   `VarTypes` and no name table (`engine/PhosphorOpcodes.pas:126-152`); `TUserFunc`
-   declares the function's own name and no names for its locals (`:115-122`). The
+   `VarTypes` and no name table (`engine/PhosphorOpcodes.pas#TProgram`); `TUserFunc`
+   declares the function's own name and no names for its locals (`engine/PhosphorOpcodes.pas#TUserFunc`). The
    compiler has them and throws them away (`FVarNames`, `FLocalNames`). So
    `variables` is not merely unimplemented, it is unanswerable until `TProgram`
    carries names.
@@ -569,7 +569,7 @@ order:
    hand.
 
    One more thing this end cannot see: **a seam that blocks corrupts `TimeoutMs`**,
-   which is wall-clock sampled once per run (`engine/PhosphorVM.pas:2030-2036`). The
+   which is wall-clock sampled once per run (`engine/PhosphorVM.pas#TPhosphorVM.Run`). The
    host must discount the time spent parked, or a session that pauses for a minute
    kills the program on resume.
 

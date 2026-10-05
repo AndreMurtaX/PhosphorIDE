@@ -10,7 +10,7 @@ unit uphosphoroutline;
   THIS IS A SCANNER AND NOT A PARSER, AND THAT IS A TRADE WITH A BILL ATTACHED.
   Phosphor's lexer has no keyword table at all: every keyword reaches the parser
   as an ordinary identifier and is decided by POSITION
-  (engine/PhosphorLexer.pas:444-470), so `then = 5` is a legal assignment and
+  (engine/PhosphorLexer.pas#TLexer.Tokenize), so `then = 5` is a legal assignment and
   `function if(a)` is a legal definition of a function called `if` -- both
   measured against the real host on 2026-09-16. A scanner that reads a word and
   concludes "this is the keyword" is therefore wrong about some legal program,
@@ -38,8 +38,9 @@ unit uphosphoroutline;
   scanner -- the one that takes the first word of a line:
 
     - `x = 1 : function f()` is legal. A definition begins a STATEMENT, not a
-      line (engine/PhosphorCompiler.pas:2360 dispatches it from ParseStatement),
-      and `:` is what separates two of them (:3009-3010).
+      line (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseStatementBody
+      dispatches it from ParseStatement), and `:` is what separates two of them
+      (engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile).
     - `if x > 0 then function f()` and `... else function f()` are legal too, so
       `then` and `else` open a statement as surely as `:` does.
     - `head: function a%() return 1 : end function : function b%() return 2 :
@@ -49,34 +50,34 @@ unit uphosphoroutline;
       `setup: 30 function pick$(a$)`: a label may begin wherever a statement may
       begin AT PROGRAM LEVEL, which the compiler's own comment enumerates as a
       line's start, after a `:`, after a numeric label and after a named one
-      (engine/PhosphorCompiler.pas:3027-3037). The first version of this unit
-      asked the narrower question -- is this the first token of the line -- and
-      lost both of those definitions.
+      (engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile). The first version
+      of this unit asked the narrower question -- is this the first token of the
+      line -- and lost both of those definitions.
 
       BUT THAT ENUMERATION IS THE NAMED-LABEL READER'S, and reading it as the
       integer's costs a definition that does not exist. The numeric label is a
-      different branch (:2939-2948) and it runs ONCE per turn of the statement
-      loop, so `10 20 function f()` is refused with `expected end of line` while
-      `10 head: function f()` and `head: 10 function f()` both compile. Measured
-      2026-09-17, after this paragraph had said otherwise since it was written.
-      But `if x > 0 then 20 function f()` is REFUSED (`expected end of line`),
-      because `then` opens a statement and not a program-level one. That is the
-      whole reason the walk reports WHY it is at a statement position and not
-      merely that it is -- and until item 18 this unit was the only one of the
-      two scanners that asked, which is how the fold gutter came to open a block
-      here for a definition this pane did not list.
+      different branch (engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile) and it
+      runs ONCE per turn of the statement loop, so `10 20 function f()` is refused
+      with `expected end of line` while `10 head: function f()` and
+      `head: 10 function f()` both compile. Measured 2026-09-17, after this paragraph
+      had said otherwise since it was written. But `if x > 0 then 20 function f()` is
+      REFUSED (`expected end of line`), because `then` opens a statement and not a
+      program-level one. That is the whole reason the walk reports WHY it is at a
+      statement position and not merely that it is -- and until item 18 this unit was
+      the only one of the two scanners that asked, which is how the fold gutter came
+      to open a block here for a definition this pane did not list.
     - `end function`, two words, is the same token as `endfunction` -- the lexer
       merges them, but ONLY when they are adjacent, so an `end` at the end of one
       line and a `function` at the start of the next is not a terminator
-      (engine/PhosphorLexer.pas:189-224, verified: it reports the next definition
-      as a nested one).
+      (engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords, verified: it
+      reports the next definition as a nested one).
     - `function m%()`, `n?()`, `o@()` and `g$()` are all legal: the type suffix
-      is part of the name (engine/PhosphorLexer.pas:448-451) and it is the only
-      declaration of a return type the language has.
+      is part of the name (engine/PhosphorLexer.pas#TLexer.Tokenize) and it is
+      the only declaration of a return type the language has.
     - `FUNCTION Upper()` ... `END FUNCTION` is legal: the lexer lowercases every
-      identifier as it scans (engine/PhosphorLexer.pas:452). So the name is
-      matched folded and shown as the user typed it, because the fold is the
-      language's and the spelling is theirs.
+      identifier as it scans (engine/PhosphorLexer.pas#TLexer.Tokenize). So the
+      name is matched folded and shown as the user typed it, because the fold is
+      the language's and the spelling is theirs.
     - `rem function ghost()`, `' function ghost()` and `println "function
       ghost()"` define nothing. Comments run to end of line and a string that
       reaches one is a hard error rather than a continuation, which is why a
@@ -104,11 +105,10 @@ unit uphosphoroutline;
   line IS a definition, is callable, and must still appear here.
 
   WHAT IS DELIBERATELY ABSENT. Labels (`setup:`, `10`) are not collected and
-  `gosub`/`goto` targets are not resolved. They are a second table in the
-  compiler that never consults the function table, they would need a reserved-
-  word test this repository does not extract, and the roadmap item asks about
-  functions. An absence that is written down beats a jump that is wrong and
-  looks right.
+  `gosub`/`goto` targets are not resolved. They are a second table in the compiler
+  that never consults the function table, they would need a reserved-word test
+  this repository does not extract, and the roadmap item asks about functions. An
+  absence that is written down beats a jump that is wrong and looks right.
 
   MIT License. Copyright (c) 2026 Andre Murta.
 }
@@ -135,12 +135,12 @@ type
     Display: String;
     { The text between the parentheses, exactly as written, or '' for none. }
     Params: String;
-    { The `local` clause, exactly as written, or '' -- and it is on the HEADER
-      line or it does not exist: `local` is read only when it is the token right
-      after the closing parenthesis (engine/PhosphorCompiler.pas:634-645), and a
-      `local i` on a line of its own is a compile error rather than a
-      declaration. It is here so that F12 can tell a function's own parameter
-      from a function of the same name somewhere else in the file. }
+    { The `local` clause, exactly as written, or '' -- and it is on the HEADER line or
+      it does not exist: `local` is read only when it is the token right after the
+      closing parenthesis (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseFunction),
+      and a `local i` on a line of its own is a compile error rather than a declaration.
+      It is here so that F12 can tell a function's own parameter from a function of the
+      same name somewhere else in the file. }
     Locals: String;
     { How many names are in it: 0 for `()`, and -1 when there is no parameter
       list on the line at all -- which is what `function f` looks like for the
@@ -216,11 +216,11 @@ function FuncAtLine(const AFuncs: TOutlineFuncs; ALine: Integer): Integer;
   expression`, measured), so an unclosed paren means the line is still being
   typed and the arity is genuinely not known yet.
 
-  WHITESPACE BEFORE THE PARENTHESIS IS SKIPPED, and the first version of this did
-  not skip it, on a rule the language does not have. `FLex.Peek().Kind = tkLParen`
-  (engine/PhosphorCompiler.pas:996) is a test on the TOKEN STREAM, and the lexer
-  has already thrown the spaces away: `println f (7)` prints 70. Measured on
-  2026-09-16, after a review said so and the host agreed with the review. }
+  WHITESPACE BEFORE THE PARENTHESIS IS SKIPPED, and the first version of this did not
+  skip it, on a rule the language does not have. `FLex.Peek().Kind = tkLParen`
+  (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParsePrimary) is a test on the TOKEN
+  STREAM, and the lexer has already thrown the spaces away: `println f (7)` prints 70.
+  Measured on 2026-09-16, after a review said so and the host agreed with the review. }
 function CallArgCount(const ALine: String; ANameEnd: Integer): Integer;
 
 implementation

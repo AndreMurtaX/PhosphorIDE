@@ -5,60 +5,6 @@
 # citation goes red this is what it used to point at, and reading it
 # beside the claim is the whole job. A hash alone would make every
 # failure a mystery and every fix a re-baseline.
-../Phosphor/engine/PhosphorBytecode.pas:284-284	3765159b833621cd	WU8(AStream, Ord(High(TOpcode))); // opcode-set guard
-../Phosphor/engine/PhosphorBytecode.pas:36-36	a25c49bc8ef63d7a	PBC_VERSION = 1; // bump whenever the format or opcode meaning changes
-../Phosphor/engine/PhosphorCompiler.pas:2049-2049	9be22927f99a41e0	FProg.Emit(opPrintFile, 0, 0, ln);
-../Phosphor/engine/PhosphorCompiler.pas:2360-2360	325755d8f0822b2b	if t.StrVal = 'function' then begin ParseFunction(); Exit; end;
-../Phosphor/engine/PhosphorCompiler.pas:2407-2427	fb377a78b68c3d70	FProg.Emit(opResume, 0, 0, t.Line);
-../Phosphor/engine/PhosphorCompiler.pas:3004-3013	ad12dad795bf07ef	if FLex.Cur().Kind = tkInt then
-../Phosphor/engine/PhosphorCompiler.pas:3027-3037	aee3b8252e5d3c27	// AND THIS LOOP RUNS THE TEST IN MORE PLACES THAN A LINE'S START, which
-../Phosphor/engine/PhosphorCompiler.pas:421-448	376fa173c4e2a106	FVarNames[FVarCount] := AName;
-../Phosphor/engine/PhosphorCompiler.pas:461-469	027fd2d5a79f3b98	Result.Idx := FLocalCount - 1;
-../Phosphor/engine/PhosphorCompiler.pas:601-645	b66a166269998dd3	if FInFunction then begin Fail('nested functions are not supported', FLex.Cur().Line); Exit; end;
-../Phosphor/engine/PhosphorCompiler.pas:634-645	65a0c622f3f9126a	if IsKeyword('local') then
-../Phosphor/engine/PhosphorCompiler.pas:710-712	82735bfbc869d22a	if FFailed then Exit;
-../Phosphor/engine/PhosphorCompiler.pas:725-727	8834dd7e15a2124b	FProg.SetUserFuncLocals(ufIdx, ltypes, lnames);
-../Phosphor/engine/PhosphorCompiler.pas:74-74	489c3d94ec628b8f	the comment there -- because "the lexer is sitting at the end" and "the
-../Phosphor/engine/PhosphorCompiler.pas:77-77	313cc6ba5692c4df	FParseDone: Boolean;
-../Phosphor/engine/PhosphorCompiler.pas:796-797	08bc6ba8dfbd1da4	if FLabelCount = Length(FLabelName) then
-../Phosphor/engine/PhosphorCompiler.pas:932-936	169078ab66ce781a	Expect(tkRParen, '")"');
-../Phosphor/engine/PhosphorCompiler.pas:996-996	f6472a4586333027	else if FLex.Peek().Kind = tkLParen then begin FLex.Advance(); ParseCall(t.StrVal, t.Line); end
-../Phosphor/engine/PhosphorEngine.pas:146-146	6a5461a5f8b5c746	this engine that MAY BLOCK -- see TPhosphorDebugProc, and TPhosphorVM's
-../Phosphor/engine/PhosphorEngine.pas:313-313	9d8c1c0bd8e9f4f3	before. A seam that wants the VM mid-run asks DebugVM, which is the next
-../Phosphor/engine/PhosphorLexer.pas:189-224	d0af7633d68933f6	procedure TLexer.MergeCompoundKeywords;
-../Phosphor/engine/PhosphorLexer.pas:207-209	532efb2378427822	end
-../Phosphor/engine/PhosphorLexer.pas:215-219	692d7850dd379b00	Inc(i, 2);
-../Phosphor/engine/PhosphorLexer.pas:265-292	1f156dd30e8293b1	// number
-../Phosphor/engine/PhosphorLexer.pas:394-404	f74f41e511f21a4a	case FSrc[FPos + 1] of
-../Phosphor/engine/PhosphorLexer.pas:420-435	e7c5a060d3c04052	end
-../Phosphor/engine/PhosphorLexer.pas:444-470	2e036451085954f3	// identifier (with optional trailing type suffix), or keyword
-../Phosphor/engine/PhosphorLexer.pas:448-451	79aad005c1183b5f	while (FPos <= len) and IsIdentChar(FSrc[FPos]) do Inc(FPos);
-../Phosphor/engine/PhosphorLexer.pas:452-452	4cacf667e2096beb	s := LowerCase(Copy(FSrc, n, FPos - n));
-../Phosphor/engine/PhosphorLexer.pas:453-453	dc699a33e1c5eeb0	if s = 'rem' then
-../Phosphor/engine/PhosphorLexer.pas:453-458	147a2ee81562459c	if s = 'rem' then
-../Phosphor/engine/PhosphorLexer.pas:459-460	7999a00f5548372a	if s = 'mod' then
-../Phosphor/engine/PhosphorLexer.pas:90-98	6a6a9aff770908dc	function IsIdentStart(C: Char): Boolean; inline;
-../Phosphor/engine/PhosphorOpcodes.pas:126-152	755a57f3bf67d78d	Entry: Integer;
-../Phosphor/engine/PhosphorRegistry.pas:220-228	bc8777b940cab88f	{ The guards are the registry's own objects; nothing outside holds one, and a
-../Phosphor/engine/PhosphorVM.pas:1585-1589	4429753f8e88dc45	begin
-../Phosphor/engine/PhosphorVM.pas:1722-1722	71fa3514944f7d26	((Fmt[i] = '+') and (i < n) and (Fmt[i + 1] in ['#', '.', '$', '*'])) or
-../Phosphor/engine/PhosphorVM.pas:177-177	cddb2e3f650b3bfa	CallerStmtPC, CallerStmtSP, CallerStmtFrameSP: Integer;
-../Phosphor/engine/PhosphorVM.pas:2020-2024	0ee505add4f97be0	// settles it and the resume of any later one does not. See RestoreOverlap.
-../Phosphor/engine/PhosphorVM.pas:2030-2036	42874bde5ec81c3e	range inventedFrom .. inventedTo, empty when inventedFrom is MaxInt. Exactly
-../Phosphor/engine/PhosphorVM.pas:206-206	e40b6fdb1e748173	the arrival of a fifth action a change to the state machine.
-../Phosphor/engine/PhosphorVM.pas:2256-2260	08b9bd962dbfb18d	TWO RULES THIS ACTIVATION MUST RESPECT.
-../Phosphor/engine/PhosphorVM.pas:2558-2558	8bbb0310698d23fc	bTmp := False;
-../Phosphor/engine/PhosphorVM.pas:374-374	a2424c186f1ad8d0	and the pc of the boundary. Those four are ONE value in four fields: a step
-../Phosphor/engine/PhosphorVM.pas:3751-3751	e6f07d43b5c21db0	begin
-../Phosphor/engine/PhosphorValue.pas:633-633	0f9d0b2d99d6030d	concatenation, EAccessViolation, and EStackOverflow, and report each of them
-../Phosphor/engine/PhosphorValue.pas:73-74	e98e04fb9e96ac0a	and simply continues. The seam MUST NOT block: the engine treats it as a
-../Phosphor/engine/libs/PhosphorDictLib.pas:47-53	937de134e3f245a9	{ Each entry's hash, taken once when the entry is made and carried beside
-../Phosphor/host/console/phosphor.lpr:1760-1770	3678a6b182fa8071	STOP-AT-ENTRY IS ASKED FOR ONCE, AND ONLY BEFORE THE PROGRAM STARTS. The VM
-../Phosphor/host/console/phosphor.lpr:4156-4156	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
-../Phosphor/host/console/phosphor.lpr:867-887	5e9b8ddac1bf6d5b	{ Reads a whole file as raw bytes and strips a leading UTF-8 BOM if present, so
-../Phosphor/scripts/build.ps1:67-69	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
-../Phosphor/scripts/check-seams.py:98-98	14b1846b246f3bde	# report-and-continue; there is nowhere for a host to pause to" -- which is
-../Phosphor/tests/debug_protocol_test.py:143-143	7f9629fae2691404	caps.get('setVariable') is False, str(caps))
 src/core/udebugproto.pas:108-108	f7321e3307743907	Line: Integer;
 src/core/udebugproto.pas:109-109	3cad279a8445c86c	end;
 src/core/udebugproto.pas:110-110	d4dcb1753ba80358	TPdbpFrames = array of TPdbpFrame;
@@ -104,8 +50,8 @@ src/core/uphosphorrun.pas:752-756	4fe25746e739c3b3	{ ExitCode, not ExitStatus. O
 src/core/uphosphorrun.pas:773-773	e3b0c44298fc1c14	
 src/core/uphosphorrun.pas:81-108	c4da38090a6b309c	protected
 src/core/uphosphorsettings.pas:278-278	a127a959b6bc21d3	function TPhosphorSettings.GetRecentCount: Integer;
-src/core/usynphosphor.pas:24-31	6e9a638df26ca96d	WHAT IT DELIBERATELY GETS WRONG. Phosphor's lexer has NO keyword table -- every
-src/core/usynphosphor.pas:5-12	abe3e2dc52151184	WHY THERE IS NO RANGE STATE. A SynEdit highlighter normally has to carry state
+src/core/usynphosphor.pas:24-31	8b8687d3ea23a45b	WHAT IT DELIBERATELY GETS WRONG. Phosphor's lexer has NO keyword table -- every
+src/core/usynphosphor.pas:5-12	bdb0549f59e76635	WHY THERE IS NO RANGE STATE. A SynEdit highlighter normally has to carry state
 src/phosphoride.lpr:40-41	4676b961ee761e29	A hand-written .lfm that names a component the .pas does not publish streams
 src/phosphoride.lpr:5-10	b8f150e9ccef2120	This program never links the Phosphor engine. It edits text and it spawns the
 src/phosphoride.lpr:668-668	b0d7362318c9e966	Application.Scaled := True;

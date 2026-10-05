@@ -9,7 +9,7 @@ unit uphosphorfold;
   WHY THIS UNIT EXISTS AT ALL, and it is the whole of roadmap item 17's warning.
   `usynphosphor.pas:24-31` records that Phosphor decides keywords by POSITION --
   the lexer has no keyword table, every keyword reaches the parser as an ordinary
-  identifier (`engine/PhosphorLexer.pas:444-470`), and `next = 5` is a legal
+  identifier (`engine/PhosphorLexer.pas#TLexer.Tokenize`), and `next = 5` is a legal
   assignment. It says in as many words that nothing downstream may assume a
   coloured keyword IS a keyword. A fold engine built on the colouring would
   therefore mis-fold a legal program, and the failure mode of a mis-fold is TEXT
@@ -36,9 +36,9 @@ unit uphosphorfold;
                                        is then" opens a fold that never closes.
 
     else if n = 2 then ... endif       `else if` is ONE token to the lexer
-                                       (`engine/PhosphorLexer.pas:207-209`), so
-                                       this needs exactly ONE endif. Treating the
-                                       `if` as an opener leaves the first one
+                                       (`engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords`),
+                                       so this needs exactly ONE endif. Treating
+                                       the `if` as an opener leaves the first one
                                        unclosed.
 
     if n = 1 then / ... / end if       THE TWO-WORD TERMINATOR is at the
@@ -50,15 +50,15 @@ unit uphosphorfold;
 
   1. Strings and comments are stripped first. `'` and `rem` run to end of line and
      a string that reaches one is the hard error `unterminated string`
-     (`engine/PhosphorLexer.pas:420-435`), which is why ONE LINE is enough state.
+     (`engine/PhosphorLexer.pas#TLexer.Tokenize`), which is why ONE LINE is enough state.
   2. A word counts only where a statement may begin: the line's start, after a
      `:` at bracket depth 0, after `then`, after `else`.
   2a. AND A STATEMENT POSITION HAS A LEVEL. An integer is a LABEL where a
      statement may begin at PROGRAM level -- a line's start, or after a `:`
-     (`engine/PhosphorCompiler.pas:3004-3013`) -- and a label leaves the
-     position open, so `x = 1 : 20 function h()` runs. After `then` or `else`
-     the position is a statement's but not the program's, an integer there is an
-     expression rather than a label, and `if x > 0 then 20 function f()` is
+     (`engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile`) -- and a label
+     leaves the position open, so `x = 1 : 20 function h()` runs. After `then` or
+     `else` the position is a statement's but not the program's, an integer there
+     is an expression rather than a label, and `if x > 0 then 20 function f()` is
      refused. This is what the two copies of the rule disagreed about; see the
      paragraph on item 18 below.
   2b. AND THERE IS ONLY ONE NUMERIC LABEL PER POSITION. `10 20 function f()` is
@@ -276,7 +276,8 @@ function BlockOpenedBy(const AWord: String): TPhosphorBlock;
 function BlockClosedBy(const AWord: String): TPhosphorBlock;
 
 { The single word `end` merges with, or '' -- `end if` is `endif`, and the two
-  must be ADJACENT in the token stream (engine/PhosphorLexer.pas:189-224). }
+  must be ADJACENT in the token stream
+  (engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords). }
 function MergedWithEnd(const AWord: String): String;
 
 { A name for a message and for a check. }
@@ -374,9 +375,9 @@ end;
 
 function MergedWithEnd(const AWord: String): String;
 begin
-  { engine/PhosphorLexer.pas:189-224 merges exactly these four. `else if` into
-    `elseif` is the fifth and is handled in ScanFoldLine, because it is a
-    divider rather than a terminator. }
+  { engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords merges exactly these
+    four. `else if` into `elseif` is the fifth and is handled in ScanFoldLine,
+    because it is a divider rather than a terminator. }
   if AWord = 'if' then
     Result := 'endif'
   else if AWord = 'while' then
@@ -602,9 +603,10 @@ begin
 
     { THE LEXER'S MERGE PASS, mirrored: `end if` is `endif` and `else if` is
       `elseif`, and both need their two words ADJACENT in the token stream
-      (engine/PhosphorLexer.pas:189-224). Reading the second one here is what
-      makes that adjacency testable; if it does not merge it is held and handed
-      back on the next call, so nothing is lost and nothing is read twice. }
+      (engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords). Reading the
+      second one here is what makes that adjacency testable; if it does not
+      merge it is held and handed back on the next call, so nothing is lost and
+      nothing is read twice. }
     if (W = 'end') or (W = 'else') then
     begin
       WalkSkipSpace(AWalk);
@@ -629,19 +631,21 @@ begin
           this unit's own corpus had not:
 
             end end function   The lexer's merge pass advances by ONE when a
-                               pair does not merge (PhosphorLexer.pas:215-219),
+                               pair does not merge
+                               (PhosphorLexer.pas#TLexer.MergeCompoundKeywords),
                                so it retries at the SECOND `end`, which merges
                                with `function`. A word handed forward gets no
                                lookahead of its own, so the terminator was lost
-                               and the fold ran to the end of the file --
-                               exactly the failure this unit exists to prevent.
+                               and the fold ran to the end of the file -- exactly
+                               the failure this unit exists to prevent.
 
-            end rem a note      `rem` is the lexer's own (PhosphorLexer.pas:453-
-                               458) and runs to end of line. A word handed
-                               forward skipped the `rem` test below, so the
-                               COMMENT was walked as code: a `:` in it opened a
-                               program-level statement position and a `function`
-                               in it was listed in the outline pane.
+            end rem a note      `rem` is the lexer's own
+                               (PhosphorLexer.pas#TLexer.Tokenize) and runs to end
+                               of line. A word handed forward skipped the `rem`
+                               test below, so the COMMENT was walked as code: a
+                               `:` in it opened a program-level statement position
+                               and a `function` in it was listed in the outline
+                               pane.
 
           Rewinding costs one identifier re-scanned and has neither hole,
           because the second word then arrives by the one path every other word
@@ -674,8 +678,9 @@ begin
       AND THERE IS ONLY ONE OF THEM. `10 20 function f()` is refused with
       `expected end of line`, because the compiler records a label at the top of
       its statement loop and then parses a STATEMENT, not a second label
-      (engine/PhosphorCompiler.pas:3004-3013). A named label may still follow --
-      `10 head: function f()` compiles, and so does `head: 10 function f()`. }
+      (engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile). A named label may
+      still follow -- `10 head: function f()` compiles, and so does
+      `head: 10 function f()`. }
     AWalk.NextStatement := AWalk.AtStatement and AWalk.AtProgramLevel and
                            AWalk.NextLabelOk;
     AWalk.NextLabelOk := False;

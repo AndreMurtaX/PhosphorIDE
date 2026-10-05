@@ -1386,9 +1386,9 @@ begin
 
   { AN INTEGER IS A LABEL WHEREVER A STATEMENT MAY BEGIN AT PROGRAM LEVEL, and
     the compiler's own comment enumerates the four places
-    (engine/PhosphorCompiler.pas:3027-3037). All three below compile and run;
-    the first version of this scanner asked the narrower question -- is this the
-    first token of the line -- and lost two of them. }
+    (engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile). All three below
+    compile and run; the first version of this scanner asked the narrower
+    question -- is this the first token of the line -- and lost two of them. }
   Funcs := ScanOutlineText('x = 1 : 20 function h()' + LE + 'endfunction' + LE);
   CheckEqInt('a numeric label after a separator still labels a statement',
              1, Length(Funcs));
@@ -1617,7 +1617,7 @@ begin
   Group('uphosphorrepl: the prompt, and what was typed at it');
 
   { --- the prompts, exactly as the host writes them ------------------------ }
-  { Phosphor host/console/phosphor.lpr:4156 writes both on one line, and the
+  { Phosphor host/console/phosphor.lpr#Repl writes both on one line, and the
     trailing space is part of each. The five spaces before `...>` are the
     difference between a continuation that lines up under the first prompt and
     one that does not. }
@@ -2041,8 +2041,9 @@ begin
           Walked('if x then 20 function'));
 
   { --- the lexer's merge table, which is why a token can span two words ---- }
-  { engine/PhosphorLexer.pas:189-224. The walk does this because a consumer that
-    saw `end` and `if` separately would have to redo it. }
+  { engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords. The walk does this
+    because a consumer that saw `end` and `if` separately would have to redo
+    it. }
   CheckEq('end if is one token', 'endif!^', Walked('end if'));
   CheckEq('and so is else if', 'elseif!^', Walked('else if'));
   CheckEq('with any spacing', 'endif!^', Walked('end     if'));
@@ -2062,11 +2063,11 @@ begin
     and the corpus varied the words, not their neighbours.
 
     1. THE MERGE PASS RETRIES AT THE SECOND WORD. It advances by one when a pair
-       does not merge (engine/PhosphorLexer.pas:215-219), so `end end function`
-       is `end` followed by `endfunction` -- and a word handed forward gets no
-       lookahead of its own, so the terminator was LOST and the fold ran to the
-       end of the file. `function f() / return 1 / end end function / ...` runs
-       and prints. }
+       does not merge (engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords),
+       so `end end function` is `end` followed by `endfunction` -- and a word
+       handed forward gets no lookahead of its own, so the terminator was LOST
+       and the fold ran to the end of the file.
+       `function f() / return 1 / end end function / ...` runs and prints. }
   CheckEq('the second end merges with what follows it', 'end!^ endfunction',
           Walked('end end function'));
   CheckEq('and the third likewise', 'end!^ end endfunction',
@@ -2074,8 +2075,8 @@ begin
   CheckEq('else then a two-word terminator is the terminator', 'elseif!^ x then',
           Walked('else if x then'));
   { 2. `rem` IS THE LEXER'S OWN and runs to end of line
-       (engine/PhosphorLexer.pas:453-458). A word handed forward skipped the
-       `rem` test, so the COMMENT was walked as code: a `:` in it opened a
+       (engine/PhosphorLexer.pas#TLexer.Tokenize). A word handed forward skipped
+       the `rem` test, so the COMMENT was walked as code: a `:` in it opened a
        program-level statement position and a `function` in it reached the
        outline pane. `println "done" / end rem TODO: function parse$() here`
        runs, and there is no function in it. }
@@ -2894,9 +2895,11 @@ begin
     PhosphorBuiltinTier(Words[0], Tier) and (Tier = ptGui));
 
   { CASE IS FOLDED, and it is folded the way the language folds it: the lexer
-    lower-cases every identifier at tokenisation (engine/PhosphorLexer.pas:452),
-    and an identifier is ASCII (:90-98). The compare does ASCII only, on purpose,
-    and these are the cases that would have caught it doing something else. }
+    lower-cases every identifier at tokenisation
+    (engine/PhosphorLexer.pas#TLexer.Tokenize), and an identifier is ASCII
+    (engine/PhosphorLexer.pas#IsIdentChar). The compare does ASCII only, on
+    purpose, and these are the cases that would have caught it doing something
+    else. }
   Check('an upper-case keyword is still a keyword', IsPhosphorKeyword('FUNCTION'));
   Check('a mixed-case one too', IsPhosphorKeyword('FuNcTiOn'));
   Check('and a built-in', IsPhosphorBuiltin('LEN'));

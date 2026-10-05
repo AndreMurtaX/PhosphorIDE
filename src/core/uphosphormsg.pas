@@ -51,16 +51,16 @@ unit uphosphormsg;
 
      THE FIX IS AEXPECTPATH, AND A TABLE OF REFUSAL OPENINGS WAS THE TRAP. Every
      located site formats `phosphor: %s:%d: %s` with %s echoed verbatim from the
-     command line -- `../Phosphor/host/console/phosphor.lpr:855`, `:999`, `:2859`
-     and `:3233`, and there are exactly four. So a caller that knows what it
-     passed can decide by rule instead of by guess: the line is a location when it
-     opens with that path AND a separator follows at that offset, and everything
-     else under the prefix is a refusal whatever it says. A table of openings
-     would instead have matched at the position the PATH occupies, taking the jump
-     away from any file named `unhandled x.bas` or `--weird.bas` and from every
-     file in a folder called `unhandled cases` -- both measured out of the real
-     binary -- while still never reaching the three refusals that lead with the
-     echoed path.
+     command line -- `../Phosphor/host/console/phosphor.lpr#CompileFile`,
+     `phosphor.lpr#RunFile`, `phosphor.lpr#DebugProtocol` and
+     `phosphor.lpr#DebugFile`, and there are exactly four. So a caller that knows what
+     it passed can decide by rule instead of by guess: the line is a location when it
+     opens with that path AND a separator follows at that offset, and everything else
+     under the prefix is a refusal whatever it says. A table of openings would instead
+     have matched at the position the PATH occupies, taking the jump away from any
+     file named `unhandled x.bas` or `--weird.bas` and from every file in a folder
+     called `unhandled cases` -- both measured out of the real binary -- while still
+     never reaching the three refusals that lead with the echoed path.
 
      WHAT IT RESTS ON, so that whoever breaks it knows where to come: no Phosphor
      diagnostic names a file other than the one on the command line, because the
@@ -121,11 +121,11 @@ type
 const
   PhosphorDiagPrefix = 'phosphor: ';
 
-  { A SECOND PREFIX, and the editor's own debug launch is what provokes it.
-    Fourteen sites use it (`../Phosphor/host/console/phosphor.lpr:3115-4048`) and
-    this unit knew none of them, so a failed debug start reached the Output pane
-    as ordinary program text -- on exactly the path where the editor most wants
-    to surface a refusal. }
+  { A SECOND PREFIX, and the editor's own debug launch is what provokes it. Fourteen
+    sites use it (`phosphor.lpr#TDebugSession`, `phosphor.lpr#ParseBreakList`,
+    `phosphor.lpr#DebugFile`, `phosphor.lpr#RunCommandLine`) and this unit knew none
+    of them, so a failed debug start reached the Output pane as ordinary program
+    text -- on exactly the path where the editor most wants to surface a refusal. }
   PhosphorDebugPrefix = 'phosphor debug: ';
 
   PhosphorReplPrefix = 'error: ';

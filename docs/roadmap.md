@@ -344,7 +344,7 @@ default, and a return value that tells the VM what to do next.
 
 `OnBreakpoint` cannot be reused, and this is not a preference. Its contract is written into
 the type's own comment: the seam "MUST NOT block: the engine treats it as a report, never a
-wait, so no confirm-answer is returned" (`engine/PhosphorValue.pas:73-74`), and it returns
+wait, so no confirm-answer is returned" (`engine/PhosphorValue.pas#TPhosphorBreakpointProc`), and it returns
 void, so there is nothing for a debugger to answer with. Redefining it in place would change
 what `BREAKPOINT` means for every existing host, including the three with recorded
 exemptions in `scripts/check-seams.py` -- among them `phosphor.lpr:OnBreakpoint`,
@@ -685,7 +685,7 @@ Three things must be right:
   caret must be scanned by the same rule the highlighter uses, or typing `lef` and accepting
   `left$` inserts a second `$`.
 - **Case-insensitive lookup, case-preserving insertion.** Phosphor lowercases every
-  identifier as it is scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println`
+  identifier as it is scanned (`engine/PhosphorLexer.pas#TLexer.Tokenize`), so `PrintLn` and `println`
   are one word; the insertion should follow what the user typed rather than forcing lower
   case on their file.
 
@@ -967,7 +967,7 @@ jumping to its definition.
 **What makes it tractable, and what makes it a trap.** `function` and `endfunction` are
 keywords by **position**, not by lexing: Phosphor's lexer has no keyword table at all, and
 every keyword reaches the parser as an ordinary identifier
-(`src/core/usynphosphor.pas:24-31`, citing `engine/PhosphorLexer.pas:444-470`). A scanner
+(`src/core/usynphosphor.pas:24-31`, citing `engine/PhosphorLexer.pas#TLexer.Tokenize`). A scanner
 that treats the first word of a line as structural is therefore right for every ordinary
 program and wrong for a legal one.
 
@@ -1091,7 +1091,7 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
 **Two things will bite, and both are known now rather than after the fact.**
 
 - **The prompt arrives, but it is not a line, and the pane must know that.** The REPL
-  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:4156`), and the
+  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr#Repl`), and the
   runner already handles that case: `DrainTimer` counts drains in which a stream produced
   nothing and `FlushPrompt` emits the unterminated tail after two of them
   (`src/core/uphosphorrun.pas:667-681`), marked `ACompleteLine=False`; `RunnerOutput`
@@ -1224,7 +1224,7 @@ already written down in `docs/architecture.md` and in the highlighter's own head
 - **It changes the highlighter's base class and its cost model.** `TSynPhosphorSyn` derives
   from `TSynCustomHighlighter` and carries **no range state on purpose**: Phosphor has no
   block comment and no multi-line string -- a string literal reaching a newline is the hard
-  lexical error `unterminated string` (`engine/PhosphorLexer.pas:420-435`) -- so every line
+  lexical error `unterminated string` (`engine/PhosphorLexer.pas#TLexer.Tokenize`) -- so every line
   can be coloured by looking at that line alone, `GetRange`/`SetRange` stay the base class's
   no-ops, and editing line 10 never repaints line 400
   (`src/core/usynphosphor.pas:5-12`). SynEdit's fold support lives in a different base class
@@ -1354,7 +1354,7 @@ does not list a function for.
 
 Today that costs nothing: the program does not compile, so the cost is a fold marker in a
 file that is already red. What it costs later is the thing that has bitten this repository
-twice. Phosphor's compound-keyword table (`engine/PhosphorLexer.pas:189-224`) is a moving
+twice. Phosphor's compound-keyword table (`engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords`) is a moving
 part, `tools/gen-keywords.py --check` does not extract it, and a change there will be fixed
 in ONE of the two copies. From then on the outline pane and the fold gutter disagree about
 where the same `function` ends, in the same window, on the same buffer -- one jumps to a
@@ -2086,7 +2086,7 @@ froze the roadmap -- forty-three citations stopped being checked and the run sai
 only as a smaller total. A gate that switches itself off quietly is worse than no gate.
 A declaration belongs where a reader looks for one. **What I did NOT do is mine
 its citation corrections**, and that is the honest gap: it fixed ranges like
-`PhosphorCompiler.pas:601-645` to `:623-632` against the Phosphor of 2026-09-16, and
+lines 601-645 of `PhosphorCompiler.pas` to lines 623-632 against the Phosphor of 2026-09-16, and
 Phosphor has changed since -- items 25 and 26 edited `PhosphorVM.pas` and
 `phosphor.lpr` in this session alone. Applying those numbers unread would be
 re-introducing rot with a straight face. They are worth a read against today's tree and
@@ -2105,7 +2105,7 @@ where its text went.
 
 **IT FOUND ROTTED CITATIONS ON ITS FIRST RUN**, and they are fixed in the same commit:
 `phosphor.lpr` line 3017, cited for the REPL prompt, had become frame-label printing in
-the debug state dump. The prompt is `:3746`.
+the debug state dump. The prompt was then at line 3746.
 
 **I counted those wrong twice.** A grep before writing the checker found three; I wrote
 "three". The tool found a fourth, in `docs/roadmap.md`, worded differently from the
@@ -2303,9 +2303,9 @@ exactly as the old chain answered. A second overlap arriving from a new Phosphor
 release is then a line of output somebody reads rather than a colour that changed.
 
 **ASCII IS THE LANGUAGE'S OWN RULE, not an approximation.** A Phosphor identifier is
-ASCII letters, digits and `_` (`engine/PhosphorLexer.pas:90-98`) with one of
+ASCII letters, digits and `_` (`engine/PhosphorLexer.pas#IsIdentChar`) with one of
 `$ % @ ?` as a suffix, and the lexer folds it with `LowerCase`
-(`engine/PhosphorLexer.pas:452`). Folding one character is a compare and an add; the
+(`engine/PhosphorLexer.pas#TLexer.Tokenize`). Folding one character is a compare and an add; the
 table entries are written lower case by the generator, so only the probe needs it.
 
 **And the citation gate caught this change, in the same session it was built.**
@@ -2373,8 +2373,10 @@ wrong shape.**
 **WHAT WAS BUILT INSTEAD IS THE PATH THE CALLER PASSED.** There is exactly one
 call to `ParsePhosphorMessage` in the editor, and `FRunPath` is already in scope
 one line above it. Every located site formats `phosphor: %s:%d: %s` with `%s`
-echoed verbatim from the command line -- `../Phosphor/host/console/phosphor.lpr:855`,
-`:999`, `:2859`, `:3233`, and there are exactly four. So the question stops being
+echoed verbatim from the command line -- `../Phosphor/host/console/phosphor.lpr#CompileFile`,
+`../Phosphor/host/console/phosphor.lpr#RunFile`,
+`../Phosphor/host/console/phosphor.lpr#DebugProtocol`,
+`../Phosphor/host/console/phosphor.lpr#DebugFile`, and there are exactly four. So the question stops being
 a guess: **the line is a location when it opens with that path and a separator
 follows at that offset; everything else under the prefix is a refusal, whatever it
 says.** That closes every forgery, including the three no table could reach, and

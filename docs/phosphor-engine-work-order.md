@@ -97,12 +97,12 @@ calling statement is silently dropped, also exit 0. Reproduce both.
 
 **Where the repair belongs.** Your own compiler comment already says: *"closing it belongs
 to the VM, which can see at fault time what this site cannot -- that a handler jump
-crossed a frame boundary"* (`PhosphorCompiler.pas:725-727`). The VM holds both frame
+crossed a frame boundary"* (`PhosphorCompiler.pas#TPhosphorCompiler.AddGoto`). The VM holds both frame
 depths it needs.
 
 **Do NOT fix it at `AddGoto` in the compiler.** The first version of that guard refused
 twelve measured-correct programs, which is why the discriminator there is deliberately a
-bound and not an equivalence (`PhosphorCompiler.pas:710-712`).
+bound and not an equivalence (`PhosphorCompiler.pas#TPhosphorCompiler.AddGoto`).
 
 **Smallest version:** one check at the point control would leave the program -- fall-through
 past `FProg.Count`, and `opEnd` -- when a handler was entered and never resumed at a frame
@@ -118,10 +118,11 @@ that would catch a regression here are `tests/suite/54_onerror_reentrancy` and
 ## A2. Overload resolution is a linear scan run 2^(int args) times
 
 *Measured.* `TPhosphorRegistry.IndexOfKey` is `for i := 0 to FCount - 1 do if FKeys[i] =
-AKey then Exit(i)` with no index (`PhosphorRegistry.pas:220-228`). `Resolve` enumerates
-`for mask := 0 to (1 shl k) - 1` (`:363`), calls `IndexOfKey` once per mask (`:378`) and
-builds a fresh key each time (`:373-377`). The VM calls `Resolve` per `opCall`
-(`PhosphorVM.pas:2558`) with **no cache**. The full host registers ~1230 keys.
+AKey then Exit(i)` with no index (`PhosphorRegistry.pas#TPhosphorRegistry.IndexOfKey`,
+as of Phosphor b4f9f71). `Resolve` enumerates `for mask := 0 to (1 shl k) - 1`, calls `IndexOfKey`
+once per mask and builds a fresh key each time (all three in
+`PhosphorRegistry.pas#TPhosphorRegistry.Resolve`, as of Phosphor b4f9f71). The VM calls `Resolve`
+per `opCall` (`PhosphorVM.pas#TPhosphorVM.ExecFrom`) with **no cache**. The full host registers ~1230 keys.
 
 300,000 iterations of the same loop, shipped binary:
 
@@ -154,7 +155,7 @@ moved.
 ## A3. `str$` loses Double precision with no escape hatch
 
 *Measured.* `vkDouble: Result := FloatToStr(V.Num, InvariantFS)` -- FPC's 15-significant-digit
-default (`PhosphorValue.pas:633`). A loop computing 200 Doubles (`x = x*1.0000001 +
+default (`PhosphorValue.pas#ValToStr`, as of Phosphor b4f9f71). A loop computing 200 Doubles (`x = x*1.0000001 +
 0.000000123`) and comparing `val(str$(x))` to `x` reports **196 of 200 changed**.
 
 `print #` then `input #` is the documented way to persist a number, and it alters every
@@ -196,7 +197,7 @@ call; a beginner arriving from another BASIC writes `cls`, `err_clear`, `g`.
 `check-examples.py` cannot see it, because the block compiles.
 
 **Smallest version:** ~10 lines at the expression-statement fallback in
-`PhosphorCompiler.pas` (around `:2448`): record `FProg.Count` before `ParseExpr`, scan the
+`PhosphorCompiler.pas#TPhosphorCompiler.ParseStatementBody`: record `FProg.Count` before `ParseExpr`, scan the
 emitted range for an `opCall`, and if there is none, fail with
 `'<name>' on its own does nothing -- a call needs parentheses: <name>()`.
 
@@ -234,7 +235,8 @@ is an identifier, say that this loop's variable does not belong there.
 ## A6. The dictionary is a linear array
 
 *Measured.* `TPhosphorDict.IndexOf` is `for i := 0 to Count - 1 do if Keys[i] = AKey then
-Exit(i)` (`PhosphorDictLib.pas:47-53`), called by `SetVal` on every set (`:58`) and by
+Exit(i)` (`PhosphorDictLib.pas#TPhosphorDict.IndexOf`, as of Phosphor b4f9f71), called by `SetVal` on
+every set (`PhosphorDictLib.pas#TPhosphorDict.SetVal`) and by
 `Remove` on every delete. Inserting n distinct keys with `dict_set@`: **n=8000 352 ms,
 n=16000 956 ms, n=32000 3169 ms** -- quadratic.
 
@@ -285,10 +287,11 @@ are wrong**, corrected in B2 and B1 below.
 The engine already emits a per-statement boundary opcode carrying the source line:
 
 - emitted once per statement by `ParseStatement`:
-  `stmtIdx := FProg.Emit(opStmt, 0, 0, FLex.Cur().Line);` (`PhosphorCompiler.pas:2049`),
-  patched at `:2051` with the pc the statement ends at;
+  `stmtIdx := FProg.Emit(opStmt, 0, 0, FLex.Cur().Line);`
+  (`PhosphorCompiler.pas#TPhosphorCompiler.ParseStatement`), patched two lines later in
+  the same routine with the pc the statement ends at;
 - its VM handler already records the exact triple a stepper needs
-  (`PhosphorVM.pas:2256-2260`):
+  (the `opStmt` arm of `PhosphorVM.pas#TPhosphorVM.ExecFrom`):
 
 ```pascal
 opStmt:
@@ -324,7 +327,7 @@ println "after"
 ```
 
 The seam is nil in `host/console/phosphor.lpr`, with the exemption recorded at
-`scripts/check-seams.py:98`.
+`scripts/check-seams.py#EXEMPT` (as of Phosphor b4f9f71).
 
 **Do:** about fifteen lines in `phosphor.lpr` filling `OnBreakpoint`, writing one line per
 fired breakpoint to **stderr** in the diagnostic shape the host already uses. Delete the
@@ -347,23 +350,28 @@ under `phosphortest.lpr`, which stays exempt and installs no seam.
 
 **PDBP's `variables` request is unimplementable today, and PDBP does not know it.** The
 compiled program carries **no variable names at all**: `TProgram` declares `VarCount` and
-`VarTypes` and no name table (`PhosphorOpcodes.pas:126-152`); `TUserFunc` declares
-`Name, Entry, ParamCount, LocalTypes, RetType` and no local names (`:115-122`). The
-compiler *has* them and throws them away -- `FVarNames` (`PhosphorCompiler.pas:74`) and
-`FLocalNames` (`:84`) are compiler fields only.
+`VarTypes` and no name table (`PhosphorOpcodes.pas#TProgram`); `TUserFunc` declares
+`Name, Entry, ParamCount, LocalTypes, RetType` and no local names
+(`PhosphorOpcodes.pas#TUserFunc`) (as of Phosphor b4f9f71). The compiler *has* them and throws them
+away -- `FVarNames` (`PhosphorCompiler.pas#TPhosphorCompiler.FVarNames`) and
+`FLocalNames` (`PhosphorCompiler.pas#TPhosphorCompiler.FLocalNames`) are compiler fields
+only (as of Phosphor b4f9f71).
 
 **Do:**
 
 - add `VarNames: array of String` to `TProgram` and `LocalNames: array of String` to
   `TUserFunc`; populate in `VarIndex` and the local allocator;
 - **do NOT serialise them, and do NOT bump `PBC_VERSION`.** `PBC_VERSION = 1`
-  (`PhosphorBytecode.pas:36`) and `LoadProgram` hard-refuses any other version (`:571-572`)
+  (`PhosphorBytecode.pas#PBC_VERSION`) and `LoadProgram` hard-refuses any other version
+  (`PhosphorBytecode.pas#ReadProgram`)
   -- a bump bricks every packed executable. `phosphor debug <file.bas>` compiles in-process,
   so `TProgram` has the names without the format being involved. `ValidateProgram` must
   then tolerate `Length(VarNames)` of either 0 (a loaded `.pbc`) or `VarCount` (a freshly
-  compiled program); it asserts the parallel rule for `VarTypes` at `:395`, so decide this
+  compiled program); it asserts the parallel rule for `VarTypes`
+  (`PhosphorBytecode.pas#ValidateProgram`), so decide this
   deliberately rather than copying;
-- filter out the compiler's hidden temporaries -- `FHidden` (`PhosphorCompiler.pas:77`)
+- filter out the compiler's hidden temporaries -- `FHidden`
+  (`PhosphorCompiler.pas#TPhosphorCompiler.FHidden`)
   counts compiler-generated globals such as a SELECT subject -- so a variables pane never
   shows them;
 - add the read-only surface on `TPhosphorVM`: `DbgFrameDepth`, `DbgFrameFunc(i)`,
@@ -371,7 +379,8 @@ compiler *has* them and throws them away -- `FVarNames` (`PhosphorCompiler.pas:7
   debug seam is on the stack; document that lifetime the way `ContainFaults` documents
   its own;
 - **`TPhosphorEngine` does not keep a handle on the running VM** -- `Run` creates it as a
-  local (`PhosphorEngine.pas:313, :324`). Add a private `FLiveVM`, set immediately after
+  local (`PhosphorEngine.pas#TPhosphorEngine.Run`, as of Phosphor b4f9f71). Add a private `FLiveVM`,
+  set immediately after
   `ConfigureVM`, and cleared **in the existing `finally`**, not after the `if`, or an
   accessor called after the run reads a freed VM;
 - add `function TPhosphorEngine.StoppableLines: TIntegerDynArray` -- a walk collecting
@@ -390,8 +399,10 @@ is useful with no debugger at all.
 
 ## B2. The seam, the hook, and the step state machine -- the risky step
 
-**The seam.** In `PhosphorValue.pas`, after `TPhosphorBreakpointProc` (`:75-76`) -- it must
-come after `TValue` in the same type block, which the playbook records at `:2688-2691`:
+**The seam.** In `PhosphorValue.pas`, after `TPhosphorBreakpointProc`
+(`PhosphorValue.pas#TPhosphorBreakpointProc`) -- it must come after `TValue` in the same
+type block, which the playbook records in its retrospective entry for 2026-09-02, round 2
+(`15_breakpoint_degrade`):
 
 ```pascal
 { Why a debugger stopped, and what it wants next. daRun resumes until the next
@@ -403,10 +414,11 @@ TPhosphorDebugProc = function(AReason: TPhosphorStopReason; ALine: Integer;
                               AFrameDepth: Integer): TPhosphorDebugAction of object;
 ```
 
-On `TPhosphorVM`, beside `OnBreakpoint` (`PhosphorVM.pas:374`): `OnDebug`, plus
+On `TPhosphorVM`, beside `OnBreakpoint` (`PhosphorVM.pas#TPhosphorVM.OnBreakpoint`): `OnDebug`, plus
 `ArmDebug(const ALines: array of Integer; AStopAtEntry: Boolean)` and `InterruptDebug`
 (one Boolean write, safe from the host's socket thread -- that is `pause`, for free). On
-`TPhosphorEngine`, a forwarded property, one line in `ConfigureVM` beside `:302`.
+`TPhosphorEngine`, a forwarded property, one line in `ConfigureVM` beside the other seam
+assignments (`PhosphorEngine.pas#TPhosphorEngine.ConfigureVM`).
 
 Give the VM the **line set**, not a callback per boundary: that is what keeps `continue`
 fast during a session, and the engine still knows nothing about breakpoints -- to it the
@@ -431,25 +443,27 @@ captured when the step command was given.
 **Cost when nothing is attached.** One never-taken branch, on an arm reached once per
 statement -- measured at one `opStmt` per 14 executed instructions in a tight loop. Compare
 against the two shapes this project has already costed: one test *per instruction* was
-3-4% and was deleted as decoration (`PhosphorVM.pas:2020-2024`); tests added to existing
-case arms measured at *no cost at all* (`:2045-2053`). Prove it the same way: three runs
+3-4% and was deleted as decoration; tests added to existing case arms measured at *no
+cost at all* (both notes are in `PhosphorVM.pas#TPhosphorVM.ExecFrom`). Prove it the same way: three runs
 of a fixed tight-loop fixture on pristine and on patched, both OSes, numbers in the commit
 message.
 
 **`stepOut` must be clamped at the re-entrancy floor.** `ExecFrom` stops when the frame
 stack returns to `AStopFrameSP`, the bound that lets `CallUserFunc` invoke a BASIC routine
-re-entrantly (`PhosphorVM.pas:1585-1589, :2992, :3004`). Pass `AStopFrameSP` into
+re-entrantly (`PhosphorVM.pas#TPhosphorVM.ExecFrom`,
+`PhosphorVM.pas#TPhosphorVM.CallUserFunc`). Pass `AStopFrameSP` into
 `DebugPoll` and clamp: `if FDbgDepth <= AStopFrameSP + 1 then treat daStepOut as daRun for
 this activation`.
 
 **Step state must not survive an ON ERROR unwind.** Wherever `FFrameSP` is assigned
-wholesale (`:1833`, and `RestoreOverlap` at `:1647`), set `FDbgDepth` to the new `FFrameSP`
+wholesale (in `Fault`, `PhosphorVM.pas#Fault`, and in `RestoreOverlap`,
+`PhosphorVM.pas#RestoreOverlap` -- both nested in `ExecFrom`), set `FDbgDepth` to the new `FFrameSP`
 and force `dmStepInto`, so the next boundary stops and the user sees where the handler
 took them. **This is the highest-risk piece of the whole plan** -- it touches the resume
 machinery the playbook records as having gone wrong twice.
 
 **A blocking seam corrupts `TimeoutMs`**, which is wall-clock and sampled from a tick taken
-once per run (`:2030-2036`). Inside `DebugPoll`, sample `GetTickCount64` before the seam
+once per run (`PhosphorVM.pas#TPhosphorVM.ExecFrom`). Inside `DebugPoll`, sample `GetTickCount64` before the seam
 and `Inc(FStartTick, elapsed)` after it. `MaxSteps` is an instruction count and is correct
 by construction. Say which of the four ceilings needed correcting in the seam's header, so
 the next reader does not rediscover it. Wrap the seam call in a `try/except` so a socket
@@ -465,9 +479,11 @@ back.
 ## B3. `phosphor debug --port N [--stop-at-entry] <file.bas>`
 
 All of it in `host/console/phosphor.lpr`, beside the existing subcommand dispatch
-(`RunCommandLine` at `:1317`, with `compile` at `:1384` and `pack` at `:1418` as the
+(`phosphor.lpr#RunCommandLine`, with its `compile` and `pack` branches as the
 template). The engine must not learn what JSON is -- and note that the boundary check is a
-uses-clause scan for platform and GUI units only (`scripts/build.ps1:67-69`), so it would
+uses-clause scan for platform and GUI units only (the `$forbidden` list of
+`scripts/build.ps1`, as of Phosphor b4f9f71; it now lives in `scripts/lib/boundary.ps1`),
+so it would
 *not* catch `uses fpjson` in the engine. What keeps the protocol in the host is the
 architecture rule, not a gate. Keep it there anyway.
 
@@ -484,7 +500,8 @@ host by looking for a line beginning `phosphor debug`, which is a fact about the
 front of it rather than a version guess.
 
 `check-seams.py` will fail six hosts the moment `OnDebug` is declared, because it derives
-seam types structurally (`:69-71, :200-210`). Budget five new EXEMPT entries with real
+seam types structurally (`scripts/check-seams.py#seam_types`,
+`scripts/check-seams.py#engine_seams`). Budget five new EXEMPT entries with real
 reasons (`phosphortest.lpr:OnDebug`: *headless: a suite run has no debugger to answer*, and
 the same for the gui/pkg/http runners and `phosphorembed.lpr`).
 
@@ -506,7 +523,7 @@ explained absence.
 
 **Run-to-cursor** needs nothing new: it is a one-shot line added to the armed set.
 **Call stack** is `DbgFrameDepth` + `DbgFrameFunc` + `DbgProgram.UserFuncs[i].Name`. Note
-that `FCallStack` (`PhosphorVM.pas:206`) is GOSUB return addresses and is **not** what a
+that `FCallStack` (`PhosphorVM.pas#TPhosphorVM.FCallStack`) is GOSUB return addresses and is **not** what a
 call stack reports.
 
 ---
@@ -514,12 +531,13 @@ call stack reports.
 # Do not
 
 - **Do not put the step check in the instruction dispatch loop.** Already measured at 3-4%
-  and deleted as decoration; the reasoning survives at `PhosphorVM.pas:2020-2024`.
+  and deleted as decoration; the reasoning survives in `PhosphorVM.pas#TPhosphorVM.ExecFrom`.
 - **Do not add an opcode for the debug boundary**, however good the zero-cost story
   sounds. It changes `Ord(High(TOpcode))`, which is written into every `.pbc` as the
-  opcode-set guard and refused on mismatch (`PhosphorBytecode.pas:284, :574-575`) -- every
+  opcode-set guard and refused on mismatch (`PhosphorBytecode.pas#WriteProgram`,
+  `PhosphorBytecode.pas#ReadProgram`) -- every
   packed executable stops loading. It also blinds `ResumeAtNextStmt`, which finds the next
-  statement by scanning for `Op = opStmt` (`PhosphorVM.pas:1722`), so `resume next` inside
+  statement by scanning for `Op = opStmt` (`PhosphorVM.pas#ResumeAtNextStmt`), so `resume next` inside
   a debugged program would silently skip statements.
 - **Do not serialise variable names into the `.pbc`** and do not bump `PBC_VERSION`.
 - **Do not carry the protocol on the child's stdout**, and do not adopt DAP. A language
@@ -531,7 +549,7 @@ call stack reports.
   violation and `Pop`'s deliberate underflow contract. Profile first; land it alone.
 - **Do not widen `coverage.py`'s glob to `host/gui/libs` and then relax its pass
   condition.** It prints *"every registered function is exercised by a test"* while its
-  libs list (`:141-142`) never reaches `host/gui/libs`. Widen it, take the red, close each
+  libs list (`scripts/coverage.py#main`, as of Phosphor b4f9f71) never reaches `host/gui/libs`. Widen it, take the red, close each
   name. Turning a narrow-but-true claim into a broad-and-false one is the worse outcome.
 - **Do not renumber the exit codes** to give a syntax error its own. Carry the distinction
   in the message.

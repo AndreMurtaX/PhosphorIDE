@@ -169,14 +169,15 @@ def collect(phosphor_root):
 # The word lists that are NOT in a registry.
 #
 # Phosphor's lexer has no keyword table at all -- it emits every one of these as
-# a plain identifier and the PARSER decides, from position, whether the word is a
-# keyword (engine/PhosphorLexer.pas:444-470). So there is nothing to extract:
-# the authority is TPhosphorCompiler.IsReservedWord, and these lists are checked
-# against it by hand when Phosphor changes. `rem` and `mod` are the only two
-# words the lexer itself owns.
+# a plain identifier and the PARSER decides, from position, whether the word is
+# a keyword (engine/PhosphorLexer.pas#TLexer.Tokenize). So there is nothing to
+# extract: the authority is TPhosphorCompiler.IsReservedWord, and these lists
+# are checked against it by hand when Phosphor changes. `rem` and `mod` are the
+# only two words the lexer itself owns.
 # ---------------------------------------------------------------------------
 
-# Everything IsReservedWord holds (engine/PhosphorCompiler.pas:421-448), minus the
+# Everything IsReservedWord holds
+# (engine/PhosphorCompiler.pas#TPhosphorCompiler.IsReservedWord), minus the
 # word-operators and literals below, plus the words deliberately left OUT of that
 # list so they stay usable as label names but which are still keywords in context:
 # as, output, append, binary (inside OPEN), using (after PRINT), error (in ON
@@ -189,17 +190,21 @@ KEYWORDS = """
     wend while
 """.split()
 
-# Word operators. `mod` is special: the lexer turns it into an operator token, so
-# unlike every other word here it can never be a variable (PhosphorLexer.pas:459-460).
+# Word operators. `mod` is special: the lexer turns it into an operator token,
+# so unlike every other word here it can never be a variable
+# (PhosphorLexer.pas#TLexer.Tokenize).
 OPERATORS = 'and mod not or'.split()
 
-# `true` and `false` are parser-level (PhosphorCompiler.pas:796-797). `null` is a
-# keyword ONLY inside a JSON literal (PhosphorCompiler.pas:932-936).
+# `true` and `false` are parser-level
+# (PhosphorCompiler.pas#TPhosphorCompiler.ParsePrimary). `null` is a keyword ONLY
+# inside a JSON literal (PhosphorCompiler.pas#TPhosphorCompiler.ParseJsonLiteral).
 LITERALS = 'false null true'.split()
 
 # Four names the compiler handles as special forms rather than registry lookups,
-# and which a user function may not shadow (engine/PhosphorCompiler.pas:461-469,
-# 800-832). They are in no registry, so nothing above finds them.
+# and which a user function may not shadow
+# (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseFunction,
+# engine/PhosphorCompiler.pas#TPhosphorCompiler.ParsePrimary). They are in no
+# registry, so nothing above finds them.
 #
 # AND THEY CARRY NO SIGNATURE, deliberately. There is none to extract: the
 # compiler parses them in its own code rather than looking them up, so writing
@@ -227,8 +232,8 @@ HEADER = """unit uphosphorlang;
   only where a graphical session was reachable when the program started, so a
   program that calls one is portable in a way `print` is not.
 
-  Lookup is case-insensitive: Phosphor lowercases every identifier as it is
-  scanned (engine/PhosphorLexer.pas:452), so `PrintLn` and `println` are one word.
+  Lookup is case-insensitive: Phosphor lowercases every identifier as it is scanned
+  (engine/PhosphorLexer.pas#TLexer.Tokenize), so `PrintLn` and `println` are one word.
   A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
   word, not `left` followed by an operator.
 }
@@ -423,9 +428,9 @@ var
   needs folding, and folding one character is a compare and an add.
 
   ASCII IS NOT AN APPROXIMATION HERE, IT IS THE LANGUAGE'S OWN RULE. A Phosphor
-  identifier is ASCII letters, digits and `_` (engine/PhosphorLexer.pas:90-98)
-  with one of `$ % @ ?` allowed as a suffix, and the lexer folds it with
-  LowerCase (engine/PhosphorLexer.pas:452). A word that could reach this function
+  identifier is ASCII letters, digits and `_` (engine/PhosphorLexer.pas#IsIdentChar)
+  with one of `$ % @ ?` allowed as a suffix, and the lexer folds it with LowerCase
+  (engine/PhosphorLexer.pas#TLexer.Tokenize). A word that could reach this function
   with a non-ASCII letter in it is not a word the parser would accept.
 
   Answers <0, 0 or >0, comparing byte by byte and then by length -- which is the

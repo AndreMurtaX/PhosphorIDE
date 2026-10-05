@@ -94,7 +94,7 @@ One case the fix must get right, and it is the reason `stopAtEntry` is in the ta
 above: when the editor **did** ask for an entry stop and a breakpoint is armed on that
 same first statement, exactly **one** `stopped` event may be sent. Two would make the
 editor look as though it stopped twice for one statement — which is the defect
-`phosphor.lpr:1760-1770` already records having fixed once, for re-arming mid-run.
+`phosphor.lpr#TDebugProto.Arm` already records having fixed once, for re-arming mid-run.
 
 ### How to know it is fixed
 
@@ -133,9 +133,9 @@ return line per frame."*
 
 ### Why that sentence is now too pessimistic
 
-**The data is already recorded.** `TCallFrame` (`engine/PhosphorVM.pas:177`) carries
+**The data is already recorded.** `TCallFrame` (`engine/PhosphorVM.pas#TCallFrame`) carries
 `CallerStmtPC`, written at every user-function call from the caller's live statement
-boundary (`:3208`, `FFrames[FFrameSP].CallerStmtPC := stmtPC`) so that a fault after the
+boundary (`engine/PhosphorVM.pas#TPhosphorVM.ExecFrom`, `FFrames[FFrameSP].CallerStmtPC := stmtPC`) so that a fault after the
 call returns can resume in the caller. `FProg.Instr(pc).Line` turns any pc into a line.
 Nothing new has to be stored and no hot path is touched: this is a read, at the moment
 a stopped editor asks a question.
@@ -143,11 +143,12 @@ a stopped editor asks a question.
 ### The fix this asks for
 
 **Engine** — one accessor beside the existing ones (`DbgFrameFunc` is at
-`engine/PhosphorVM.pas:3751`):
+`engine/PhosphorVM.pas#TPhosphorVM.DbgFrameFunc`):
 
 ```pascal
 { The line in the CALLER from which frame AFrame was entered. -1 when there is no
-  such frame, or when the frame carries no caller boundary (:4542 sets -1). }
+  such frame, or when the frame carries no caller boundary
+  (engine/PhosphorVM.pas#TPhosphorVM.CallUserFunc sets -1). }
 function DbgFrameCallerLine(AFrame: Integer): Integer;
 ```
 

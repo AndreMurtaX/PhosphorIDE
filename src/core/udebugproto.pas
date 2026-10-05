@@ -12,13 +12,13 @@ unit udebugproto;
   still holds; only its opening claim went stale.
 
   ~~NOTHING SPEAKS IT YET. The shipping phosphor host cannot pause a running
-  program: its BREAKPOINT seam is documented as report-and-continue and "must
-  never block" (engine/PhosphorValue.pas:73-74), the VM has no step API, and the
-  console host does not install the seam at all.~~ So this unit encodes and decodes
-  a conversation that -- when it was written -- had no counterpart, deliberately,
-  because the wire format is the half that two independent implementations have to
-  agree on, and it is the half that can be pinned down and tested before either
-  end exists to argue with.
+  program: its BREAKPOINT seam is documented as report-and-continue and "must never
+  block" (engine/PhosphorValue.pas#TPhosphorBreakpointProc), the VM has no step
+  API, and the console host does not install the seam at all.~~ So this unit
+  encodes and decodes a conversation that -- when it was written -- had no
+  counterpart, deliberately, because the wire format is the half that two
+  independent implementations have to agree on, and it is the half that can be
+  pinned down and tested before either end exists to argue with.
 
   WHY NOT DAP. The Debug Adapter Protocol would bring an editor-agnostic
   ecosystem, and it is the right answer if PhosphorIDE is ever not the only

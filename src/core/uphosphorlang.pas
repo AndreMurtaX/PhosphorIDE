@@ -16,8 +16,8 @@ unit uphosphorlang;
   only where a graphical session was reachable when the program started, so a
   program that calls one is portable in a way `print` is not.
 
-  Lookup is case-insensitive: Phosphor lowercases every identifier as it is
-  scanned (engine/PhosphorLexer.pas:452), so `PrintLn` and `println` are one word.
+  Lookup is case-insensitive: Phosphor lowercases every identifier as it is scanned
+  (engine/PhosphorLexer.pas#TLexer.Tokenize), so `PrintLn` and `println` are one word.
   A name's type suffix ($ % @ ?) is PART of the name and is kept -- `left$` is the
   word, not `left` followed by an operator.
 }
@@ -1170,9 +1170,9 @@ var
   needs folding, and folding one character is a compare and an add.
 
   ASCII IS NOT AN APPROXIMATION HERE, IT IS THE LANGUAGE'S OWN RULE. A Phosphor
-  identifier is ASCII letters, digits and `_` (engine/PhosphorLexer.pas:90-98)
-  with one of `$ % @ ?` allowed as a suffix, and the lexer folds it with
-  LowerCase (engine/PhosphorLexer.pas:452). A word that could reach this function
+  identifier is ASCII letters, digits and `_` (engine/PhosphorLexer.pas#IsIdentChar)
+  with one of `$ % @ ?` allowed as a suffix, and the lexer folds it with LowerCase
+  (engine/PhosphorLexer.pas#TLexer.Tokenize). A word that could reach this function
   with a non-ASCII letter in it is not a word the parser would accept.
 
   Answers <0, 0 or >0, comparing byte by byte and then by length -- which is the

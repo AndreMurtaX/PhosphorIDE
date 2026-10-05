@@ -434,7 +434,7 @@ Phosphor has neither construct:
 - `'` and `rem` run to end of line, and nothing else starts a comment. There is
   no `/* */`.
 - A string literal that reaches a newline is not a continuation. It is the hard
-  lexical error `unterminated string` (`engine/PhosphorLexer.pas:420-435`).
+  lexical error `unterminated string` (`engine/PhosphorLexer.pas#TLexer.Tokenize`).
 
 So every line can be coloured by looking at that line alone, and there is no
 lexical state to get wrong.
@@ -486,7 +486,7 @@ than waiting for the compiler to say so:
 - **An unknown backslash escape.** `"C:\temp"` is not a path, it is a tab.
   `"\x"` is not a literal backslash-x, it is the compile error `unknown escape
   sequence`. The valid set is `n t r 0 a b f v \ "`
-  (`engine/PhosphorLexer.pas:394-404`) and anything else is a defect.
+  (`engine/PhosphorLexer.pas#TLexer.Tokenize`) and anything else is a defect.
 - **An unterminated string**, which runs to end of line.
 
 For the first of these, colouring the *whole* literal red would be wrong: the
@@ -506,7 +506,7 @@ because the literal cannot then close either.
 
 **Phosphor's lexer has no keyword table.** Every keyword arrives at the parser as
 an ordinary identifier, and the parser decides from POSITION whether the word is
-a keyword (`engine/PhosphorLexer.pas:444-470`). `next = 5` and `elseif += 3` are
+a keyword (`engine/PhosphorLexer.pas#TLexer.Tokenize`). `next = 5` and `elseif += 3` are
 legal assignments to legal variables.
 
 Colouring those words as keywords everywhere is therefore *wrong*, in a way no
@@ -581,7 +581,8 @@ The unit's public counts are `PhosphorKeywordCount = 53`,
 `PhosphorBuiltinGuiCount = 426`. Core is 538 rather than 534 because four names
 are not in any registry at all: `eof`, `input$`, `loc` and `lof` are special
 forms the compiler handles directly, and a user function may not shadow them
-(`engine/PhosphorCompiler.pas:461-469, 800-832`).
+(`engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseFunction`,
+`engine/PhosphorCompiler.pas#TPhosphorCompiler.ParsePrimary`).
 
 ### The two extraction traps, both already paid for
 
@@ -627,7 +628,7 @@ a word belongs to once per identifier token on every visible line; a linear scan
 over that would be felt while scrolling.
 
 Lookup is case-insensitive because Phosphor lowercases every identifier as it is
-scanned (`engine/PhosphorLexer.pas:452`), so `PrintLn` and `println` are one word.
+scanned (`engine/PhosphorLexer.pas#TLexer.Tokenize`), so `PrintLn` and `println` are one word.
 
 ---
 
@@ -708,7 +709,7 @@ now the section above. The obstruction was in Phosphor and was structural:
 > the protocol is shaped the way it is. See `docs/debugger-lane.md`.
 
 - The engine's `BREAKPOINT` seam is documented as report-and-continue and **"must
-  never block"** (`Phosphor engine/PhosphorValue.pas:73-74`). It returns void, so
+  never block"** (`Phosphor engine/PhosphorValue.pas#TPhosphorBreakpointProc`). It returns void, so
   there is nothing for a debugger to answer it with.
 - The VM has **no step API** -- no `Step`, `OnStep`, `OnLine` or `Continue` on
   `TPhosphorEngine`, and no opcode-level trap.
@@ -938,7 +939,7 @@ where a prompt ends, and how Up and Down walk what was typed -- so
 `phosphoridetest` pins it without a window or a child process. The prompt
 literals are CITED rather than extracted, which is the documented fallback when
 there is no registry to read: they are two string literals inside a `Writeln` in
-another repository (`host/console/phosphor.lpr:4156`).
+another repository (`host/console/phosphor.lpr#Repl`).
 
 ---
 

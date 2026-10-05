@@ -22,7 +22,7 @@ text so the report can say where the lines went.
 
     python tools/check-citations.py            # check; non-zero if anything rotted
     python tools/check-citations.py --update   # re-baseline, PRINTING every change
-    python tools/check-citations.py --strict   # sibling drift is fatal too (CI)
+    python tools/check-citations.py --strict   # sibling problems are fatal too (CI)
 
 --update PRINTS WHAT IT CHANGED, and that is not a convenience. A re-baseline that
 happens quietly is how the rot comes back: somebody runs it to make the build green
@@ -44,6 +44,20 @@ read them anyway. One cited a BOM-stripping claim at six lines of GUI wiring tha
 merely ran into the right function at its tail; the other cited "re-arming schedules
 a second entry stop" at a routine about sources that fail to compile. A shifted
 number can be the right offset of the wrong thing, and no mechanism sees that.
+
+AND SINCE 2026-10-05 THE SIBLING IS CITED BY NAME, NOT BY LINE. `file#Routine`
+(or a type, a `Type.Member`, a constant) is the only form accepted into
+../Phosphor; a `file:line` there is refused outright. Two measurements decided it.
+The same three citations were re-pointed four times in one day, by offsets, as
+the sibling grew -- bookkeeping that bought nothing. And when all fifty-four
+were READ for the conversion, about fifteen already named code unrelated to the
+sentence beside them, fingerprinted and green: a citation wrong at the moment the
+lock was written is locked wrong, and this gate then DEFENDED it. A name does not
+move when lines are added above it. What the name check proves is weaker than a
+fingerprint and honest about it: the routine still EXISTS. It does not prove the
+routine still does what the sentence says -- nothing here ever proved that.
+Citations into THIS repository keep their line numbers and fingerprints: they
+move only in commits that can fix them in the same breath.
 
 WHAT THIS DOES NOT CATCH, said out loud because the item asks for it. It checks
 that a citation points at the text it pointed at before. It cannot check that the
@@ -77,9 +91,10 @@ SCAN_ROOT_FILES = ('CLAUDE.md', 'README.md')
 SCAN_EXT = ('.pas', '.lpr', '.md', '.py', '.ps1', '.sh', '.txt')
 
 # WHERE A CITED FILE IS LOOKED FOR, in order. A citation may be written with a
-# path (`engine/PhosphorLexer.pas:452`) or with a bare name (`PhosphorVM.pas:177`),
-# because both spellings are already in the tree and rewriting sixty of them to
-# suit a tool would be the tool deciding how people write prose.
+# path (`engine/PhosphorLexer.pas#TLexer.Tokenize`) or with a bare file name
+# (`PhosphorVM.pas#TCallFrame`), because both spellings are already in the tree
+# and rewriting them to suit a tool would be the tool deciding how people write
+# prose. The same holds for line citations into this repository.
 SEARCH_DIRS = (
     (SIBLING, ('engine', 'engine/libs', 'host/console', 'host/packages',
                'lazarus/demo', 'tests', 'scripts', 'docs', '')),
@@ -104,6 +119,68 @@ CITE = re.compile(
     r'\.(?:pas|lpr|inc|py|ps1|sh))'
     r':(\d+)(?:-(\d+))?'
     r'(?![0-9])')
+
+
+# A CITATION BY NAME: a source file, `#`, and a declared name -- a routine
+# (`TLexer.Tokenize`), a type, a field (`TPhosphorCompiler.FParseDone`) or a
+# constant (`PBC_VERSION`). Since 2026-10-05 this is the ONLY form allowed into the
+# sibling repository. A line number there moved every time the sibling grew -- the
+# same three citations were re-pointed four times in one day -- and, worse, a
+# number re-pointed by offset could land on the wrong thing and be fingerprinted
+# there: when every sibling citation was read for the conversion, about fifteen of
+# fifty-four named code that had nothing to do with the sentence beside them, and
+# the lock had been defending them. A name does not move when lines are added
+# above it, and when it disappears the check below says so.
+NAME_CITE = re.compile(
+    r'(?<![A-Za-z0-9_.-])'
+    r'((?:\.\./)?(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+'
+    r'\.(?:pas|lpr|inc|py|ps1|sh))'
+    r'#([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)')
+
+
+def declares(lines, name, path):
+    """Does the file DECLARE this name? Not merely mention it: a name that
+    survives only in a comment is a name whose code is gone.
+
+    Pascal is case-insensitive and the match is too. A qualified name
+    `Owner.Member` is accepted when an implementation header spells it whole
+    (`procedure TLexer.Tokenize`), or when Owner is declared as a type and Member
+    is declared -- which is how a field or a method declaration reads."""
+    ext = os.path.splitext(path)[1].lower()
+    parts = name.split('.')
+    last = re.escape(parts[-1])
+    if ext in ('.pas', '.lpr', '.inc'):
+        flags = re.I
+        member = [
+            r'^\s*(?:class\s+)?(?:procedure|function|constructor|destructor|property)'
+            r'\s+(?:[A-Za-z_]\w*\.)*' + last + r'\b',
+            r'^\s*(?:[A-Za-z_]\w*\s*,\s*)*' + last + r'\s*(?:,\s*[A-Za-z_]\w*\s*)*[:=]',
+        ]
+        owner = r'^\s*%s\s*='
+        whole = (r'^\s*(?:class\s+)?(?:procedure|function|constructor|destructor)\s+'
+                 + re.escape(name) + r'\b')
+    elif ext == '.py':
+        flags = 0
+        member = [r'^\s*def\s+' + last + r'\b', r'^\s*class\s+' + last + r'\b',
+                  r'^' + last + r'\s*=']
+        owner = r'^\s*class\s+%s\b'
+        whole = None
+    else:   # .ps1 / .sh
+        flags = re.I if ext == '.ps1' else 0
+        member = [r'^\s*function\s+' + last + r'\b', r'^\s*' + last + r'\s*\(\)',
+                  r'^\s*\$?' + last + r'\s*=']
+        owner = None
+        whole = None
+    text = '\n'.join(lines)
+    if whole and re.search(whole, text, flags | re.M):
+        return True
+    if not any(re.search(p, text, flags | re.M) for p in member):
+        return False
+    if len(parts) == 1:
+        return True
+    if owner is None:
+        return False
+    return all(re.search(owner % re.escape(q), text, flags | re.M) for q in parts[:-1])
 
 
 def norm(line):
@@ -133,6 +210,15 @@ def resolve(path):
     to retype."""
     if os.path.isabs(path):
         return path if os.path.isfile(path) else None
+    # `../Phosphor/...` NAMES THE SIBLING ITSELF. Stripping only the `../` left
+    # `Phosphor/host/...`, which exists under neither root, so every citation
+    # spelled the long way was skipped without a word -- unchecked and green,
+    # found on 2026-10-05 by the conversion to names. Mapped onto SIBLING, so a
+    # pinned checkout ($PHOSPHOR_SIBLING) is honoured here too.
+    sib = '../' + os.path.basename(os.path.normpath(SIBLING)) + '/'
+    if path.startswith(sib) or path.startswith('../Phosphor/'):
+        cand = os.path.normpath(os.path.join(SIBLING, path.split('/', 2)[2]))
+        return cand if os.path.isfile(cand) else None
     cleaned = path[3:] if path.startswith('../') else path
     for base, subs in SEARCH_DIRS:
         for sub in subs:
@@ -153,9 +239,8 @@ def read_lines(path):
         return f.read().replace('\r\n', '\n').split('\n')
 
 
-def scan():
-    """Every citation in the tree, as {key: (rel_target, lo, hi, [where])}."""
-    found = {}
+def _cited_files():
+    """Every file citations are looked for in -- and NOT a frozen one."""
     files = [os.path.join(ROOT, n) for n in SCAN_ROOT_FILES]
     for d in SCAN_DIRS:
         for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, d)):
@@ -165,15 +250,29 @@ def scan():
             for n in filenames:
                 if n.lower().endswith(SCAN_EXT):
                     files.append(os.path.join(dirpath, n))
-
+    out = []
     for f in files:
-        if not os.path.isfile(f):
-            continue
+        if os.path.isfile(f) and FROZEN not in ''.join(
+                _read_text(f).splitlines(True)[:FROZEN_HEAD]):
+            out.append(f)
+    return out
+
+
+def _read_text(f):
+    try:
+        return io.open(f, encoding='utf-8', errors='replace').read()
+    except OSError:
+        return ''
+
+
+def scan():
+    """Every citation in the tree: line citations as {key: (rel_target, lo, hi,
+    [where])}, and name citations as {(rel_target, name): [where]}."""
+    found = {}
+    named = {}
+    for f in _cited_files():
         rel_self = os.path.relpath(f, ROOT).replace('\\', '/')
-        try:
-            text = io.open(f, encoding='utf-8', errors='replace').read()
-        except OSError:
-            continue
+        text = _read_text(f)
         # A DOCUMENT ABOUT CITATIONS IS FULL OF THINGS SHAPED LIKE CITATIONS.
         # This file quotes the format; the roadmap quotes the numbers that rotted,
         # BECAUSE they rotted. Neither is a claim about a source file, and a tool
@@ -200,7 +299,16 @@ def scan():
                 found[key] = [rel, lo, hi, []]
             if rel_self not in found[key][3]:
                 found[key][3].append(rel_self)
-    return found
+        for m in NAME_CITE.finditer(text):
+            path, name = m.group(1), m.group(2)
+            target = resolve(path)
+            if target is None:
+                continue        # the same rule as a line citation: not a file here
+            rel = os.path.relpath(target, ROOT).replace('\\', '/')
+            named.setdefault((rel, name), [])
+            if rel_self not in named[(rel, name)]:
+                named[(rel, name)].append(rel_self)
+    return found, named
 
 
 def load_lock():
@@ -249,8 +357,12 @@ def main():
         # because they point at code somebody is editing today. Only the ones that
         # resolve into the sibling are skipped, and the line below says how many
         # so that "skipped" never reads as "there were none".
-        known = load_lock()
-        skipped = sum(1 for k in known if k.startswith('../Phosphor/'))
+        # COUNTED FROM THE TEXT, not from the lock: since the sibling is cited
+        # by name, none of those citations is in the lock, and counting there
+        # would report "0 not checked" for every one of them.
+        skipped = sum(1 for f in _cited_files()
+                      for m in NAME_CITE.finditer(_read_text(f))
+                      if resolve(m.group(1)) is None)
         print('citations: %s is not here, so %d citation(s) into it are NOT checked'
               % (SIBLING, skipped))
         if skipped and not update:
@@ -258,10 +370,19 @@ def main():
                   ' green build)')
         return 0
 
-    found = scan()
+    found, named = scan()
     lock = load_lock()
     entries = {}
     stale, missing, oob = [], [], []
+
+    # INTO THE SIBLING, BY NAME ONLY. A line citation there is refused outright,
+    # never fingerprinted -- see NAME_CITE for why the form changed.
+    by_line = sorted((k, found[k][3]) for k in found if k.startswith('../'))
+    found = dict((k, v) for k, v in found.items() if not k.startswith('../'))
+    unknown = []
+    for (rel, name), where in sorted(named.items()):
+        if not declares(read_lines(os.path.join(ROOT, rel)), name, rel):
+            unknown.append((rel, name, where))
 
     for key in sorted(found):
         rel, lo, hi, where = found[key]
@@ -304,7 +425,14 @@ def main():
         # there is nothing to suggest, the claim itself may be dead, and the
         # re-baseline is allowed with the old and new text in the diff for a
         # reviewer -- which is what the header promises.
-        movers = [t for t in stale if t[3]]
+        # A "move" to the line the citation already names is not a move: the
+        # first line is where it was and something LATER in the range changed.
+        # Refusing that told the editor to "write :24-31" for a citation that
+        # already said :24-31 -- an instruction that cannot be obeyed, first
+        # seen on 2026-10-05 when the conversion to names edited a citation
+        # inside a range that is itself cited.
+        movers = [t for t in stale
+                  if t[3] and t[3] != int(t[0].rpartition(':')[2].partition('-')[0])]
         if movers:
             print('REFUSED -- %d citation(s) did not rot, they MOVED. Re-stamping'
                   % len(movers))
@@ -342,6 +470,16 @@ def main():
         return 0
 
     bad = 0
+    for key, where in by_line:
+        print('LINE   %s -- a citation into the sibling must name what it cites' % key)
+        print('       write it as <file>#<Routine> (or #<Type>, #<Type.Field>, #<CONST>)')
+        print('       cited in: %s' % ', '.join(where))
+        bad += 1
+    for rel, name, where in unknown:
+        print('NAME   %s#%s -- the file declares no such name' % (rel, name))
+        print('       renamed, removed, or never there: find what the sentence means')
+        print('       cited in: %s' % ', '.join(where))
+        bad += 1
     for key, n, where in oob:
         print('STALE  %s -- the file has only %d lines' % (key, n))
         print('       cited in: %s' % ', '.join(where))
@@ -378,13 +516,15 @@ def main():
         # is the place this is supposed to be caught. This is a split by who can
         # act on it, not a relaxation -- the count is still printed, in full,
         # every time.
-        external = sum(1 for k in ([x[0] for x in oob] + [x[0] for x in stale] +
-                                   [x[0] for x in missing]) if k.startswith('../'))
+        external = (len(by_line) +
+                    sum(1 for u in unknown if u[0].startswith('../')) +
+                    sum(1 for k in ([x[0] for x in oob] + [x[0] for x in stale] +
+                                    [x[0] for x in missing]) if k.startswith('../')))
         internal = bad - external
         print('')
         print('%d citation(s) need attention. READ THE CITED LINES and either fix the'
               % bad)
-        print('number or fix the claim beside it; then run:')
+        print('number or name, or fix the claim beside it; then run:')
         print('    python tools/check-citations.py --update')
         if internal or strict:
             return 1
@@ -399,6 +539,8 @@ def main():
 
     print('citations: %d into %d file(s) still point at what they claimed'
           % (len(entries), len(set(k.rsplit(':', 1)[0] for k in entries))))
+    print('           %d by name, every one of them declared where it says'
+          % len(named))
     return 0
 
 

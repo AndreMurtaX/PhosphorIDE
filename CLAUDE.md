@@ -89,6 +89,10 @@ Nothing is done on a claim. An increment is complete when all five hold:
    the lines SAID. So `tools/citations.lock` remembers a fingerprint of each cited
    range, and a citation whose target no longer matches is a red build that names
    every file carrying it and says which line the remembered text moved to.
+   **Since 2026-10-05 that holds for citations into THIS repository only.** Into
+   `../Phosphor` the form is `file#Name` and the gate checks the name is still
+   declared there; a `file:line` into the sibling is refused -- see the citation
+   rule below for the measurements that turned it round.
    `--update` re-baselines and PRINTS each change, so accepting one leaves the old
    and new text in the commit a reviewer reads. It checks citations into THIS
    repository too, which rot faster because the code is being edited today.
@@ -290,7 +294,7 @@ the bar.
 - **A `.bas` is saved as UTF-8 with NO byte-order mark.** Still the rule, and its reason
   was wrong: measured on 2026-09-16, `phosphor run` on a BOM-saved file works, because
   the console host STRIPS a leading BOM when it reads a file
-  (`host/console/phosphor.lpr:867-887`) and has done since the first commit. What this
+  (`host/console/phosphor.lpr#ReadSource`) and has done since the first commit. What this
   file used to say -- that a BOM is `unexpected character` on line 1 -- was never true of
   that path.
 
@@ -399,7 +403,7 @@ the bar.
   function f()` is refused -- and the folder did not, so the second line opened a fold
   for a definition the outline listed nothing for, in the same window, on the same
   buffer. That cost nothing yet. What was coming is that Phosphor's compound-keyword
-  table (`engine/PhosphorLexer.pas:189-224`) is a moving part which
+  table (`engine/PhosphorLexer.pas#TLexer.MergeCompoundKeywords`) is a moving part which
   `tools/gen-keywords.py --check` does not extract, so a change there would have been
   fixed in ONE copy. **A third consumer calls the walk; it does not write a third
   scanner.** `TestWalk` in `phosphoridetest.lpr` pins the rule directly, without a
@@ -593,9 +597,9 @@ paragraph had stood "for a year": this repository's first commit is `0fe7bb4`,
 2026-09-10. It listed, among the facts that turned over, that "the `BREAKPOINT` seam
 could not block and returned void" -- which is STILL TRUE. That seam is still
 report-and-continue and still "must never block"
-(`../Phosphor/engine/PhosphorVM.pas:558`); what was added beside it is a DIFFERENT
+(`../Phosphor/engine/PhosphorVM.pas#TPhosphorVM.OnBreakpoint`); what was added beside it is a DIFFERENT
 seam, `TPhosphorDebugProc`, documented as the one that MAY BLOCK
-(`engine/PhosphorEngine.pas:146`). And it dated the turn to a single day, which the
+(`engine/PhosphorEngine.pas#TPhosphorEngine.OnDebug`). And it dated the turn to a single day, which the
 commits do not support.
 
 They were found by an adversarial pass over a correction elsewhere in the tree that
@@ -746,11 +750,22 @@ stale agent worktree under `.claude/worktrees/` holds a duplicate copy of
 the three known directories.
 
 Where extraction is not possible -- an exit code, a seam's contract, a lexer rule the
-highlighter depends on -- **cite the source with a line number**, as the unit headers
-already do (`PhosphorLexer.pas:420-435` for unterminated strings, `:444-470` for
-keywords-by-position, `:452` for case folding, `:459-460` for `mod`). Then a change
-over there is findable from here. Do not paraphrase a Phosphor rule from memory; open
-the file.
+highlighter depends on -- **cite the source BY NAME**: `<file>#<Routine>`, or
+`#<Type>`, `#<Type.Member>`, `#<CONST>`, as the unit headers do
+(`PhosphorLexer.pas#TLexer.Tokenize` for unterminated strings, keywords-by-position,
+case folding and `mod`; `PhosphorLexer.pas#TLexer.MergeCompoundKeywords` for the
+compound keywords). The sentence says WHICH part of the routine. Then a change over
+there is findable from here. Do not paraphrase a Phosphor rule from memory; open the
+file.
+
+**NEVER A LINE NUMBER INTO `../Phosphor`** -- `tools/check-citations.py` refuses one.
+Until 2026-10-05 this rule said the opposite, and two measurements reversed it: the
+same three citations were re-pointed four times in one day as the sibling grew, and
+when all fifty-four were read for the conversion, seventeen already named code
+unrelated to the sentence beside them -- fingerprinted in the lock and green,
+because a citation wrong when the lock was written is locked wrong. A name does not
+move when lines are added above it; the gate checks that it is still DECLARED.
+Citations into this repository's own files keep their line numbers.
 
 **AND A CITATION ROTS SILENTLY -- which is now a red build.**
 `tools/check-citations.py` is gate 4 above and exists because of what follows.
@@ -758,14 +773,15 @@ What it CANNOT do is check that the cited text still supports the sentence besid
 it, and it cannot see a claim that carries no citation at all -- so the habit below
 is still the job, and the gate only removes one way of failing at it.
 
-Every one of four numbers cited in this file was wrong on 2026-09-16 -- `:361-366` had become the `strClosed` reasoning, and `:385-408`, cited
+Every one of four numbers cited in this file was wrong on 2026-09-16 -- lines 361-366 had become the `strClosed` reasoning, and lines 385-408, cited
 in seven places here for "the lexer has no keyword table", had become the
 backslash-escape table inside a string literal. The CLAIMS were all still true; the
 line numbers had drifted by roughly sixty as the sibling file grew, and nothing in
 either repository could notice. They were found only because roadmap item 15 was
 about to copy one of them into an eighth place. So: when you touch a unit whose
-header cites `../Phosphor`, OPEN THE CITED LINES and fix them if they have moved --
-a citation nobody re-reads is a comment that lies with a reference attached, which is
+header cites `../Phosphor`, OPEN THE CITED ROUTINE and check that it still does what
+the sentence says -- a name that still exists proves only that it exists, and a
+citation nobody re-reads is a comment that lies with a reference attached, which is
 worse than no reference at all.
 
 One consequence worth keeping in mind while touching the highlighter: Phosphor's lexer
