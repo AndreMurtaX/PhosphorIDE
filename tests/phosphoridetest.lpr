@@ -3646,8 +3646,14 @@ begin
         much went, and that is the only part worth asserting. }
       Check('  and the reason reports a non-zero count',
             Pos('discarded', T.EndReason) > 0);
+      { ANCHORED ON `dropped; `, because the count is a substring search.
+        `Pos('0 byte(s) were discarded', ...)` also matches `10240 byte(s) were
+        discarded` -- any count whose last digit is 0 -- and the count depends on
+        how the socket happened to slice the reads. CI went red on that on
+        2026-09-19 (run 35415873864, Windows only) for a transport that was
+        working, the same substring trap as `1: 1` inside `18: 1`. }
       Check('  which is not zero',
-            Pos('0 byte(s) were discarded', T.EndReason) = 0);
+            Pos('dropped; 0 byte(s)', T.EndReason) = 0);
       Check('  and names the cap it hit',
             Pos('newline', T.EndReason) > 0);
     end;
