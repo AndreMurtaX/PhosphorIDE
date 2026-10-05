@@ -244,7 +244,8 @@ Phosphor's own documentation names them as what beginners hit most:
 - **An unterminated string**, red to end of line.
 
 **And one thing is deliberately wrong.** Phosphor's lexer has no keyword table at all:
-every keyword reaches the parser as an ordinary identifier and is decided by
+every keyword reaches the parser as an ordinary identifier (`rem` and `mod` apart,
+which the lexer owns) and is decided by
 **position** (`engine/PhosphorLexer.pas#TLexer.Tokenize`). `next = 5` and `elseif += 3` are
 legal assignments, and this editor will colour both words as keywords anyway. That is
 a trade, not an oversight. Being right about the rare program means being the parser;
@@ -326,7 +327,8 @@ jumps to the function that defines it.
 `src/core/uphosphoroutline.pas` is the scanner, and its header is worth reading
 before trusting it, because **it is a scanner and not a parser**. Phosphor's
 lexer has no keyword table -- every keyword reaches the parser as an ordinary
-identifier and is decided by position -- so `then = 5` is a legal assignment and
+identifier (`rem` and `mod` apart, which the lexer owns) and is decided by
+position -- so `then = 5` is a legal assignment and
 `function if(a)` legally defines a function called `if`. Anything that reads a
 word and concludes "that is the keyword" is therefore wrong about some legal
 program. That trade is acceptable for NAVIGATION, where being wrong costs a row

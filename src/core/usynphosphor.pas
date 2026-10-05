@@ -417,9 +417,9 @@ begin
   { `name:` at the start of a line. An approximation of the compiler's rule,
     which also requires top level and excludes the reserved words -- the
     reserved-word half is checked by the caller, the top-level half cannot be
-    known from one line. A label written inside a block is a no-op in Phosphor
-    anyway (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseStatementBody), so
-    painting one is arguably a service: it looks like a label and is not one. }
+    known from one line. A label written inside a block is REFUSED by the compiler
+    (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseStatementBody), so painting
+    one marks a line the compile will stop at. (This said 'a no-op' until 2026-10-05.) }
   Result := False;
   if not FFirstOnLine then
     Exit;

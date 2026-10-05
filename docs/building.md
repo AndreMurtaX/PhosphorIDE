@@ -354,7 +354,8 @@ in a commit message. That refusal is the point: a new Phosphor release should sh
 here as a red build, not as an editor that has quietly stopped knowing about a built-in.
 
 What `--check` cannot catch: **the keywords.** Phosphor's lexer has no keyword table at
-all -- it emits every one of them as a plain identifier and the parser decides from
+all -- it emits every one of them as a plain identifier (`rem` and `mod` apart,
+which the lexer owns) and the parser decides from
 position (`engine/PhosphorLexer.pas#TLexer.Tokenize`), so there is nothing to extract. The 53
 keywords are held by hand in `gen-keywords.py` and checked against
 `TPhosphorCompiler.IsReservedWord` by a person. `--check` proves the committed unit

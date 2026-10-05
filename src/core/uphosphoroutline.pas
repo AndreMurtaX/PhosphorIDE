@@ -39,7 +39,7 @@ unit uphosphoroutline;
 
     - `x = 1 : function f()` is legal. A definition begins a STATEMENT, not a
       line (engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseStatementBody
-      dispatches it from ParseStatement), and `:` is what separates two of them
+      dispatches it, beneath ParseStatement), and `:` is what separates two of them
       (engine/PhosphorCompiler.pas#TPhosphorCompiler.Compile).
     - `if x > 0 then function f()` and `... else function f()` are legal too, so
       `then` and `else` open a statement as surely as `:` does.

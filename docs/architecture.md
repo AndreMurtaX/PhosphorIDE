@@ -505,7 +505,8 @@ because the literal cannot then close either.
 ### What it deliberately gets wrong
 
 **Phosphor's lexer has no keyword table.** Every keyword arrives at the parser as
-an ordinary identifier, and the parser decides from POSITION whether the word is
+an ordinary identifier (`rem` and `mod` apart, which the lexer owns), and the
+parser decides from POSITION whether the word is
 a keyword (`engine/PhosphorLexer.pas#TLexer.Tokenize`). `next = 5` and `elseif += 3` are
 legal assignments to legal variables.
 
@@ -938,8 +939,8 @@ true and one was load-bearing in a way nobody had noticed:
 where a prompt ends, and how Up and Down walk what was typed -- so
 `phosphoridetest` pins it without a window or a child process. The prompt
 literals are CITED rather than extracted, which is the documented fallback when
-there is no registry to read: they are two string literals inside a `Writeln` in
-another repository (`host/console/phosphor.lpr#Repl`).
+there is no registry to read: they are two string literals passed to `host.Output`
+in another repository (`host/console/phosphor.lpr#Repl`).
 
 ---
 

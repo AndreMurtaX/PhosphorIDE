@@ -966,7 +966,7 @@ jumping to its definition.
 
 **What makes it tractable, and what makes it a trap.** `function` and `endfunction` are
 keywords by **position**, not by lexing: Phosphor's lexer has no keyword table at all, and
-every keyword reaches the parser as an ordinary identifier
+every keyword reaches the parser as an ordinary identifier, `rem` and `mod` apart
 (`src/core/usynphosphor.pas:24-31`, citing `engine/PhosphorLexer.pas#TLexer.Tokenize`). A scanner
 that treats the first word of a line as structural is therefore right for every ordinary
 program and wrong for a legal one.

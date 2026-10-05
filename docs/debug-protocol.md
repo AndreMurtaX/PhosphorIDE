@@ -516,10 +516,17 @@ to look at, and can re-enter the very line they are standing on.
 
 ---
 
-## What the host is missing
+## What the host was missing -- all of it has landed
 
-The work is in the Phosphor repository, not this one, and it is real. In dependency
-order:
+**ALL FIVE ITEMS BELOW LANDED** in the Phosphor repository between 2026-09-15 and
+2026-09-18 (`docs/debugger-lane.md` records what each was verified against). The
+list is kept as the ask it was, because its reasoning -- why the hook sits on
+`opStmt`, why names stay out of the `.pbc` -- still explains the host. Its
+sentences describe the engine BEFORE that work; each item ends with what is true
+now. Corrected 2026-10-05, when converting its citations to names showed several
+still read as present tense.
+
+The work was in the Phosphor repository, not this one. In dependency order:
 
 1. **A blocking debug seam in the VM.** The existing `OnBreakpoint` cannot be
    reused: its contract says it "MUST NOT block: the engine treats it as a report,
@@ -527,6 +534,8 @@ order:
    (`engine/PhosphorValue.pas#TPhosphorBreakpointProc`), and it returns `void`. What is needed is a
    separate seam, called at each source-line boundary, that CAN block and whose
    return value tells the VM what to do next -- run, step, stop.
+   **Now:** `engine/PhosphorEngine.pas#TPhosphorEngine.OnDebug`, a
+   `TPhosphorDebugProc` that blocks and answers a `TPhosphorDebugAction`.
 
 2. **A step state machine, hung on the statement boundary that already exists.**
    This entry used to say the fetch-decode-execute loop should notice when the
@@ -549,46 +558,52 @@ order:
    no cost at all (`engine/PhosphorVM.pas#TPhosphorVM.ExecFrom`). One `opStmt` occurs per ~14 executed instructions in
    a tight loop, so a Boolean guard there is the cheap shape -- but it is still a
    number to put in a commit message, not a claim.
+   **Now:** `engine/PhosphorVM.pas#TPhosphorVM.DebugPoll`, called from that arm.
 
-3. **Accessors for globals and frames -- AND a name table, which does not exist.**
+3. **Accessors for globals and frames -- AND a name table, which did not exist.**
    `variables` and `stackTrace` need to enumerate the global table and walk the
-   frame stack, both private today with no accessor (`FCallStack` is an `array of
+   frame stack, both private then with no accessor (`FCallStack` is an `array of
    Integer` of GOSUB return addresses -- explicitly not what `stackTrace` reports).
 
    The harder half was missed when this document was first written: **the compiled
-   program carries no variable names at all.** `TProgram` declares `VarCount` and
+   program carried no variable names at all.** `TProgram` declared `VarCount` and
    `VarTypes` and no name table (`engine/PhosphorOpcodes.pas#TProgram`); `TUserFunc`
-   declares the function's own name and no names for its locals (`engine/PhosphorOpcodes.pas#TUserFunc`). The
-   compiler has them and throws them away (`FVarNames`, `FLocalNames`). So
-   `variables` is not merely unimplemented, it is unanswerable until `TProgram`
-   carries names.
+   declared the function's own name and no names for its locals
+   (`engine/PhosphorOpcodes.pas#TUserFunc`). The compiler had them and threw them
+   away (`FVarNames`, `FLocalNames`). So `variables` was not merely unimplemented, it
+   was unanswerable until `TProgram` carried names. **Now it does:** `engine/PhosphorOpcodes.pas#TProgram.FVarNames`
+   and `engine/PhosphorOpcodes.pas#TUserFunc.LocalNames`, filled by the compiler.
 
-   They must NOT be serialised into the `.pbc`: `PBC_VERSION = 1` and `LoadProgram`
+   They must NOT be serialised into the `.pbc`: `PBC_VERSION = 1` and `ReadProgram`
    refuses any other version, so a bump would brick every packed executable.
    `phosphor debug <file.bas>` compiles in-process, where the names are already in
    hand.
+   **Still true:** the names are not in the `.pbc`, and the format is still version 1.
 
    One more thing this end cannot see: **a seam that blocks corrupts `TimeoutMs`**,
    which is wall-clock sampled once per run (`engine/PhosphorVM.pas#TPhosphorVM.Run`). The
    host must discount the time spent parked, or a session that pauses for a minute
-   kills the program on resume.
+   kills the program on resume. **Now the engine does it itself**, in
+   `engine/PhosphorVM.pas#TPhosphorVM.DebugCreditPark`, so no host has to.
 
 4. **A `phosphor debug` subcommand** in `host/console/phosphor.lpr` that opens the
    socket, installs the seam, and speaks everything above. This is where the JSON
    lives; the engine must not know what JSON is, and a source gate already enforces
-   that the engine names no host unit.
+   that the engine names no host unit. **Now:** `phosphor debug --port N`, the
+   `TDebugProto` class in `host/console/phosphor.lpr`.
 
 5. **A line in `--help`.** PhosphorIDE detects a debug-capable host by asking it for
    `--help` and looking for a line beginning `phosphor debug`
    (`src/core/udebugsession.pas`). Asking the binary what it can do is a fact about
-   the binary in front of us; a version comparison would be a guess about the
-   future.
+   the binary in front of us; a version comparison would be a guess about the future.
+   **Now:** `phosphor --help` prints both `phosphor debug` lines.
 
 Items 1 to 3 touch the engine and therefore have to pass Phosphor's source gates,
 including `check-seams.py`, which requires a host to either fill a seam or record
-why leaving it nil is right. The recorded exemption that exists today --
+why leaving it nil is right. The recorded exemption that existed then --
 `'phosphor.lpr:OnBreakpoint': 'BREAKPOINT is report-and-continue; there is nowhere
-for a host to pause to'` -- is precisely the sentence this work makes obsolete.
+for a host to pause to'` -- was precisely the sentence this work made obsolete, and
+it is gone: `phosphor.lpr` fills `OnBreakpoint` now.
 
 ---
 
@@ -596,9 +611,9 @@ for a host to pause to'` -- is precisely the sentence this work makes obsolete.
 
 Known gaps, listed so that a later version does not have to rediscover them:
 
-- **No conditional breakpoints.** The capability flag is reserved and the field is
-  not specified. A condition is an expression, and an expression needs `evaluate`
-  first.
+- ~~**No conditional breakpoints.**~~ **Landed 2026-09-17**, once `evaluate` existed:
+  see [A condition on a breakpoint](#a-condition-on-a-breakpoint) and
+  `capabilities.conditionalBreakpoints`.
 - **No `setVariable`.** The capability is reserved so that a host cannot claim it by
   accident, but there is no command. Writing a variable back through a seam that
   currently hands out copies needs the engine to offer something it does not.
