@@ -60,7 +60,7 @@
 ../Phosphor/host/console/phosphor.lpr:1801-1802	8ff5d10d11b896eb	for i := 0 to vm.DbgGlobalCount() - 1 do
 ../Phosphor/host/console/phosphor.lpr:1895-1901	dc4d4b8da725be2f	`=` INSIDE AN EXPRESSION IS A COMPARISON (opEQ), never a store, so the only
 ../Phosphor/host/console/phosphor.lpr:1911-1918	d4423ae5f38a76fb	are not a purity judgement about the library: they are what the COMPILER'S
-../Phosphor/host/console/phosphor.lpr:3899-3899	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
+../Phosphor/host/console/phosphor.lpr:4035-4035	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
 ../Phosphor/host/console/phosphor.lpr:818-838	5e9b8ddac1bf6d5b	{ Reads a whole file as raw bytes and strips a leading UTF-8 BOM if present, so
 ../Phosphor/scripts/build.ps1:67-69	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
 ../Phosphor/scripts/check-seams.py:98-98	14b1846b246f3bde	# report-and-continue; there is nowhere for a host to pause to" -- which is
