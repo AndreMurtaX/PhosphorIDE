@@ -629,6 +629,19 @@ begin
   R := Go('boom.pbc', ['pack', 'boom.pbc', PackedName]);
   ShapeEqInt('packed (pack step)', 'pack succeeds', 0, R.ExitCode);
 
+  { A PACK THAT DID NOT FINISH IS ONE FAILURE, AND WHAT IT LEFT IS NOT RUN.
+    CI run 35360881722 (2026-09-18, Windows): pack stalled, RunHost killed it at
+    20 s -- Go already counted that -- and a boom.exe was on disk anyway, so this
+    procedure went on and ran it. It exited 0 with nothing on either stream, and
+    the run reported five SHAPE MOVED and one WORDING MOVED: the host changing
+    the packed diagnostic, which it had not done. In the one program whose job is
+    to say when the host's shapes move, a false "moved" is the worst message.
+    Measured the same day by killing pack at random moments: 2 kills in 80 left a
+    file at the final name that runs as a plain REPL and exits 0. Whatever it is,
+    it is not the program this test packed. }
+  if (not R.Ok) or (R.ExitCode <> 0) then
+    Exit;
+
   Exe := IncludeTrailingPathDelimiter(WorkDir) + PackedName;
   if not FileExists(Exe) then
   begin
