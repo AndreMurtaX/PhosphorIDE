@@ -53,9 +53,9 @@
 ../Phosphor/engine/PhosphorValue.pas:633-633	0f9d0b2d99d6030d	concatenation, EAccessViolation, and EStackOverflow, and report each of them
 ../Phosphor/engine/PhosphorValue.pas:73-74	e98e04fb9e96ac0a	and simply continues. The seam MUST NOT block: the engine treats it as a
 ../Phosphor/engine/libs/PhosphorDictLib.pas:47-53	937de134e3f245a9	{ Each entry's hash, taken once when the entry is made and carried beside
-../Phosphor/host/console/phosphor.lpr:1753-1763	3678a6b182fa8071	STOP-AT-ENTRY IS ASKED FOR ONCE, AND ONLY BEFORE THE PROGRAM STARTS. The VM
-../Phosphor/host/console/phosphor.lpr:4149-4149	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
-../Phosphor/host/console/phosphor.lpr:860-880	5e9b8ddac1bf6d5b	{ Reads a whole file as raw bytes and strips a leading UTF-8 BOM if present, so
+../Phosphor/host/console/phosphor.lpr:1758-1768	3678a6b182fa8071	STOP-AT-ENTRY IS ASKED FOR ONCE, AND ONLY BEFORE THE PROGRAM STARTS. The VM
+../Phosphor/host/console/phosphor.lpr:4154-4154	08c004dd24026354	if pending = '' then host.Output('phosphor> ') else host.Output(' ...> ');
+../Phosphor/host/console/phosphor.lpr:865-885	5e9b8ddac1bf6d5b	{ Reads a whole file as raw bytes and strips a leading UTF-8 BOM if present, so
 ../Phosphor/scripts/build.ps1:67-69	80bf40f86157965b	# against tests/boundary: the PowerShell halves 10/11, the bash halves 8/11. Both
 ../Phosphor/scripts/check-seams.py:98-98	14b1846b246f3bde	# report-and-continue; there is nowhere for a host to pause to" -- which is
 ../Phosphor/tests/debug_protocol_test.py:143-143	7f9629fae2691404	caps.get('setVariable') is False, str(caps))

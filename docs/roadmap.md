@@ -1091,7 +1091,7 @@ line -- as `pmkReplError`, and correctly refuses to treat it as a jump target.
 **Two things will bite, and both are known now rather than after the fact.**
 
 - **The prompt arrives, but it is not a line, and the pane must know that.** The REPL
-  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:4149`), and the
+  writes `phosphor> ` with no newline (`Phosphor host/console/phosphor.lpr:4154`), and the
   runner already handles that case: `DrainTimer` counts drains in which a stream produced
   nothing and `FlushPrompt` emits the unterminated tail after two of them
   (`src/core/uphosphorrun.pas:667-681`), marked `ACompleteLine=False`; `RunnerOutput`

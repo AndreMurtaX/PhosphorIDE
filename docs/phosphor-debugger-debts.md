@@ -94,7 +94,7 @@ One case the fix must get right, and it is the reason `stopAtEntry` is in the ta
 above: when the editor **did** ask for an entry stop and a breakpoint is armed on that
 same first statement, exactly **one** `stopped` event may be sent. Two would make the
 editor look as though it stopped twice for one statement — which is the defect
-`phosphor.lpr:1753-1763` already records having fixed once, for re-arming mid-run.
+`phosphor.lpr:1758-1768` already records having fixed once, for re-arming mid-run.
 
 ### How to know it is fixed
 
