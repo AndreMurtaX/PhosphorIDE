@@ -387,6 +387,14 @@ shadowing), every operator, and index syntax. Its own reasoning is in
 without a debugger. Both are answered `ok:true`, after which the host closes the
 socket.
 
+**Frames the host has already read behind a `disconnect` are answered, not
+dropped** -- `ok:false`, with an error saying they arrived after the disconnect --
+and only then does the socket close. That is the state-machine rule below applied
+to `terminated`: a command in the wrong state is answered, never ignored. Frames
+still in flight when the socket closes cannot be answered; the editor's
+closed-socket rule covers those. (Until 2026-10-05 the Phosphor host closed with
+them unanswered.)
+
 The editor also treats a closed socket as a disconnect, so a host that dies without
 answering is handled by the same path.
 
