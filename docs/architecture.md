@@ -564,8 +564,8 @@ have both repositories. **A Phosphor release that adds a built-in shows up here
 as a red build.** That is the point: silence would mean the editor had quietly
 stopped knowing the language.
 
-The counts are asserted rather than assumed -- 534 engine names, 181 package, 426
-GUI -- and if a release moves any of them the script refuses to generate and says
+The counts are asserted rather than assumed -- 539 engine names, 182 package, 426
+GUI as of Phosphor 0.1.0 -- and if a release moves any of them the script refuses to generate and says
 so:
 
 ```

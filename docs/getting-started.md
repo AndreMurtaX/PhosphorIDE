@@ -50,6 +50,13 @@ and the editor finds the interpreter with no configuration at all.
 
 The editor is useless without it, so start here.
 
+**Or download it.** If you only want to USE the editor, a released `phosphor` is
+enough: [Phosphor 0.1.0](https://github.com/AndreMurtaX/Phosphor/releases/tag/v0.1.0)
+is one archive per OS. Unpack it and point the editor at the binary in
+Preferences, set `$PHOSPHOR_HOST`, or put `phosphor` beside `phosphoride`. It was
+checked against this editor's `bin/phosphorcontract` on 2026-10-10: 163 of 163
+green. Build it as below when you also work on Phosphor itself.
+
 ```powershell
 cd C:\Dev\Phosphor
 powershell -NoProfile -File scripts\build.ps1

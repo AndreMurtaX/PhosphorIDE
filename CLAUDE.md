@@ -74,7 +74,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
    trap 3.
 4. **Both generated units are current, and no citation has rotted.**
    `python tools/gen-keywords.py ../Phosphor --check` prints
-   `uphosphorlang.pas is current (538 core, 181 package, 426 gui)`, and
+   `uphosphorlang.pas is current (543 core, 182 package, 426 gui, 1235 signatures over 1142 names)`, and
    `python tools/gen-icons.py --check` prints
    `uphosphoricons.pas is current (9 icons, 16 and 24 px)`. Both exit 0, and both
    build scripts run them. The icon check prints the TOOLBAR count only; the five
@@ -266,12 +266,13 @@ the bar.
   A dark outline on a dark toolbar is an icon nobody can see, and that is not a build
   failure either.
 - **`src/core/uphosphorlang.pas` is GENERATED. Never hand-edit it.** Rewrite it with
-  `python tools/gen-keywords.py ../Phosphor`. Its 53 keywords, 538 core, 181 package
+  `python tools/gen-keywords.py ../Phosphor`. Its 53 keywords, 543 core, 182 package
   and 426 GUI built-ins are facts about the *other* repository; a hand edit puts them
   in two places and the edited copy is the one that goes stale. The script asserts
-  `EXPECTED = {'core': 534, 'package': 181, 'gui': 426}`, and
-  `EXPECTED_SIG_NAMES` / `EXPECTED_SIG_PAIRS` for the signatures (534 registrations plus the
-  four special forms `eof input$ loc lof` makes the unit's 538) and **refuses to
+  `EXPECTED = {'core': 539, 'package': 182, 'gui': 426}`, and
+  `EXPECTED_SIG_NAMES` / `EXPECTED_SIG_PAIRS` for the signatures (539 registrations plus the
+  four special forms `eof input$ loc lof` makes the unit's 543; counts as of
+  Phosphor 0.1.0, 2026-10-10) and **refuses to
   generate** when Phosphor has moved, so a new Phosphor release is a red build rather
   than silence. Decide the new numbers deliberately, update `EXPECTED`, and say so in
   the commit message.
@@ -448,7 +449,7 @@ the bar.
   turn -- operator, literal, keyword, and then each of the three built-in tiers, because
   `PhosphorBuiltinTier` loops -- and a word in none of them, which is most words a person
   types, paid for all six. (This said FIVE until 2026-09-17, in three places written the
-  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1350` said six. A
+  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1351` said six. A
   count is derived or it is cited.) One table and one binary search took the same measurement from
   **13,28 us per line to 2,28**, and the worst single keystroke at 5000 lines from
   86,46 ms to 19,74. `ScanFoldLine` costs 0,47 us in both runs; only its SHARE moved,

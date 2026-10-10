@@ -51,10 +51,10 @@ import os
 import re
 import sys
 
-EXPECTED = {'core': 536, 'package': 181, 'gui': 426}
+EXPECTED = {'core': 539, 'package': 182, 'gui': 426}
 # Names carrying at least one extractable signature, and (name, signature) pairs.
-EXPECTED_SIG_NAMES = 1138
-EXPECTED_SIG_PAIRS = 1228
+EXPECTED_SIG_NAMES = 1142
+EXPECTED_SIG_PAIRS = 1235
 
 TIER_DIRS = [
     ('core', 'engine/libs'),

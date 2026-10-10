@@ -342,11 +342,11 @@ python3 tools/gen-keywords.py ../Phosphor --check
 
 This one needs a Phosphor *checkout*, not a binary: it reads `.pas` sources. It
 regenerates `src/core/uphosphorlang.pas` into memory and diffs, printing
-`uphosphorlang.pas is current (538 core, 181 package, 426 gui)` or exiting non-zero with
+`uphosphorlang.pas is current (543 core, 182 package, 426 gui, 1235 signatures over 1142 names)` or exiting non-zero with
 `... is stale -- rerun tools/gen-keywords.py`.
 
-Before it generates anything it asserts the counts it extracted: 534 from `engine/libs`,
-181 from `host/packages`, 426 from `host/gui/libs`. The unit ships 538 core names because
+Before it generates anything it asserts the counts it extracted: 539 from `engine/libs`,
+182 from `host/packages`, 426 from `host/gui/libs` (as of Phosphor 0.1.0). The unit ships 543 core names because
 the script adds the four compiler special forms -- `eof`, `input$`, `loc`, `lof` -- which
 are in no registry and so cannot be extracted. If a Phosphor release moves one of those
 numbers the script refuses to run and says so, and a human decides what the new number is

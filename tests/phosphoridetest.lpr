@@ -722,8 +722,11 @@ begin
              Length(PhosphorSignatures('zzqzz')));
   Check('lookup is case-insensitive here too',
         Length(PhosphorSignatures('MID$')) = 2);
+  { 1142 names as of Phosphor 0.1.0 (2026-10-10): 1138 before, plus cfg_free,
+    dict_free, json_free and http_clientcert -- tools/gen-keywords.py's
+    EXPECTED_SIG_NAMES, which is where the number is decided. }
   CheckEqInt('the table holds what the unit says it holds',
-             PhosphorSignatureNameCount, 1138);
+             PhosphorSignatureNameCount, 1142);
 
   { --- which call the caret is in ------------------------------------------ }
   Check('inside a call', CallAt('mid$(s, 1', 10, Nm, Arg));
@@ -2793,7 +2796,7 @@ end;
   not blue.
 
   So EVERY word in EVERY table is classified and checked against the table it came
-  from -- 1207 of them, read out of the unit's own lists rather than sampled or
+  from -- 1211 of them, read out of the unit's own lists rather than sampled or
   retyped. A check over a sample would pass the day the merge dropped the tail of
   one table.
 
@@ -2866,7 +2869,9 @@ begin
     output is the warning -- and this assertion is what turns a silent change of
     mind into a red test. }
   Words := PhosphorBuiltins(ptCore);
-  CheckEqInt('the core table is not empty', 540, Length(Words));
+  { 543 = Phosphor 0.1.0's 539 engine registrations plus the four compiler
+    special forms (eof input$ loc lof); 540 before 2026-10-10. }
+  CheckEqInt('the core table is not empty', 543, Length(Words));
   Ok := AllAre(Words, pwkBuiltinCore, 'error');
   Check('every core built-in classifies as one, except the overlap' + Since, Ok);
   Check('`error` is in the core table', PhosphorClassify('error', Kind));
@@ -2876,7 +2881,7 @@ begin
   Check('  and IS a keyword', IsPhosphorKeyword('error'));
 
   Words := PhosphorBuiltins(ptPackage);
-  CheckEqInt('the package table is not empty', 181, Length(Words));
+  CheckEqInt('the package table is not empty', 182, Length(Words));   // + http_clientcert
   Ok := AllAre(Words, pwkBuiltinPackage, '');
   Check('every package built-in classifies as one' + Since, Ok);
 
@@ -2921,8 +2926,8 @@ begin
   I := 0;
   for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
     Inc(I, Length(PhosphorBuiltins(Tier)));
-  CheckEqInt('and 1207 words were checked, not a sample',
-    1207, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
+  CheckEqInt('and 1211 words were checked, not a sample',
+    1211, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
     Length(PhosphorLiteralWords));
 end;
 
