@@ -722,16 +722,18 @@ begin
              Length(PhosphorSignatures('zzqzz')));
   Check('lookup is case-insensitive here too',
         Length(PhosphorSignatures('MID$')) = 2);
-  { 1158 names as of Phosphor main (2026-10-10, after 0.1.0): 1142 at 0.1.0,
+  { 1163 names as of Phosphor main (2026-10-10, after 0.1.0): 1142 at 0.1.0,
     plus the crypto library's 8 (sha256$ sha1$ md5$ hmac_sha256$ pbkdf2_sha256$
     password_hash$ password_verify? crypto_equal?) and the grid's and control's 8
     (stringgrid_row stringgrid_col stringgrid_cursor@ stringgrid_onselect@
     stringgrid_colwidth@ stringgrid_colwidth control_ondblclick@
-    control_dblclick@). At 0.1.0: 1138 before, plus cfg_free,
+    control_dblclick@) and modal forms' 5 (form_showmodal form_modalresult@
+    form_modalresult button_modalresult@ button_modalresult). At 0.1.0: 1138
+    before, plus cfg_free,
     dict_free, json_free and http_clientcert -- tools/gen-keywords.py's
     EXPECTED_SIG_NAMES, which is where the number is decided. }
   CheckEqInt('the table holds what the unit says it holds',
-             PhosphorSignatureNameCount, 1158);
+             PhosphorSignatureNameCount, 1163);
 
   { --- which call the caret is in ------------------------------------------ }
   Check('inside a call', CallAt('mid$(s, 1', 10, Nm, Arg));
@@ -2801,7 +2803,7 @@ end;
   not blue.
 
   So EVERY word in EVERY table is classified and checked against the table it came
-  from -- 1227 of them, read out of the unit's own lists rather than sampled or
+  from -- 1232 of them, read out of the unit's own lists rather than sampled or
   retyped. A check over a sample would pass the day the merge dropped the tail of
   one table.
 
@@ -2892,7 +2894,7 @@ begin
   Check('every package built-in classifies as one' + Since, Ok);
 
   Words := PhosphorBuiltins(ptGui);
-  CheckEqInt('the gui table is not empty', 434, Length(Words));   // + the grid's 6, the control's 2
+  CheckEqInt('the gui table is not empty', 439, Length(Words));   // + the grid's 6, the control's 2, modal forms' 5
   Ok := AllAre(Words, pwkBuiltinGui, '');
   Check('every gui built-in classifies as one' + Since, Ok);
 
@@ -2932,8 +2934,8 @@ begin
   I := 0;
   for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
     Inc(I, Length(PhosphorBuiltins(Tier)));
-  CheckEqInt('and 1227 words were checked, not a sample',
-    1227, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
+  CheckEqInt('and 1232 words were checked, not a sample',
+    1232, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
     Length(PhosphorLiteralWords));
 end;
 

@@ -74,7 +74,7 @@ Nothing is done on a claim. An increment is complete when all five hold:
    trap 3.
 4. **Both generated units are current, and no citation has rotted.**
    `python tools/gen-keywords.py ../Phosphor --check` prints
-   `uphosphorlang.pas is current (551 core, 182 package, 434 gui, 1252 signatures over 1158 names)`, and
+   `uphosphorlang.pas is current (551 core, 182 package, 439 gui, 1257 signatures over 1163 names)`, and
    `python tools/gen-icons.py --check` prints
    `uphosphoricons.pas is current (9 icons, 16 and 24 px)`. Both exit 0, and both
    build scripts run them. The icon check prints the TOOLBAR count only; the five
@@ -267,12 +267,12 @@ the bar.
   failure either.
 - **`src/core/uphosphorlang.pas` is GENERATED. Never hand-edit it.** Rewrite it with
   `python tools/gen-keywords.py ../Phosphor`. Its 53 keywords, 551 core, 182 package
-  and 434 GUI built-ins are facts about the *other* repository; a hand edit puts them
+  and 439 GUI built-ins are facts about the *other* repository; a hand edit puts them
   in two places and the edited copy is the one that goes stale. The script asserts
-  `EXPECTED = {'core': 547, 'package': 182, 'gui': 434}`, and
+  `EXPECTED = {'core': 547, 'package': 182, 'gui': 439}`, and
   `EXPECTED_SIG_NAMES` / `EXPECTED_SIG_PAIRS` for the signatures (547 registrations plus the
   four special forms `eof input$ loc lof` makes the unit's 551; counts as of
-  Phosphor main, 2026-10-10, after its crypto library and grid selection) and **refuses to
+  Phosphor main, 2026-10-10, after its crypto library, grid selection and modal forms) and **refuses to
   generate** when Phosphor has moved, so a new Phosphor release is a red build rather
   than silence. Decide the new numbers deliberately, update `EXPECTED`, and say so in
   the commit message.
@@ -449,7 +449,7 @@ the bar.
   turn -- operator, literal, keyword, and then each of the three built-in tiers, because
   `PhosphorBuiltinTier` loops -- and a word in none of them, which is most words a person
   types, paid for all six. (This said FIVE until 2026-09-17, in three places written the
-  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1371` said six. A
+  same day from memory while `docs/roadmap.md` and `uphosphorlang.pas:1376` said six. A
   count is derived or it is cited.) One table and one binary search took the same measurement from
   **13,28 us per line to 2,28**, and the worst single keystroke at 5000 lines from
   86,46 ms to 19,74. `ScanFoldLine` costs 0,47 us in both runs; only its SHARE moved,
