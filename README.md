@@ -208,7 +208,7 @@ python tools/gen-keywords.py ../Phosphor --check    # CI: fail if it would chang
 
 The word lists are facts about *another repository*, and typing them here would put
 those facts in two places -- the second copy being the one that goes stale. The
-generator asserts its counts (539 core registrations, 182 package, 426 GUI, as of
+generator asserts its counts (547 core registrations, 182 package, 434 GUI, as of
 Phosphor 0.1.0) and
 **refuses to generate** if Phosphor has moved, so a new Phosphor release that adds a
 built-in arrives as a red build rather than as silence. `--check` regenerates into
@@ -219,10 +219,10 @@ no keyword table, so there is nothing to extract. The 53 of them are held by han
 `gen-keywords.py` and checked against `TPhosphorCompiler.IsReservedWord` by a person,
 which means a Phosphor release that adds a keyword passes every gate here in silence.
 
-What the editor therefore knows: **53 keywords** and **1151 built-in names** in three
-availability tiers -- 543 core (the 539 registrations plus `eof`, `input$`, `loc` and
+What the editor therefore knows: **53 keywords** and **1167 built-in names** in three
+availability tiers -- 551 core (the 547 registrations plus `eof`, `input$`, `loc` and
 `lof`, four special forms the compiler handles itself and no registry lists), 182 from
-the opt-in host packages, 426 GUI. The tiers are three lists rather than one because
+the opt-in host packages, 434 GUI. The tiers are three lists rather than one because
 they are not interchangeable: core is always there, package names exist only because
 the console host links every package, and GUI names exist only where a graphical
 session was reachable when the program started. A program calling one is portable in a
@@ -260,7 +260,7 @@ and `mod`, are the exception and are treated as absolute.
 
 ## Completion
 
-**Ctrl+Space**, or **Edit > Complete Word**, offers every name this host knows — 53 keywords, 543 core built-ins, 182 from packages, 426 GUI — filtered by
+**Ctrl+Space**, or **Edit > Complete Word**, offers every name this host knows — 53 keywords, 551 core built-ins, 182 from packages, 434 GUI — filtered by
 what you have typed, each row showing which tier it came from.
 
 The tier matters and is not decoration. Core is always there. A package name runs

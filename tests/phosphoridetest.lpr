@@ -722,11 +722,16 @@ begin
              Length(PhosphorSignatures('zzqzz')));
   Check('lookup is case-insensitive here too',
         Length(PhosphorSignatures('MID$')) = 2);
-  { 1142 names as of Phosphor 0.1.0 (2026-10-10): 1138 before, plus cfg_free,
+  { 1158 names as of Phosphor main (2026-10-10, after 0.1.0): 1142 at 0.1.0,
+    plus the crypto library's 8 (sha256$ sha1$ md5$ hmac_sha256$ pbkdf2_sha256$
+    password_hash$ password_verify? crypto_equal?) and the grid's and control's 8
+    (stringgrid_row stringgrid_col stringgrid_cursor@ stringgrid_onselect@
+    stringgrid_colwidth@ stringgrid_colwidth control_ondblclick@
+    control_dblclick@). At 0.1.0: 1138 before, plus cfg_free,
     dict_free, json_free and http_clientcert -- tools/gen-keywords.py's
     EXPECTED_SIG_NAMES, which is where the number is decided. }
   CheckEqInt('the table holds what the unit says it holds',
-             PhosphorSignatureNameCount, 1142);
+             PhosphorSignatureNameCount, 1158);
 
   { --- which call the caret is in ------------------------------------------ }
   Check('inside a call', CallAt('mid$(s, 1', 10, Nm, Arg));
@@ -2796,7 +2801,7 @@ end;
   not blue.
 
   So EVERY word in EVERY table is classified and checked against the table it came
-  from -- 1211 of them, read out of the unit's own lists rather than sampled or
+  from -- 1227 of them, read out of the unit's own lists rather than sampled or
   retyped. A check over a sample would pass the day the merge dropped the tail of
   one table.
 
@@ -2869,9 +2874,10 @@ begin
     output is the warning -- and this assertion is what turns a silent change of
     mind into a red test. }
   Words := PhosphorBuiltins(ptCore);
-  { 543 = Phosphor 0.1.0's 539 engine registrations plus the four compiler
+  { 551 = Phosphor main's 547 engine registrations (539 at 0.1.0, plus the
+    crypto library's 8) plus the four compiler
     special forms (eof input$ loc lof); 540 before 2026-10-10. }
-  CheckEqInt('the core table is not empty', 543, Length(Words));
+  CheckEqInt('the core table is not empty', 551, Length(Words));
   Ok := AllAre(Words, pwkBuiltinCore, 'error');
   Check('every core built-in classifies as one, except the overlap' + Since, Ok);
   Check('`error` is in the core table', PhosphorClassify('error', Kind));
@@ -2886,7 +2892,7 @@ begin
   Check('every package built-in classifies as one' + Since, Ok);
 
   Words := PhosphorBuiltins(ptGui);
-  CheckEqInt('the gui table is not empty', 426, Length(Words));
+  CheckEqInt('the gui table is not empty', 434, Length(Words));   // + the grid's 6, the control's 2
   Ok := AllAre(Words, pwkBuiltinGui, '');
   Check('every gui built-in classifies as one' + Since, Ok);
 
@@ -2926,8 +2932,8 @@ begin
   I := 0;
   for Tier := Low(TPhosphorTier) to High(TPhosphorTier) do
     Inc(I, Length(PhosphorBuiltins(Tier)));
-  CheckEqInt('and 1211 words were checked, not a sample',
-    1211, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
+  CheckEqInt('and 1227 words were checked, not a sample',
+    1227, I + Length(PhosphorKeywords) + Length(PhosphorOperatorWords) +
     Length(PhosphorLiteralWords));
 end;
 

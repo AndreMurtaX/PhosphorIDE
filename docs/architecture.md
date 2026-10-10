@@ -564,7 +564,7 @@ have both repositories. **A Phosphor release that adds a built-in shows up here
 as a red build.** That is the point: silence would mean the editor had quietly
 stopped knowing the language.
 
-The counts are asserted rather than assumed -- 539 engine names, 182 package, 426
+The counts are asserted rather than assumed -- 547 engine names, 182 package, 434
 GUI as of Phosphor 0.1.0 -- and if a release moves any of them the script refuses to generate and says
 so:
 
@@ -578,8 +578,8 @@ Refusing is the right failure. A generator that happily writes whatever it found
 turns "Phosphor changed under us" into a diff nobody reads.
 
 The unit's public counts are `PhosphorKeywordCount = 53`,
-`PhosphorBuiltinCoreCount = 538`, `PhosphorBuiltinPackageCount = 181`,
-`PhosphorBuiltinGuiCount = 426`. Core is 538 rather than 534 because four names
+`PhosphorBuiltinCoreCount = 551`, `PhosphorBuiltinPackageCount = 182`,
+`PhosphorBuiltinGuiCount = 434`. Core is 551 rather than 547 because four names
 are not in any registry at all: `eof`, `input$`, `loc` and `lof` are special
 forms the compiler handles directly, and a user function may not shadow them
 (`engine/PhosphorCompiler.pas#TPhosphorCompiler.ParseFunction`,
